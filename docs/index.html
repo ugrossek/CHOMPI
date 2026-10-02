@@ -58,7 +58,9 @@
     letter-spacing: -.02em;
     margin: 0 0 18px;
   }
-  .lede { max-width: 34em; margin: 0 0 36px; color: var(--ink-soft); font-size: 1.12rem; }
+  .lede { max-width: 34em; margin: 0 0 14px; color: var(--ink-soft); font-size: 1.12rem; }
+  .credit { max-width: 40em; margin: 0 0 28px; color: var(--ink-soft); font-size: .98rem; }
+  .credit a { color: inherit; }
 
   /* ---- the instrument -------------------------------------------------- */
   .chompi {
@@ -222,6 +224,7 @@
 <main>
   <h1>Feed the CHOMPI</h1>
   <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
+  <p class="credit">This builds on <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">sfaber's multi-firmware launcher</a>, which does the hard part of running several firmwares from one card. The USB upload, this page and a few launcher fixes are added on top.</p>
 
   <aside class="notice">
     <p><strong>Use at your own risk.</strong> This is an unofficial, experimental hobby project. It is not made or supported by CHOMPI Club or by the author of the launcher, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. It has only been tested on one CHOMPI. If something goes wrong, switch CHOMPI off and on. If it no longer starts at all, it can be reflashed at <a href="https://flash.daisy.audio">flash.daisy.audio</a>.</p>
@@ -231,7 +234,7 @@
     <summary>First time? Set up the card</summary>
     <ol>
       <li>Back up your SD card: copy everything on it to your computer.</li>
-      <li><a href="launcher/CHOMPI.bin" download>Download the launcher</a> and copy it to the top level of the card. Move every other <code>.bin</code> file out of the top level, because CHOMPI installs the first one it finds there.</li>
+      <li><a href="launcher/CHOMPI.bin" download>Download the launcher</a> (sfaber's launcher with USB upload added) and copy it to the top level of the card. Move every other <code>.bin</code> file out of the top level, because CHOMPI installs the first one it finds there.</li>
       <li>Create a folder called <code>FIRMWARE</code> on the card. You can leave it empty and send firmwares from this page later, or copy some in now, named by key: <code>01_TAPE.bin</code> appears on key 1, <code>02_TEMPO.bin</code> on key 2. The stock firmwares are in the <a href="https://github.com/ugrossek/CHOMPI/tree/main/firmware/card-profiles">CHOMPI repository</a>.</li>
       <li>Eject the card, put it in CHOMPI and switch it on. The lights fade through colours while the launcher is installed, then one white key lights up per firmware (or the lights pulse amber if <code>FIRMWARE</code> is empty). If the very first start hangs, switch off and on once.</li>
       <li>Plug CHOMPI into this computer and continue below.</li>
