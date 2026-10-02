@@ -34,7 +34,8 @@ RamBufferMemory chompi_buff;
 int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 
 // pitch shifter delay lines, one per voice
-float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2]; 
+float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
+int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
 
 daisysp::Oscillator osc;
 

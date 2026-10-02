@@ -203,7 +203,7 @@ namespace daisy
             /* voices */
             for (size_t i = 0; i < kMaxPoly; i++)
             {
-                chompi_voice[i].Init(file_manager, samplerate, chompi_buff, chompi::shift_mem[i]);
+                chompi_voice[i].Init(file_manager, samplerate, chompi_buff, chompi::shift_mem[i], chompi::shift_ana[i]);
             }
             chompi_writer.Init(chompi_buff);
             record = false;
@@ -421,6 +421,7 @@ namespace daisy
 
 
             /** voice read*/
+            chompi::StereoPitchShifter::NewBlock(size);
             for (size_t voice = 0; voice < kMaxPoly; voice++)
             {
                 if (chompi_voice[voice].IsPlaying() || chompi_voice[voice].deferred_trig)
