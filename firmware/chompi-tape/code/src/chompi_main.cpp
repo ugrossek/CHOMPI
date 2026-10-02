@@ -9,6 +9,8 @@
 #include "RamBuffer.h"
 #include "InterpolatedDelayLine.h"
 #include "OptionsManager.h"
+#include <cerrno>
+#include <cstddef>
 
 #define DSY_DTCMRAM_BSS __attribute__((section(".dtcmram_bss")))
 
@@ -36,6 +38,34 @@ int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 // pitch shifter delay lines, one per voice
 float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
 int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
+
+/* The heap, for the few things that malloc -- chiefly the USB serial port,
+ *  which calloc's ~550 bytes when a computer configures the device.
+ *
+ *  newlib's own _sbrk hands out whatever SRAM .bss leaves over, and does not
+ *  stop at the end of RAM. The pitch shifter left 432 bytes there, so with USB
+ *  plugged in that allocation ran off the end and TAPE faulted at startup.
+ *  This one draws from its own block in D2 RAM instead, which leaves the .bss
+ *  layout untouched, and refuses rather than overruns. */
+static uint8_t __attribute__((section(".d2_bss"), aligned(8))) heap_mem[32 * 1024];
+
+/* Also in D2, so that not even this shifts anything in .bss. D2 is not
+ *  zeroed at start-up: main() clears it before anything can allocate
+ *  (nothing mallocs before main). */
+static size_t __attribute__((section(".d2_bss"))) heap_used;
+
+extern "C" void *_sbrk(ptrdiff_t incr)
+{
+    size_t &used = heap_used;
+    if (incr < 0 ? (size_t)-incr > used : (size_t)incr > sizeof(heap_mem) - used)
+    {
+        errno = ENOMEM;
+        return (void *)-1;
+    }
+    void *prev = heap_mem + used;
+    used += incr;
+    return prev;
+}
 
 daisysp::Oscillator osc;
 
@@ -315,6 +345,8 @@ void MainLoop(void* data)
 
 int main(void)
 {
+    heap_used = 0; /* see _sbrk */
+
     hw.Init();
     // System::Delay(100);
 
