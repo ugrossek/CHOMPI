@@ -1,5 +1,31 @@
 # CHOMPI — Open Source
 
+> ### This branch adds firmware upload over USB
+>
+> Built on top of [sfaber's multi-firmware launcher](https://github.com/sfaber02/CHOMPI),
+> which is described further down. What this branch adds:
+>
+> - **Install firmware over USB-MIDI.** While the picker is showing, send a
+>   `.bin` into one of the 15 slots, from the browser at
+>   **<https://ugrossek.github.io/CHOMPI/>** (Chrome or Edge) or with
+>   `midi-send.py` on Linux. It is written to `/FIRMWARE/NN_NAME.bin` and
+>   started. Sending to the same slot again replaces it.
+> - **Key = slot** in the picker: `05_X.bin` is always on key 5.
+> - **USB on a Mac**, also after unplugging and replugging the cable.
+>
+> How it works: [`firmware/chompi-launcher`](firmware/chompi-launcher/)
+> (README and `PROTOCOL.md`). The web page's source is in [`docs/`](docs/).
+>
+> **Use at your own risk.** An unofficial, experimental hobby project,
+> tested on one CHOMPI, with no warranty. On top of what sfaber lists below,
+> an upload writes the firmware into `/FIRMWARE` on your SD card and replaces
+> whatever is in that slot, so back up your card first.
+>
+> Everything below is sfaber's README, unchanged except that its download
+> links point to sfaber's releases.
+
+---
+
 > ### This fork adds a multi-firmware launcher
 >
 > Run TAPE, TEMPO and WAVE from **one SD card**. Power on and CHOMPI lights one
@@ -10,7 +36,7 @@
 > internal flash. It installs like any ordinary firmware update, and swapping
 > back to a stock card returns you to normal.
 >
-> - **[Download a ready-to-use card image](../../releases/latest)** — unzip to a FAT32 card and go
+> - **[Download a ready-to-use card image](https://github.com/sfaber02/CHOMPI/releases/latest)** — unzip to a FAT32 card and go
 > - [`firmware/chompi-launcher`](firmware/chompi-launcher/) — source, and how it works
 >
 > The three stock firmwares here are patched to keep their samples and settings
@@ -38,7 +64,7 @@ Everything in this section is the fork's, not CHOMPI Club's.
 | | |
 |---|---|
 | [`firmware/chompi-launcher`](firmware/chompi-launcher/) | The launcher itself — source, how it works, and `make-card.sh` to build a card. |
-| [Releases](../../releases/latest) | A ready-to-use card image. Unzip to a FAT32 card. |
+| [Releases](https://github.com/sfaber02/CHOMPI/releases/latest) | A ready-to-use card image. Unzip to a FAT32 card. |
 
 ## Card layout — this differs from CHOMPI's instructions
 
