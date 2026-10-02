@@ -18,8 +18,9 @@
 > they can share a card. Each falls back to the root if its folder is missing,
 > so the binaries still work on a stock single-firmware card.
 >
-> A community modification. Not an official CHOMPI Club release — everything
-> below is their original README.
+> A community modification by [@sfaber02](https://github.com/sfaber02), not an
+> official CHOMPI Club release. CHOMPI Club's own README is further down,
+> unchanged.
 >
 > **Use at your own risk.** This is unofficial software provided as-is, with no
 > warranty. It is built to be safe: it never writes to the processor's internal
@@ -30,28 +31,14 @@
 
 ---
 
-**CHOMPI** is a quirky chromatic sampler and tape-music instrument by
-[CHOMPI Club](https://www.chompiclub.com).
+# The launcher
 
-This repo contains all of the production files, both hardware and firmware, that make up the CHOMPI Sampler.
-
----
-
-## What's here
+Everything in this section is the fork's, not CHOMPI Club's.
 
 | | |
 |---|---|
-| [`firmware/chompi-launcher`](firmware/chompi-launcher/) | **Added by this fork.** A launcher that boots any of the firmwares in `/FIRMWARE` from a key press, plus `make-card.sh` to build the card. |
-| [**Firmware — Start Here**](firmware/README.md) | Quick instructions for setting up your development environment, building the firmware, and loading it onto your CHOMPI. |
-| [`firmware/chompi-wave`](firmware/chompi-wave/) | **WAVE 1.0**, a wavetable synth firmware that doubles as a starting point for anyone writing their own firmware. |
-| [`firmware/chompi-tempo`](firmware/chompi-tempo/) | **TEMPO 1.0**, a pattern generator firmware — the counterpart to TAPE. |
-| [`firmware/chompi-tape`](firmware/chompi-tape/) | **TAPE 2.0**, the sampler firmware every CHOMPI ships with. |
-| [`firmware/chompi-bootloader-v6.4-beta`](firmware/chompi-bootloader-v6.4-beta/) | This bootloader never shipped on units, but was created to improve stability of the Daisy Seed's integration with CHOMPI's hardware as well as repair edge-case issues related to bugs inherited from older versions of the Electrosmith bootloader.  |
-| [`firmware/card-profiles`](firmware/card-profiles/) | The factory microSD card contents for TAPE, TEMPO and WAVE — firmware, samples and settings. |
-| [`hardware/hardware-pcb`](hardware/hardware-pcb/) | Schematic, BOM, EAGLE PCB files, and the full fabrication package. |
-| [`hardware/hardware-enclosure`](hardware/hardware-enclosure/) | The six pcb panel enclosure files, as well as laser cutting files for diy panels. |
-
-Each folder contains its own README, so check those out for more details.
+| [`firmware/chompi-launcher`](firmware/chompi-launcher/) | The launcher itself — source, how it works, and `make-card.sh` to build a card. |
+| [Releases](../../releases/latest) | A ready-to-use card image. Unzip to a FAT32 card. |
 
 ## Card layout — this differs from CHOMPI's instructions
 
@@ -95,6 +82,79 @@ f_chdir("/YOURFIRMWARE");
 
 `firmware/chompi-launcher/make-card.sh /Volumes/YOUR_CARD` builds this layout
 from the factory profiles in `firmware/card-profiles`.
+
+## Risks, and what actually gets written
+
+Low risk, but not zero risk — here is exactly what happens, so you can judge
+for yourself.
+
+**What gets written**
+
+- **QSPI flash** — the bootloader installs the launcher here, the same way it
+  installs any firmware you put on a card. It happens once, on the first boot
+  after the `.bin` changes (the slow rainbow). The bootloader skips the write
+  when what is on the card already matches what is in QSPI.
+- **Your SD card** — the launcher writes `/FIRMWARE/launcher_log.txt`, and each
+  firmware reads and writes its own settings inside its own folder.
+
+**What never gets written**
+
+- **The STM32's internal flash**, where the bootloader lives. That is the one
+  thing that could genuinely brick a CHOMPI, and nothing here touches it. No
+  DFU step, no chip programmer, no soldering.
+
+**Switching firmwares does not flash anything.** Picking one copies it into RAM
+and resets; QSPI keeps holding the launcher. You write to flash *less* than you
+would by swapping cards.
+
+**If something goes wrong**
+
+1. Power cycle — you land back at the picker.
+2. Put your old card in — the bootloader installs that firmware and you are
+   back on stock.
+3. Worst case, <https://flash.daisy.audio> over USB. The Daisy's DFU mode is in
+   factory ROM and cannot be overwritten, so the board is always recoverable.
+
+**Caveats worth knowing**
+
+- Unofficial, as-is, no warranty. Not a CHOMPI Club release.
+- It is new. It works here and on a handful of other units, but it has not seen
+  a lot of hardware yet.
+- Your existing cards are untouched — this is a separate card, and nothing
+  migrates or modifies your current setup.
+- Each firmware falls back to the card root when its folder is missing, so
+  stock cards still work. But if you create an empty `/TAPE` folder, TAPE will
+  look there and find nothing.
+
+---
+
+# CHOMPI Club's original README
+
+Everything below this line is CHOMPI Club's, unchanged.
+
+---
+
+**CHOMPI** is a quirky chromatic sampler and tape-music instrument by
+[CHOMPI Club](https://www.chompiclub.com).
+
+This repo contains all of the production files, both hardware and firmware, that make up the CHOMPI Sampler.
+
+---
+
+## What's here
+
+| | |
+|---|---|
+| [**Firmware — Start Here**](firmware/README.md) | Quick instructions for setting up your development environment, building the firmware, and loading it onto your CHOMPI. |
+| [`firmware/chompi-wave`](firmware/chompi-wave/) | **WAVE 1.0**, a wavetable synth firmware that doubles as a starting point for anyone writing their own firmware. |
+| [`firmware/chompi-tempo`](firmware/chompi-tempo/) | **TEMPO 1.0**, a pattern generator firmware — the counterpart to TAPE. |
+| [`firmware/chompi-tape`](firmware/chompi-tape/) | **TAPE 2.0**, the sampler firmware every CHOMPI ships with. |
+| [`firmware/chompi-bootloader-v6.4-beta`](firmware/chompi-bootloader-v6.4-beta/) | This bootloader never shipped on units, but was created to improve stability of the Daisy Seed's integration with CHOMPI's hardware as well as repair edge-case issues related to bugs inherited from older versions of the Electrosmith bootloader.  |
+| [`firmware/card-profiles`](firmware/card-profiles/) | The factory microSD card contents for TAPE, TEMPO and WAVE — firmware, samples and settings. |
+| [`hardware/hardware-pcb`](hardware/hardware-pcb/) | Schematic, BOM, EAGLE PCB files, and the full fabrication package. |
+| [`hardware/hardware-enclosure`](hardware/hardware-enclosure/) | The six pcb panel enclosure files, as well as laser cutting files for diy panels. |
+
+Each folder contains its own README, so check those out for more details.
 
 ## What's not here
 
