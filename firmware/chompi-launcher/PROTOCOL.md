@@ -230,10 +230,9 @@ one renamed into place. If power is lost while writing, the old firmware is
 still there. If it is lost in the short moment between removing the old file
 and the rename, the new image is still on the card as `upload.tmp`.
 
-**Which key the slot appears on is up to the launcher.** It currently sorts
-the files in `/FIRMWARE` and lights one key per file in that order. The
-number therefore sets the order, not necessarily the key: with only `01`,
-`02`, `03` and `05` present, slot 5 shows on the 4th key.
+**Slot *N* is white key *N* in the launcher's picker.** The launcher puts
+every `NN_*.bin` on key `NN`; keys without a firmware stay dark, and files
+without a number fill the free keys.
 
 ### Name rules
 

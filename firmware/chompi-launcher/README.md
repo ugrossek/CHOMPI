@@ -113,9 +113,10 @@ shuffled them in and out of the root; that is gone.
 /WAVE/                 wavetables, options.json, presets.json
 ```
 
-Slots are assigned by sorting filenames, so the numeric prefixes pin each
-firmware to a key. Add a firmware by dropping a `.bin` in `/FIRMWARE`; up to 15
-are shown, one per white key. Have it `f_chdir()` into its own folder and it
+The number in front of the name is the key: `05_TAPE-DEV.bin` is on key 5,
+whatever else is on the card, and keys without a firmware stay dark. Files
+without a number fill the free keys in name order. Add a firmware by dropping
+a `.bin` in `/FIRMWARE`; up to 15 are shown, one per white key. Have it `f_chdir()` into its own folder and it
 will never collide with anything else on the card.
 
 `./make-card.sh /Volumes/YOUR_CARD` builds this layout from the factory card

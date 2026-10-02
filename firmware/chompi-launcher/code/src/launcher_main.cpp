@@ -194,15 +194,31 @@ static bool HasBinExtension(const char *name)
            (ext[2] == 'i' || ext[2] == 'I') && (ext[3] == 'n' || ext[3] == 'N');
 }
 
-/** Collect up to kMaxSlots .bin files from /FIRMWARE, sorted by name so the key
- *  order stays put as firmwares are added and removed. Prefix them 01_, 02_ and
- *  so on to pin them to particular keys. */
+/** The key a filename asks for: "05_TAPE.bin" -> 5. 0 without a valid
+ *  NN_ prefix. */
+static int SlotFromName(const char *name)
+{
+    if (name[0] < '0' || name[0] > '9' || name[1] < '0' || name[1] > '9'
+       || name[2] != '_')
+        return 0;
+    const int n = (name[0] - '0') * 10 + (name[1] - '0');
+    return n >= 1 && n <= kMaxSlots ? n : 0;
+}
+
+/** Put the .bin files from /FIRMWARE on keys. NN_NAME.bin goes on key NN, so
+ *  a firmware stays on its key no matter what else is on the card -- the
+ *  same slot number a USB upload names. Files without a prefix (or whose key
+ *  is taken) fill the free keys in name order. */
 static void ScanFirmwares()
 {
-    DIR     dir;
-    FILINFO info;
+    static Slot found[2 * kMaxSlots];
+    int         n_found = 0;
+    DIR         dir;
+    FILINFO     info;
 
     slot_count = 0;
+    for (int i = 0; i < kMaxSlots; i++)
+        slots[i].size = 0; /* empty key */
 
     FRESULT res = f_opendir(&dir, kFirmwareDir);
     Log("f_opendir(\"%s\") -> %d", kFirmwareDir, (int)res);
@@ -210,7 +226,7 @@ static void ScanFirmwares()
         return;
 
     int seen = 0;
-    while (slot_count < kMaxSlots)
+    while (n_found < 2 * kMaxSlots)
     {
         res = f_readdir(&dir, &info);
         if (res != FR_OK)
@@ -243,27 +259,53 @@ static void ScanFirmwares()
             continue;
         }
 
-        strncpy(slots[slot_count].name, info.fname, sizeof(slots[0].name) - 1);
-        slots[slot_count].name[sizeof(slots[0].name) - 1] = '\0';
-        slots[slot_count].size = (uint32_t)info.fsize;
-        slot_count++;
-        Log("    ACCEPTED as slot %d", slot_count);
+        strncpy(found[n_found].name, info.fname, sizeof(found[0].name) - 1);
+        found[n_found].name[sizeof(found[0].name) - 1] = '\0';
+        found[n_found].size = (uint32_t)info.fsize;
+        n_found++;
     }
     f_closedir(&dir);
-    Log("directory walk saw %d entries, accepted %d", seen, slot_count);
 
     /* Insertion sort: tiny list, and it keeps the ordering obvious. */
-    for (int i = 1; i < slot_count; i++)
+    for (int i = 1; i < n_found; i++)
     {
-        Slot key = slots[i];
+        Slot key = found[i];
         int  j   = i - 1;
-        while (j >= 0 && strcasecmp(slots[j].name, key.name) > 0)
+        while (j >= 0 && strcasecmp(found[j].name, key.name) > 0)
         {
-            slots[j + 1] = slots[j];
+            found[j + 1] = found[j];
             j--;
         }
-        slots[j + 1] = key;
+        found[j + 1] = key;
     }
+
+    /* Numbered ones onto their own keys first, then the rest into the gaps. */
+    static bool placed[2 * kMaxSlots];
+    for (int i = 0; i < n_found; i++)
+    {
+        const int key = SlotFromName(found[i].name);
+        placed[i]     = key && slots[key - 1].size == 0;
+        if (placed[i])
+            slots[key - 1] = found[i];
+    }
+    int gap = 0;
+    for (int i = 0; i < n_found; i++)
+    {
+        if (placed[i])
+            continue;
+        while (gap < kMaxSlots && slots[gap].size)
+            gap++;
+        if (gap == kMaxSlots)
+        {
+            Log("    no free key left for %s", found[i].name);
+            continue;
+        }
+        slots[gap] = found[i];
+    }
+
+    for (int i = 0; i < kMaxSlots; i++)
+        slot_count += slots[i].size ? 1 : 0;
+    Log("directory walk saw %d entries, %d on keys", seen, slot_count);
 }
 
 /* Settings are each firmware's own business.
@@ -524,8 +566,9 @@ static void DrawPicker(uint32_t now)
     for (int i = 0; i < kNumPthLeds; i++)
         SetPthLed(i, 0, 0, 0);
 
-    for (int i = 0; i < slot_count; i++)
-        SetSmtLedFloat(kSlotLed[i], level, level, level);
+    for (int i = 0; i < kMaxSlots; i++)
+        if (slots[i].size)
+            SetSmtLedFloat(kSlotLed[i], level, level, level);
 
     fill_led_data();
 }
@@ -708,19 +751,60 @@ static void DrawUploadProgress()
 static bool     prev_int_state = true;
 static bool     usb_handoff    = false;
 static uint32_t usb_handoff_t  = 0;
+static bool     usb_lent       = false; /**< lines are with the charger */
+static uint32_t usb_lent_t     = 0;
+static uint32_t usb_quiet_t    = 0;     /**< ignore "unknown" until then */
+static uint32_t usb_log_t      = 0;     /**< last USB event, for LogFlush */
+static bool     usb_log_dirty  = false;
 
-/** At power-on: let the charger detect the port, then take the lines. */
+/** Read every charger register, waiting for the I2C transfer to land.
+ *  TAPE waits forever; a failed read never sets read_ready, so this gives
+ *  up eventually rather than hang the picker. False if it did. */
+static bool ChargerRead()
+{
+    hw.MpReadAll();
+    const uint32_t started = System::GetNow();
+    while (!hw.read_ready && System::GetNow() - started < 500)
+        System::Delay(1);
+    return hw.read_ready;
+}
+
+static void UsbLog(const char *what)
+{
+    Log("usb-switch: %s (DPDM_STAT 0x%02X)", what,
+        (unsigned)(hw.mp_buff_[0] & 0xF0));
+    usb_log_t     = System::GetNow();
+    usb_log_dirty = true;
+}
+
+/** At power-on, the same sequence TAPE runs: set the charger up and clear
+ *  its pending status, give it a moment, let it detect the port, then take
+ *  the lines. */
 static void UsbTakeOver()
 {
+    hw.MpWrite(0x0c, 0B01010001); /* BATT_LOW at 3V, as TAPE does */
+    const bool read = ChargerRead();
+    System::Delay(100);           /* TAPE spends ~100 ms here */
+
     hw.usb_sw.Write(false);       /* give USB to the charger */
     System::Delay(1);
     hw.MpWrite(0x0a, 0B00100100); /* auto DPDM */
     System::Delay(1);
     hw.usb_sw.Write(true);        /* take it back */
+    UsbLog(read ? "power-on, lines taken" : "power-on, charger did not answer");
 }
 
 /** Charger raised its interrupt: a cable came or went. If it does not yet
- *  know the port type, lend it the lines and force a fresh detection. */
+ *  know the port type, lend it the lines and force a fresh detection; once
+ *  it does, take them back.
+ *
+ *  Some ports never get identified -- a Mac's USB-C port reads "unknown"
+ *  every time. TAPE's version of this then lends the lines out, forces a
+ *  detection, gets "unknown" again, and repeats every ~230 ms for as long as
+ *  the cable is in, so USB never comes back after a replug. Here a forced
+ *  detection that comes back empty ends it: the lines are taken anyway (the
+ *  host enumerates fine either way) and further "unknown" is ignored for a
+ *  few seconds. */
 static void ServiceUsbSwitch(uint32_t now)
 {
 #if !NO_BATT
@@ -730,22 +814,39 @@ static void ServiceUsbSwitch(uint32_t now)
 
     if (interrupt)
     {
-        hw.MpReadAll();
-        /* TAPE waits forever here. A failed I2C read never sets read_ready,
-           so give up after a while rather than hang the picker. */
-        const uint32_t started = System::GetNow();
-        while (!hw.read_ready && System::GetNow() - started < 50)
-            System::Delay(1);
-
-        if ((hw.mp_buff_[0] & 0B11110000) == 0) /* DPDM_STAT unknown */
+        if (!ChargerRead())
+        {
+            /* Deciding on stale registers could lend the lines out for good.
+               Leave everything as it is and look again on the next pass. */
+            prev_int_state = true;
+            UsbLog("interrupt, charger did not answer -- retrying");
+        }
+        else if ((hw.mp_buff_[0] & 0B11110000) == 0 && usb_lent)
+        {
+            /* Our forced detection came back empty. Stop asking. */
+            hw.usb_sw.Write(true);
+            usb_lent    = false;
+            usb_quiet_t = now + 5000;
+            UsbLog("interrupt, detection found nothing -- lines taken anyway");
+        }
+        else if ((hw.mp_buff_[0] & 0B11110000) == 0 && (int32_t)(now - usb_quiet_t) < 0)
+        {
+            /* Still settling from the last round; leave the lines with us. */
+        }
+        else if ((hw.mp_buff_[0] & 0B11110000) == 0) /* DPDM_STAT unknown */
         {
             hw.usb_sw.Write(false);
             usb_handoff   = true;
             usb_handoff_t = now;
+            usb_lent      = true;
+            usb_lent_t    = now;
+            UsbLog("interrupt, port unknown -- lines lent to charger");
         }
         else
         {
             hw.usb_sw.Write(true);
+            usb_lent = false;
+            UsbLog("interrupt, port known -- lines taken");
         }
     }
 
@@ -753,6 +854,24 @@ static void ServiceUsbSwitch(uint32_t now)
     {
         usb_handoff = false;
         hw.MpWrite(0x0a, 0B00110100); /* force DPDM */
+    }
+
+    /* TAPE waits for the next interrupt to take the lines back. If that one
+       never comes, USB would stay dark until a power cycle; take them. */
+    if (usb_lent && now - usb_lent_t > 1500)
+    {
+        ChargerRead(); /* only for the log */
+        hw.usb_sw.Write(true);
+        usb_lent    = false;
+        usb_quiet_t = now + 5000;
+        UsbLog("no second interrupt -- lines taken");
+    }
+
+    /* Get the handshake onto the card without waiting for a key press. */
+    if (usb_log_dirty && now - usb_log_t > 3000)
+    {
+        usb_log_dirty = false;
+        LogFlush();
     }
 #endif
 }
@@ -855,9 +974,10 @@ int main(void)
 
     ScanFirmwares();
     Log("scan: %d firmware(s) in /%s", slot_count, kFirmwareDir);
-    for (int i = 0; i < slot_count; i++)
-        Log("  key %d -> %s (%lu bytes)", i + 1, slots[i].name,
-            (unsigned long)slots[i].size);
+    for (int i = 0; i < kMaxSlots; i++)
+        if (slots[i].size)
+            Log("  key %d -> %s (%lu bytes)", i + 1, slots[i].name,
+                (unsigned long)slots[i].size);
 
     if (slot_count == 0)
     {
@@ -897,8 +1017,10 @@ int main(void)
         }
 
         bool any_down = false;
-        for (int i = 0; i < slot_count; i++)
+        for (int i = 0; i < kMaxSlots; i++)
         {
+            if (slots[i].size == 0)
+                continue; /* dark key */
             if (hw.button_sr.State(static_cast<int>(kSlotKey[i])))
             {
                 any_down = true;
