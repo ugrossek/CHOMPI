@@ -12,8 +12,7 @@
 >
 > **Use at your own risk.** This is unofficial software provided as-is, with no warranty,
 > and it has only been tested on one unit. It is loaded from the SD card like any firmware
-> update and never touches the bootloader. If something goes wrong, put the original firmware
-> back on the card, or recover the board over USB DFU: <https://flash.daisy.audio>.
+> update and never touches the bootloader.
 
 ---
 
