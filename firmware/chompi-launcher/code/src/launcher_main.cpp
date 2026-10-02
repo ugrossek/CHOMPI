@@ -9,10 +9,16 @@
  *  The stock bootloader skips directories when it hunts for a .bin to install,
  *  so it only ever sees the launcher, and QSPI keeps holding the launcher no
  *  matter which firmware was last run.
+ *
+ *  A firmware can also arrive over USB MIDI (see midi_upload.h and
+ *  PROTOCOL.md). It is written into the slot the host names, then read back
+ *  off the card and started exactly as if its key had been pressed -- send it
+ *  while the picker is up, or while any fault is showing.
  */
 #include "daisy_seed.h"
 #include "hardware.h"
 #include "chainload.h"
+#include "midi_upload.h"
 #include "fatfs.h"
 #include <cstring>
 #include <cstdio>
@@ -60,6 +66,12 @@ struct Slot
 static Slot slots[kMaxSlots];
 static int  slot_count = 0;
 
+MidiUpload upload;
+
+/** Whether the card is mounted. An upload remounts it if not, so a card
+ *  inserted after power-on still works. */
+static bool card_ok = false;
+
 /* ------------------------------------------------------------------------
  *  Logging
  *
@@ -87,7 +99,7 @@ static int  slot_count = 0;
  *  Not reentrant, which is fine here: one thing happens at a time. */
 
 static const char *kLogFile = "FIRMWARE/launcher_log.txt";
-static char        log_buf[8192];
+static char __attribute__((aligned(32))) log_buf[8192];
 static size_t      log_len = 0;
 
 static void Log(const char *fmt, ...)
@@ -112,6 +124,70 @@ static void Log(const char *fmt, ...)
     log_len += snprintf(log_buf + log_len, sizeof(log_buf) - log_len, "\r\n");
 }
 
+/** Where this boot's log starts in the file. Earlier boots are kept ahead of
+ *  it, so a run that ends in a hang -- which never gets to write again --
+ *  can still be read after the next one. Starts over once the file is big.
+ *
+ *  Always on a sector boundary, with the gap padded out. Writing from the
+ *  middle of a sector lost bytes at every following sector boundary. */
+static FSIZE_t log_base = 0;
+
+static void LogStartRun()
+{
+    static FILINFO info;
+    static FIL     f;
+
+    if (f_stat(kLogFile, &info) != FR_OK || info.fsize >= 64 * 1024)
+    {
+        log_base = 0;
+        return;
+    }
+
+    log_base = (info.fsize + 511) & ~(FSIZE_t)511;
+    if (log_base == info.fsize)
+        return;
+
+    static char pad[512];
+    memset(pad, '\n', sizeof(pad));
+    if (f_open(&f, kLogFile, FA_OPEN_ALWAYS | FA_WRITE) != FR_OK)
+        return;
+    UINT put = 0;
+    if (f_lseek(&f, info.fsize) == FR_OK)
+        f_write(&f, pad, (UINT)(log_base - info.fsize), &put);
+    f_close(&f);
+}
+
+/** DIAGNOSTIC: a debug firmware leaves a record of how far it got, and of any
+ *  crash, in backup SRAM, which survives the reset that brings us back here. */
+struct CrashRec
+{
+    uint32_t magic, stage, pc, lr, psr, cfsr, hfsr, mmfar, bfar;
+};
+
+static void LogCrashRecord()
+{
+    System::InitBackupSram();
+    volatile CrashRec *rec = (volatile CrashRec *)0x38800100;
+
+    Log("reset cause RCC_RSR=0x%08lX", (unsigned long)RCC->RSR);
+    if ((rec->magic & 0xFFFF0000) == 0xB0070000)
+        Log("RECORD: firmware did not finish startup, last stage %lu",
+            (unsigned long)rec->stage);
+    else if ((rec->magic & 0xFFFF0000) == 0x600D0000)
+        Log("RECORD: firmware finished startup, stage %lu",
+            (unsigned long)rec->stage);
+    else if ((rec->magic & 0xFFFF0000) == 0xFA170000)
+        Log("RECORD: FAULT at stage %lu: pc=0x%08lX lr=0x%08lX psr=0x%08lX "
+            "cfsr=0x%08lX hfsr=0x%08lX mmfar=0x%08lX bfar=0x%08lX",
+            (unsigned long)rec->stage, (unsigned long)rec->pc,
+            (unsigned long)rec->lr, (unsigned long)rec->psr,
+            (unsigned long)rec->cfsr, (unsigned long)rec->hfsr,
+            (unsigned long)rec->mmfar, (unsigned long)rec->bfar);
+    else
+        Log("RECORD: none (magic 0x%08lX)", (unsigned long)rec->magic);
+    rec->magic = 0;
+}
+
 /** Write the whole log out.
  *
  *  Deliberately NOT FA_CREATE_ALWAYS. That truncates on open, so a flush whose
@@ -125,7 +201,7 @@ static void LogFlush()
     static FIL f;
     if (f_open(&f, kLogFile, FA_OPEN_ALWAYS | FA_WRITE) != FR_OK)
         return;
-    if (f_lseek(&f, 0) != FR_OK)
+    if (f_lseek(&f, log_base) != FR_OK)
     {
         f_close(&f);
         return;
@@ -329,6 +405,141 @@ static bool LoadImage(const Slot &slot, uint32_t *out_len)
     return true;
 }
 
+/** Keybed filling left to right in amber while an upload goes onto the card,
+ *  then in white as LoadImage() reads it back to start it. */
+static void DrawWriteProgress(uint32_t done, uint32_t total)
+{
+    const int lit = (int)((done * kMaxSlots) / total);
+    for (int k = 0; k < kMaxSlots; k++)
+        SetSmtLedFloat(kSlotLed[k], k < lit ? .9f : 0.f, k < lit ? .45f : 0.f,
+                       0.f);
+    fill_led_data();
+}
+
+/** Write the uploaded image into its slot: /FIRMWARE/NN_NAME.bin.
+ *
+ *  Goes to a temporary file first, which is read back and compared before any
+ *  existing NN_* file is removed, so a failed write never costs the firmware
+ *  already in the slot. On success *out describes the new file, ready for
+ *  LoadImage(). */
+static MidiUpload::Status StoreUpload(Slot *out)
+{
+    static const char *kTemp = "FIRMWARE/upload.tmp";
+    static FIL         file;
+
+    const uint32_t len = upload.Total();
+
+    if (!card_ok)
+    {
+        const FRESULT res = f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
+        Log("store: card was not mounted, f_mount -> %d", (int)res);
+        if (res != FR_OK)
+            return MidiUpload::NO_CARD;
+        card_ok = true;
+    }
+
+    FRESULT res = f_mkdir(kFirmwareDir);
+    if (res != FR_OK && res != FR_EXIST)
+    {
+        Log("store: f_mkdir -> %d", (int)res);
+        return MidiUpload::WRITE_FAILED;
+    }
+
+    /* Write. Through the bounce buffer, as SDMMC's DMA cannot reach SDRAM. */
+    const uint32_t started = System::GetNow();
+    res = f_open(&file, kTemp, FA_CREATE_ALWAYS | FA_WRITE);
+    Log("store: f_open(\"%s\") -> %d", kTemp, (int)res);
+    if (res != FR_OK)
+        return MidiUpload::WRITE_FAILED;
+
+    bool ok = true;
+    for (uint32_t off = 0; ok && off < len; off += kChunkSize)
+    {
+        const UINT want = len - off < kChunkSize ? len - off : kChunkSize;
+        UINT       put  = 0;
+        memcpy(bounce_buf, fw_image + off, want);
+        res = f_write(&file, bounce_buf, want, &put);
+        if (res != FR_OK || put != want)
+        {
+            Log("store: f_write at %lu -> %d, put %lu of %lu",
+                (unsigned long)off, (int)res, (unsigned long)put,
+                (unsigned long)want);
+            ok = false;
+        }
+        DrawWriteProgress(off + want, len);
+    }
+    res = f_close(&file);
+    if (res != FR_OK)
+        Log("store: f_close -> %d", (int)res);
+    if (!ok || res != FR_OK)
+        return MidiUpload::WRITE_FAILED;
+
+    /* Read back and compare: a card that silently drops writes would
+       otherwise leave a slot that fails only the next time it is chosen. */
+    res = f_open(&file, kTemp, FA_OPEN_EXISTING | FA_READ);
+    for (uint32_t off = 0; ok && res == FR_OK && off < len; off += kChunkSize)
+    {
+        const UINT want = len - off < kChunkSize ? len - off : kChunkSize;
+        UINT       got  = 0;
+        res = f_read(&file, bounce_buf, want, &got);
+        if (res != FR_OK || got != want || memcmp(bounce_buf, fw_image + off, want))
+        {
+            Log("store: readback differs at %lu (res %d, got %lu)",
+                (unsigned long)off, (int)res, (unsigned long)got);
+            ok = false;
+        }
+    }
+    f_close(&file);
+    if (!ok || res != FR_OK)
+        return MidiUpload::WRITE_FAILED;
+    Log("store: %lu bytes written and verified in %lu ms", (unsigned long)len,
+        (unsigned long)(System::GetNow() - started));
+
+    /* Clear the slot: every NN_* file, whatever its name. Collected first,
+       since deleting while the directory is being read is asking for trouble. */
+    char prefix[8];
+    snprintf(prefix, sizeof(prefix), "%02u_", (unsigned)upload.Slot());
+
+    static char doomed[8][_MAX_LFN + 1];
+    int         n_doomed = 0;
+    DIR         dir;
+    FILINFO     info;
+    if (f_opendir(&dir, kFirmwareDir) == FR_OK)
+    {
+        while (n_doomed < 8 && f_readdir(&dir, &info) == FR_OK && info.fname[0])
+        {
+            if (!(info.fattrib & AM_DIR) && strncmp(info.fname, prefix, 3) == 0)
+            {
+                strncpy(doomed[n_doomed], info.fname, sizeof(doomed[0]) - 1);
+                doomed[n_doomed][sizeof(doomed[0]) - 1] = '\0';
+                n_doomed++;
+            }
+        }
+        f_closedir(&dir);
+    }
+    for (int i = 0; i < n_doomed; i++)
+    {
+        static char path[sizeof(doomed[0]) + 16];
+        snprintf(path, sizeof(path), "%s/%s", kFirmwareDir, doomed[i]);
+        res = f_unlink(path);
+        Log("store: replacing %s, f_unlink -> %d", path, (int)res);
+        if (res != FR_OK)
+            return MidiUpload::WRITE_FAILED;
+    }
+
+    snprintf(out->name, sizeof(out->name), "%s%s.bin", prefix, upload.Name());
+    out->size = len;
+
+    char path[80];
+    snprintf(path, sizeof(path), "%s/%s", kFirmwareDir, out->name);
+    res = f_rename(kTemp, path);
+    Log("store: f_rename -> \"%s\" -> %d", path, (int)res);
+    if (res != FR_OK)
+        return MidiUpload::WRITE_FAILED;
+
+    return MidiUpload::OK;
+}
+
 /** Breathing white on every populated key. Unpopulated keys stay dark, so the
  *  number of lit keys is the number of firmwares you have. */
 static void DrawPicker(uint32_t now)
@@ -384,8 +595,14 @@ enum class Fault
     Internal,     /**< white   -- the trampoline does not fit; cannot happen */
 };
 
+static void ServiceUsb(uint32_t now);
+static void DrawUploadProgress();
+
 /** Slow pulse, and the unit stays here rather than jumping into nothing.
- *  Commits the log on the way in -- this is where the evidence matters most. */
+ *  Commits the log on the way in -- this is where the evidence matters most.
+ *
+ *  Still listens on USB: a firmware sent over MIDI needs neither a card nor
+ *  anything on it, so this is also the way out of a bad card. */
 [[noreturn]] static void ErrorLoop(Fault fault)
 {
     Log("STOP: fault %d", (int)fault);
@@ -401,19 +618,32 @@ enum class Fault
         case Fault::Internal:    r = .8f; g = .8f;  b = .8f;  break;
     }
 
+    uint32_t tick = 0;
     while (true)
     {
         const uint32_t now = System::GetNow();
-        const float phase  = (float)(now % 1200) / 1200.f;
-        const float tri    = phase < .5f ? phase * 2.f : (1.f - phase) * 2.f;
+        ServiceUsb(now);
 
-        for (int i = 0; i < kNumSmtLeds; i++)
-            SetSmtLed(i, 0, 0, 0);
-        for (int i = 0; i < kNumPthLeds; i++)
-            SetPthLedFloat(i, tri * r, tri * g, tri * b);
+        if (now - tick < 16)
+            continue;
+        tick = now;
 
-        fill_led_data();
-        System::Delay(16);
+        if (upload.Active(now))
+        {
+            DrawUploadProgress();
+        }
+        else
+        {
+            const float phase = (float)(now % 1200) / 1200.f;
+            const float tri   = phase < .5f ? phase * 2.f : (1.f - phase) * 2.f;
+
+            for (int i = 0; i < kNumSmtLeds; i++)
+                SetSmtLed(i, 0, 0, 0);
+            for (int i = 0; i < kNumPthLeds; i++)
+                SetPthLedFloat(i, tri * r, tri * g, tri * b);
+
+            fill_led_data();
+        }
         hw.LowBatteryLockoutCheck();
     }
 }
@@ -426,6 +656,15 @@ static void ShutdownPeripherals()
     hw.LedsOff();
     StopLeds();
     System::Delay(20); /* let the last DMA transfer retire */
+
+    /* Leave USB properly: the host sees the device go, and the data lines go
+       back to the charger, as they are at power-on. Otherwise the reset cuts
+       a live connection off mid-stream and the incoming firmware starts up
+       underneath it. */
+    UsbHandle usb;
+    usb.DeInit(UsbHandle::FS_EXTERNAL);
+    hw.usb_sw.Write(false);
+    System::Delay(100);
 
     /* libDaisy's SDMMC driver has no teardown call, but unmounting ends the
        last transfer, and the peripheral does nothing further unless asked. */
@@ -446,10 +685,174 @@ static void ShutdownPeripherals()
     hw.seed.DeInit();
 }
 
+/** Check the staged image and start it. Shared by both ways in: a key press,
+ *  and an upload once it has been stored -- both read it off the card first. */
+[[noreturn]] static void Boot(uint32_t length)
+{
+    const uint32_t msp   = *(const uint32_t *)(fw_image + 0);
+    const uint32_t entry = *(const uint32_t *)(fw_image + 4);
+    Log("vector table: MSP=0x%08lX entry=0x%08lX", (unsigned long)msp,
+        (unsigned long)entry);
+
+    if (!ImageLooksValid(fw_image, length))
+    {
+        Log("FAIL: vector table rejected");
+        ErrorLoop(Fault::BadImage);
+    }
+
+    /* Last thing written: if the log ends here, the handover itself is where
+       it went wrong. */
+    Log("handing over to 0x%08lX -- goodbye", (unsigned long)entry);
+    LogFlush(); /* last chance; the next instruction is the jump */
+
+    ShutdownPeripherals();
+    ChainLoad(fw_image, length); /* does not return */
+}
+
+/** Keybed filling left to right in cyan as an upload arrives -- the same
+ *  gauge as a card read, in a colour that says where it is coming from. */
+static void DrawUploadProgress()
+{
+    const uint32_t total = upload.Total();
+    const int lit = total ? (int)((upload.Received() * kMaxSlots) / total) : 0;
+
+    for (int i = 0; i < kNumSmtLeds; i++)
+        SetSmtLed(i, 0, 0, 0);
+    for (int i = 0; i < kNumPthLeds; i++)
+        SetPthLed(i, 0, 0, 0);
+    for (int k = 0; k < kMaxSlots; k++)
+        SetSmtLedFloat(kSlotLed[k], 0.f, k < lit ? .8f : .05f,
+                       k < lit ? .8f : .05f);
+
+    fill_led_data();
+}
+
+/* ------------------------------------------------------------------------
+ *  USB
+ *
+ *  CHOMPI's USB data lines run through a switch shared with the MP2722
+ *  charger, which needs them for a moment to work out what kind of port it is
+ *  plugged into. Until the Daisy takes them back, the host never sees a MIDI
+ *  device. This is the same handshake TAPE does in its main loop. */
+
+static bool     prev_int_state = true;
+static bool     usb_handoff    = false;
+static uint32_t usb_handoff_t  = 0;
+
+/** At power-on: let the charger detect the port, then take the lines. */
+static void UsbTakeOver()
+{
+    hw.usb_sw.Write(false);       /* give USB to the charger */
+    System::Delay(1);
+    hw.MpWrite(0x0a, 0B00100100); /* auto DPDM */
+    System::Delay(1);
+    hw.usb_sw.Write(true);        /* take it back */
+}
+
+/** Charger raised its interrupt: a cable came or went. If it does not yet
+ *  know the port type, lend it the lines and force a fresh detection. */
+static void ServiceUsbSwitch(uint32_t now)
+{
+#if !NO_BATT
+    const bool int_state = hw.mpc_int.Read();
+    const bool interrupt = !int_state && prev_int_state;
+    prev_int_state       = int_state;
+
+    if (interrupt)
+    {
+        hw.MpReadAll();
+        /* TAPE waits forever here. A failed I2C read never sets read_ready,
+           so give up after a while rather than hang the picker. */
+        const uint32_t started = System::GetNow();
+        while (!hw.read_ready && System::GetNow() - started < 50)
+            System::Delay(1);
+
+        if ((hw.mp_buff_[0] & 0B11110000) == 0) /* DPDM_STAT unknown */
+        {
+            hw.usb_sw.Write(false);
+            usb_handoff   = true;
+            usb_handoff_t = now;
+        }
+        else
+        {
+            hw.usb_sw.Write(true);
+        }
+    }
+
+    if (usb_handoff && now - usb_handoff_t > 1)
+    {
+        usb_handoff = false;
+        hw.MpWrite(0x0a, 0B00110100); /* force DPDM */
+    }
+#endif
+}
+
+/** Called as often as the loops can manage: an upload is stop-and-wait, so
+ *  every pass that skips this is a chunk not received. Does not return once
+ *  an upload completes. */
+static void ServiceUsb(uint32_t now)
+{
+    ServiceUsbSwitch(now);
+
+    switch (upload.Poll())
+    {
+        case MidiUpload::Event::None:
+        case MidiUpload::Event::Progress: break;
+
+        case MidiUpload::Event::Pinged: Log("usb: ping"); break;
+
+        case MidiUpload::Event::Started:
+            Log("usb: upload of %lu bytes started",
+                (unsigned long)upload.Total());
+            break;
+
+        case MidiUpload::Event::Rejected:
+            Log("usb: message rejected, status %d at %lu/%lu bytes",
+                (int)upload.LastStatus(), (unsigned long)upload.Received(),
+                (unsigned long)upload.Total());
+            break;
+
+        case MidiUpload::Event::Complete:
+        {
+            Log("usb: upload complete, %lu bytes, crc 0x%08lX ok, for slot %u "
+                "as \"%s\"", (unsigned long)upload.Total(),
+                (unsigned long)upload.Crc(), (unsigned)upload.Slot(),
+                upload.Name());
+
+            Slot                     stored;
+            const MidiUpload::Status st = StoreUpload(&stored);
+            upload.FinishEnd(st);
+            if (st != MidiUpload::OK)
+            {
+                Log("usb: store failed, status %d -- upload kept for a retry",
+                    (int)st);
+                LogFlush();
+                break;
+            }
+
+            /* Start it the way a key press would: read back off the card into
+               fw_image, then the same Boot(). An image that arrived over USB
+               and one picked from the menu take the identical path. */
+            System::Delay(20); /* let the END reply leave */
+            uint32_t length = 0;
+            if (!LoadImage(stored, &length))
+            {
+                Log("FAIL: could not read back %s", stored.name);
+                ErrorLoop(Fault::ReadFailed);
+            }
+            Boot(length);
+        }
+    }
+}
+
 int main(void)
 {
     hw.Init();
     LedSetup();
+
+    /* Before anything that can fail: USB is the way back from a bad card. */
+    upload.Init(fw_image, sizeof(fw_image), kMaxSlots);
+    UsbTakeOver();
 
     SdmmcHandler::Config sd_cfg;
     sd_cfg.speed = SdmmcHandler::Speed::FAST;
@@ -461,7 +864,11 @@ int main(void)
     const char   *sd_path = fsi.GetSDPath();
     const FRESULT mres    = f_mount(&fsi.GetSDFileSystem(), sd_path, 1);
 
-    Log("CHOMPI launcher: boot");
+    card_ok = (mres == FR_OK);
+    if (card_ok)
+        LogStartRun();
+    Log("==== CHOMPI launcher: boot");
+    LogCrashRecord();
     Log("f_mount(\"%s\") -> %d", sd_path ? sd_path : "(null)", (int)mres);
 
     if (mres != FR_OK)
@@ -494,12 +901,31 @@ int main(void)
 
     /* Wait for every key to be released before arming, so that a key still held
        down from power-on does not immediately select a slot. */
-    bool armed = false;
+    bool     armed = false;
+    uint32_t tick  = 0;
 
     while (true)
     {
-        hw.ProcessAllControls();
         const uint32_t now = System::GetNow();
+        ServiceUsb(now);
+
+        /* Everything else at the old pace: the key debounce is tuned for it,
+           and the battery check is a blocking I2C transaction. */
+        if (now - tick < 8)
+            continue;
+        tick = now;
+
+        hw.ProcessAllControls();
+
+        /* An upload owns fw_image until it finishes or stalls; a key press now
+           would read a card image over the top of it. */
+        if (upload.Active(now))
+        {
+            armed = false;
+            DrawUploadProgress();
+            hw.LowBatteryLockoutCheck();
+            continue;
+        }
 
         bool any_down = false;
         for (int i = 0; i < slot_count; i++)
@@ -521,24 +947,7 @@ int main(void)
                     }
                     Log("read %lu bytes into SDRAM", (unsigned long)length);
 
-                    const uint32_t msp   = *(const uint32_t *)(fw_image + 0);
-                    const uint32_t entry = *(const uint32_t *)(fw_image + 4);
-                    Log("vector table: MSP=0x%08lX entry=0x%08lX",
-                        (unsigned long)msp, (unsigned long)entry);
-
-                    if (!ImageLooksValid(fw_image, length))
-                    {
-                        Log("FAIL: vector table rejected");
-                        ErrorLoop(Fault::BadImage);
-                    }
-
-                    /* Last thing written: if the log ends here, the handover
-                       itself is where it went wrong. */
-                    Log("handing over to 0x%08lX -- goodbye", (unsigned long)entry);
-                    LogFlush(); /* last chance; the next instruction is the jump */
-
-                    ShutdownPeripherals();
-                    ChainLoad(fw_image, length); /* does not return */
+                    Boot(length);
                 }
             }
         }
@@ -548,6 +957,5 @@ int main(void)
 
         DrawPicker(now);
         hw.LowBatteryLockoutCheck();
-        System::Delay(8);
     }
 }

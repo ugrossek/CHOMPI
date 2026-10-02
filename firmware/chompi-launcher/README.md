@@ -123,6 +123,40 @@ profiles in `firmware/card-profiles`. It only adds and overwrites, never
 deletes, and refuses to run if a second `.bin` is sitting in the root where it
 would race the launcher for the bootloader's attention.
 
+## Sending a firmware over USB MIDI
+
+While the launcher is up -- picker showing, or parked on any fault -- it also
+listens on USB MIDI. Send it an image and a slot number, and it stores the
+image in that slot on the card and starts it:
+
+```bash
+./midi-send.py --slot 5 ../chompi-tape/code/src/build/CHOMPI.bin
+```
+
+The keybed fills in cyan as the image arrives, then amber as it is written to
+`/FIRMWARE/05_TAPE.bin`, then white as it is read back to start. Sending to
+slot 5 again replaces it, so a work-in-progress build keeps one slot instead
+of piling up. Whatever was in the slot before goes, including a stock
+firmware: `--slot 1` on a standard card replaces `01_TAPE.bin`.
+
+The name defaults to the project folder the image was built in
+(`chompi-tape` -> `TAPE`); `--name` overrides it.
+
+The image is written to a temporary file and read back before the slot's old
+file is removed. Once stored, it is started exactly as if its key had been
+pressed: read off the card into the same buffer, handed over by the same
+`ChainLoad()`.
+
+It also works with an empty `/FIRMWARE` or a card inserted after power-on.
+Without a card it reports `NO_CARD` and nothing happens.
+
+`midi-send.py` is Linux only and needs nothing beyond Python 3. The protocol
+is specified in [PROTOCOL.md](PROTOCOL.md), for anyone writing another client.
+
+USB only appears once the launcher has taken the data lines back from the
+MP2722 charger, which TAPE does as well: they are switched between the two, and
+the charger borrows them to identify the port.
+
 ## Building
 
 Needs ARM's **official** GCC 10.3-2021.10 — not xPack's rebuild of the same
@@ -152,6 +186,8 @@ with `make CHOMPI_LIBS=/path/to/libs`.
 | Slow **magenta** pulse | The image would not read off the card. |
 | Slow **blue** pulse | Image read, but its vector table was rejected. |
 | Slow **white** pulse | Trampoline does not fit its landing site (should be impossible). |
+| Keybed filling in **cyan** | Firmware arriving over USB MIDI. |
+| Keybed filling in **amber** | That firmware being written to its slot on the card. |
 
 On any fault the unit parks there rather than jumping into nothing, and the
 log is committed to the card first.
