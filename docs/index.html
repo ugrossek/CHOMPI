@@ -340,11 +340,25 @@ function show(id, text, bad = false) {
 }
 
 /* ---- connect ----------------------------------------------------------- */
+/** Pair each output with the input of the same device. Names usually match,
+ *  but systems differ, so fall back to the manufacturer, then to "the only
+ *  input there is". */
 function portsByName() {
   const outs = [...state.access.outputs.values()];
   const ins = [...state.access.inputs.values()];
-  return outs.map((o) => ({ name: o.name, out: o, in: ins.find((i) => i.name === o.name) }))
-             .filter((p) => p.in);
+  const base = (n) => (n || "").toLowerCase().replace(/\b(in|out|input|output|port)\b|\d+$/g, "").trim();
+  return outs.map((o) => {
+    const i = ins.find((i) => i.name === o.name)
+      || ins.find((i) => base(i.name) === base(o.name))
+      || ins.find((i) => i.manufacturer && i.manufacturer === o.manufacturer)
+      || (ins.length === 1 && outs.length === 1 ? ins[0] : null);
+    return { name: o.name, out: o, in: i };
+  }).filter((p) => p.in);
+}
+
+function seenPorts() {
+  const list = (m) => [...m.values()].map((p) => `"${p.name}"`).join(", ") || "none";
+  return `inputs: ${list(state.access.inputs)}; outputs: ${list(state.access.outputs)}`;
 }
 
 function adapter(pair) {
@@ -405,9 +419,11 @@ function refreshPorts(connectNow) {
     return;
   }
   if (!pairs.length) {
-    show("connect-result", "No MIDI devices found. Is CHOMPI on and plugged in?", true);
+    show("connect-result", `No MIDI device found that can both send and receive. Is CHOMPI on, showing the launcher, and plugged in? (The browser sees ${seenPorts()}.)`, true);
+    logLines.push(`ports seen: ${seenPorts()}`);
     return;
   }
+  logLines.push(`ports seen: ${seenPorts()}`);
   const guess = Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)));
   sel.value = guess;
   connectTo(pairs[guess]);
