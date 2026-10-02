@@ -157,37 +157,6 @@ static void LogStartRun()
     f_close(&f);
 }
 
-/** DIAGNOSTIC: a debug firmware leaves a record of how far it got, and of any
- *  crash, in backup SRAM, which survives the reset that brings us back here. */
-struct CrashRec
-{
-    uint32_t magic, stage, pc, lr, psr, cfsr, hfsr, mmfar, bfar;
-};
-
-static void LogCrashRecord()
-{
-    System::InitBackupSram();
-    volatile CrashRec *rec = (volatile CrashRec *)0x38800100;
-
-    Log("reset cause RCC_RSR=0x%08lX", (unsigned long)RCC->RSR);
-    if ((rec->magic & 0xFFFF0000) == 0xB0070000)
-        Log("RECORD: firmware did not finish startup, last stage %lu",
-            (unsigned long)rec->stage);
-    else if ((rec->magic & 0xFFFF0000) == 0x600D0000)
-        Log("RECORD: firmware finished startup, stage %lu",
-            (unsigned long)rec->stage);
-    else if ((rec->magic & 0xFFFF0000) == 0xFA170000)
-        Log("RECORD: FAULT at stage %lu: pc=0x%08lX lr=0x%08lX psr=0x%08lX "
-            "cfsr=0x%08lX hfsr=0x%08lX mmfar=0x%08lX bfar=0x%08lX",
-            (unsigned long)rec->stage, (unsigned long)rec->pc,
-            (unsigned long)rec->lr, (unsigned long)rec->psr,
-            (unsigned long)rec->cfsr, (unsigned long)rec->hfsr,
-            (unsigned long)rec->mmfar, (unsigned long)rec->bfar);
-    else
-        Log("RECORD: none (magic 0x%08lX)", (unsigned long)rec->magic);
-    rec->magic = 0;
-}
-
 /** Write the whole log out.
  *
  *  Deliberately NOT FA_CREATE_ALWAYS. That truncates on open, so a flush whose
@@ -510,9 +479,8 @@ static MidiUpload::Status StoreUpload(Slot *out)
         {
             if (!(info.fattrib & AM_DIR) && strncmp(info.fname, prefix, 3) == 0)
             {
-                strncpy(doomed[n_doomed], info.fname, sizeof(doomed[0]) - 1);
-                doomed[n_doomed][sizeof(doomed[0]) - 1] = '\0';
-                n_doomed++;
+                /* Same size as fname, so it always fits. */
+                strcpy(doomed[n_doomed++], info.fname);
             }
         }
         f_closedir(&dir);
@@ -520,7 +488,9 @@ static MidiUpload::Status StoreUpload(Slot *out)
     for (int i = 0; i < n_doomed; i++)
     {
         static char path[sizeof(doomed[0]) + 16];
-        snprintf(path, sizeof(path), "%s/%s", kFirmwareDir, doomed[i]);
+        strcpy(path, kFirmwareDir);
+        strcat(path, "/");
+        strcat(path, doomed[i]);
         res = f_unlink(path);
         Log("store: replacing %s, f_unlink -> %d", path, (int)res);
         if (res != FR_OK)
@@ -868,7 +838,6 @@ int main(void)
     if (card_ok)
         LogStartRun();
     Log("==== CHOMPI launcher: boot");
-    LogCrashRecord();
     Log("f_mount(\"%s\") -> %d", sd_path ? sd_path : "(null)", (int)mres);
 
     if (mres != FR_OK)

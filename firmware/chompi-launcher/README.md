@@ -147,11 +147,19 @@ file is removed. Once stored, it is started exactly as if its key had been
 pressed: read off the card into the same buffer, handed over by the same
 `ChainLoad()`.
 
+That detour through the card is deliberate. An earlier version started the
+uploaded image straight from memory, and TAPE then froze at startup, while
+the very same bytes started fine from the card. The cause was never found.
+Going through the card makes an uploaded firmware indistinguishable from a
+picked one, and that route has not failed since.
+
 It also works with an empty `/FIRMWARE` or a card inserted after power-on.
 Without a card it reports `NO_CARD` and nothing happens.
 
-`midi-send.py` is Linux only and needs nothing beyond Python 3. The protocol
-is specified in [PROTOCOL.md](PROTOCOL.md), for anyone writing another client.
+`midi-send.py` is Linux only and needs nothing beyond Python 3. For macOS and
+Windows there is a web page that does the same in Chrome or Edge:
+https://ugrossek.github.io/CHOMPI/ (source in `docs/`). The protocol is
+specified in [PROTOCOL.md](PROTOCOL.md), for anyone writing another client.
 
 USB only appears once the launcher has taken the data lines back from the
 MP2722 charger, which TAPE does as well: they are switched between the two, and
@@ -231,6 +239,11 @@ from one card, and per-firmware settings survive switching — confirmed by
 saving a TAPE preset and finding it intact after a round trip through another
 firmware.
 
+**USB upload working on hardware.** Stock TAPE sent with `midi-send.py` was
+stored, started, and afterwards offered in the picker; sending again to the
+same slot replaced it rather than adding one. Card write plus readback takes
+140–290 ms for a 240K image.
+
 A healthy boot reads like this. Note the read time — that is the whole image:
 
 ```
@@ -242,6 +255,12 @@ A healthy boot reads like this. Note the read time — that is the whole image:
 [  21486] vector table: MSP=0x20020000 entry=0x24001901
 [  21542] handing over to 0x24001901 -- goodbye
 ```
+
+The very first start after the bootloader has installed a new launcher has
+been seen to hang with the LEDs frozen, before the launcher logged anything.
+A power cycle cleared it, and it has not recurred on later starts. The same
+happened once with a TAPE build, so it looks like a property of the first
+start after flashing rather than of the launcher.
 
 Recovery if a handover ever misbehaves: power cycle. The launcher is still in
 QSPI and nothing was written to internal flash. The jump request is one-shot —
