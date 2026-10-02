@@ -24,6 +24,8 @@ The search runs on a decimated mono copy of the signal in fast RAM and is spread
 samples. All voices share a per-block search budget so the audio callback isn't overloaded.
 See [`code/src/PitchShifter.h`](code/src/PitchShifter.h).
 
+A ready-to-flash build is on the [Releases page](../../../../releases/latest).
+
 Known limits:
 - About 30–45 ms of onset latency when shifting up.
 - With many notes at high ratios, later voices fall back to unaligned splices (the shared

@@ -6,7 +6,9 @@
 > playback speed. Details, build notes and known limits are in
 > [`firmware/chompi-tape`](firmware/chompi-tape/#pitch-shift-experiment-this-fork).
 >
-> THis is not an official CHOMPI Club release. Everything below is their original README.
+> **[Download the firmware](../../releases/latest)** — a ready-to-flash `.bin`, with install steps.
+>
+> This is not an official CHOMPI Club release. Everything below is their original README.
 >
 > **Use at your own risk.** This is unofficial software provided as-is, with no warranty,
 > and it has only been tested on one unit. It is loaded from the SD card like any firmware
