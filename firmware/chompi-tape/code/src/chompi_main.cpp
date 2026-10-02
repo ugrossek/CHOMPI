@@ -345,7 +345,15 @@ void MainLoop(void* data)
 
 int main(void)
 {
-    heap_used = 0; /* see _sbrk */
+    /* The heap lives in D2 RAM, whose clocks are off after reset until the
+       first D2 peripheral is set up (libDaisy only enables them with
+       DATA_IN_D2_SRAM). Touching it before hw.Init() faulted -- TAPE hung
+       before drawing anything. Enable them first, as the CMSIS template does
+       for data in D2. */
+    RCC->AHB2ENR |= RCC_AHB2ENR_D2SRAM1EN | RCC_AHB2ENR_D2SRAM2EN
+                    | RCC_AHB2ENR_D2SRAM3EN;
+    (void)RCC->AHB2ENR; /* read back: the enable has taken effect */
+    heap_used = 0;      /* see _sbrk */
 
     hw.Init();
     // System::Delay(100);
