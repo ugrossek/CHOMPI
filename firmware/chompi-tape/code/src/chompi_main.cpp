@@ -21,7 +21,12 @@ UserInterface ui;
 SdmmcHandler sdmmc;
 FatFSInterface fsi;
 Engine engine;
-PresetManager presets;
+/* In DTCM, not .bss: the heap is whatever SRAM .bss leaves over, and the
+ *  pitch shifter left it 432 bytes -- too few for the USB serial port's
+ *  buffers, which are calloc'd when a computer configures the device. With
+ *  USB plugged in TAPE then faulted at startup. DTCM is not zeroed at start,
+ *  so main() clears this before anything reads it. */
+PresetManager DSY_DTCMRAM_BSS presets;
 OptionsManager options;
 
 daisysp::Reverb DSY_DTCMRAM_BSS reverb;
@@ -315,6 +320,8 @@ void MainLoop(void* data)
 
 int main(void)
 {
+    memset(static_cast<void *>(&presets), 0, sizeof(presets)); /* see above */
+
     hw.Init();
     // System::Delay(100);
 

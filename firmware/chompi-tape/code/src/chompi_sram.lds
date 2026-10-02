@@ -159,6 +159,13 @@ SECTIONS
 
 	PROVIDE(end = .); 
 
+	/* The heap runs from here to the end of SRAM, and libDaisy's _sbrk does
+	   not check that limit: an allocation that does not fit silently runs off
+	   the end of RAM and faults. USB alone calloc's ~550 bytes when the
+	   serial port is configured. Fail the build instead. */
+	ASSERT(ORIGIN(SRAM) + LENGTH(SRAM) - _ebss >= 2K,
+	       "less than 2K left for the heap -- move something out of .bss")
+
 	.dtcmram_bss (NOLOAD) :
 	{
 		. = ALIGN(4);
