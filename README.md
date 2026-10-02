@@ -13,6 +13,11 @@
 > - **Key = slot** in the picker: `05_X.bin` is always on key 5.
 > - **USB on a Mac**, also after unplugging and replugging the cable.
 >
+> **Written with AI.** The USB upload, its protocol and the web page were
+> written together with Claude, Anthropic's AI assistant; most of the code
+> came out of that conversation. Tested on my own CHOMPI, but read the code
+> before you rely on it.
+>
 > How it works: [`firmware/chompi-launcher`](firmware/chompi-launcher/)
 > (README and `PROTOCOL.md`). The web page's source is in [`docs/`](docs/).
 >
