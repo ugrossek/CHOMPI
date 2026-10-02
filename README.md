@@ -2,7 +2,7 @@
 
 > ### This branch adds firmware upload over USB
 >
-> Built on top of [sfaber's multi-firmware launcher](https://github.com/sfaber02/CHOMPI),
+> Built on top of the [multi-firmware launcher](https://github.com/sfaber02/CHOMPI) by [@sfaber02](https://github.com/sfaber02),
 > which is described further down. What this branch adds:
 >
 > - **Install firmware over USB-MIDI.** While the picker is showing, send a
@@ -17,12 +17,12 @@
 > (README and `PROTOCOL.md`). The web page's source is in [`docs/`](docs/).
 >
 > **Use at your own risk.** An unofficial, experimental hobby project,
-> tested on one CHOMPI, with no warranty. On top of what sfaber lists below,
+> tested on one CHOMPI, with no warranty. On top of what @sfaber02 lists below,
 > an upload writes the firmware into `/FIRMWARE` on your SD card and replaces
 > whatever is in that slot, so back up your card first.
 >
-> Everything below is sfaber's README, unchanged except that its download
-> links point to sfaber's releases.
+> Everything below is @sfaber02's README, unchanged except that its download
+> links point to their releases.
 
 ---
 
