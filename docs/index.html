@@ -68,7 +68,7 @@
     border-radius: 22px 22px 34px 34px;
     padding: 18px 18px 22px;
     box-shadow: 0 6px 0 var(--body-edge);
-    margin-bottom: 52px;
+    margin: 4px 0 18px;
   }
   .screen {
     display: flex; align-items: center; gap: 10px;
@@ -217,6 +217,8 @@
     .key .n { bottom: 22%; }
     .steps > li { grid-template-columns: 34px 1fr; gap: 0 10px; }
     .steps > li::before { font-size: 2rem; }
+    /* the keybed takes the full width, under the step number too */
+    .steps .chompi { margin-left: -44px; }
   }
 </style>
 </head>
@@ -240,13 +242,6 @@
       <li>Plug CHOMPI into this computer and continue below.</li>
     </ol>
   </details>
-
-  <section class="chompi" aria-label="CHOMPI keybed: the slots">
-    <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
-      <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
-    </div>
-    <div class="keys" id="keys"></div>
-  </section>
 
   <ol class="steps">
     <li id="step-connect">
@@ -279,7 +274,13 @@
     <li id="step-slot">
       <div>
         <h2>Pick a slot and a name</h2>
-        <p>Press a key on the CHOMPI above. Whatever is in that slot now will be replaced.</p>
+        <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+        <section class="chompi" aria-label="CHOMPI keybed: the slots">
+          <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
+            <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
+          </div>
+          <div class="keys" id="keys"></div>
+        </section>
         <div class="row">
           <label class="field">Name on the card
             <input type="text" id="name" maxlength="16" spellcheck="false" autocomplete="off" placeholder="TAPE-DEV">
