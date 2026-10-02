@@ -1,5 +1,21 @@
 # CHOMPI — Open Source
 
+> ### This fork: TAPE with speed-independent pitch
+>
+> An experimental **TAPE** build where changing a voice's pitch no longer changes its
+> playback speed. Details, build notes and known limits are in
+> [`firmware/chompi-tape`](firmware/chompi-tape/#pitch-shift-experiment-this-fork).
+>
+> A community experiment. Not an official CHOMPI Club release — everything below is their
+> original README.
+>
+> **Use at your own risk.** This is unofficial software provided as-is, with no warranty,
+> and it has only been tested on one unit. It is loaded from the SD card like any firmware
+> update and never touches the bootloader. If something goes wrong, put the original firmware
+> back on the card, or recover the board over USB DFU: <https://flash.daisy.audio>.
+
+---
+
 **CHOMPI** is a quirky chromatic sampler and tape-music instrument by
 [CHOMPI Club](https://www.chompiclub.com).
 

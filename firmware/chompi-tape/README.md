@@ -10,6 +10,39 @@ TAPE is a 7-voice sampler and varispeed tape looper. Samples stream from the mic
 looper and sample buffer record into SDRAM. Seven streaming voices, varispeed playback,
 tape-style looper, delay and reverb, and MIDI in and out over TRS and USB.
 
+## Pitch-shift experiment (this fork)
+
+In stock TAPE, a higher pitch plays the sample faster and a lower pitch plays it slower, like
+a tape. In this fork a voice always streams from the card at normal speed, and a pitch shifter
+changes the pitch without changing the speed. It replaces the `_double` file switching, which
+frees about 4 KB of code space.
+
+How it works: each voice has a delay line in SDRAM. A read tap moves through it at the pitch
+ratio. When the tap runs out of room it jumps back by about one grain, to the offset where the
+waveform best lines up with what is playing (cross-correlation, WSOLA-style), and crossfades.
+The search runs on a decimated mono copy of the signal in fast RAM and is spread over many
+samples. All voices share a per-block search budget so the audio callback isn't overloaded.
+See [`code/src/PitchShifter.h`](code/src/PitchShifter.h).
+
+Known limits:
+- About 30–45 ms of onset latency when shifting up.
+- With many notes at high ratios, later voices fall back to unaligned splices (the shared
+  budget ran out), which sounds rougher.
+- The looper's pitch control is unchanged and still varispeed.
+- Tested on one unit, by ear. The first boot after flashing hung once and worked on retry;
+  the cause is unknown.
+- Flash headroom is tight: about 2.5 KB of code and 430 B of SRAM data remain.
+
+Also fixed: the `Limiter.h` include case, so the firmware builds on Linux.
+
+### No warranty
+
+This is unofficial, experimental software, provided as-is without warranty of any kind (see
+[`LICENSE`](../../LICENSE)). You use it at your own risk. It is loaded from the SD card and
+never touches the bootloader. Keep a copy of the original firmware binary so you can put it
+back, and if a unit ever won't boot, USB DFU mode lives in the processor's ROM and can't be
+overwritten: <https://flash.daisy.audio>.
+
 ## Building
 
 Toolchain: GNU Arm Embedded 10.3-2021.10. Newer compilers overflow the firmware's SRAM region
@@ -33,8 +66,8 @@ bin/                      bootloader binary and install script
 
 The card holds the firmware binary, the sample banks, and two JSON files: `options.json`
 (global settings) and `presets.json` (per-slot knob positions). Samples are named
-`<instrument>_<bank><slot>.wav` — 48 kHz, 16-bit stereo — with a matching `_double` variant
-used for high-pitched playback.
+`<instrument>_<bank><slot>.wav` — 48 kHz, 16-bit stereo. (Stock TAPE also expects a matching
+`_double` variant for high-pitched playback; this fork no longer uses it.)
 
 ## Support Guidelines
 
