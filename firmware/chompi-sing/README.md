@@ -5,8 +5,12 @@ A live harmonizer for CHOMPI, built on TAPE.
 Sing into the built-in mic (or plug a mic or line source into the input jack) and hold keys:
 every held key adds a copy of your voice, pitch-shifted by that key's distance from the
 **middle C**. Hold C and E and you hear a third; C, E and G give a major chord. The 25 keys
-cover one octave down to one octave up, up to 7 voices at a time. Looper and effects work as
-in TAPE, on your voice and the harmonies. TAPE's sample engine is gone.
+cover one octave down to one octave up, up to 7 voices at a time. Or flip the toggle switch
+to **latch**: hold a chord, let go, and it keeps following your voice while your hands are
+free for the knobs. Looper and effects work as in TAPE, on your voice and the harmonies.
+
+**An external mic on the input jack is strongly recommended.** The built-in mic sits on the
+same board as the keys and picks up their clicks.
 
 | Knob | Page 1 | Page 2 (press the knob) |
 |---|---|---|
@@ -32,9 +36,8 @@ Every start begins from the defaults; SING does not save knob settings.
 Tips:
 - **Use headphones.** The built-in mic and speaker feed back.
 - Knob 6, page 2 (input gain) sets how hot your voice goes into the harmonies.
-- The built-in mic sits on the same board as the keys and hears their clicks. SING dips the
-  mic for 35 ms after every key change, which helps but doesn't remove them. A mic on the
-  input jack avoids them entirely.
+- With the built-in mic, SING dips the mic for 35 ms after every key change, which reduces
+  the key clicks but doesn't remove them. A mic on the input jack avoids them entirely.
 
 ## How it works
 
