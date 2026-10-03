@@ -154,7 +154,7 @@
   }
   button.act.big { background: var(--amber); color: #1D1B3A; font-size: 1.15rem; padding: 14px 28px; }
   button.act:disabled { opacity: .35; cursor: not-allowed; }
-  button.act:focus-visible, label.act:focus-within, button.stock:focus-visible, input:focus-visible, select:focus-visible {
+  button.act:focus-visible, label.act:focus-within, input:focus-visible, select:focus-visible {
     outline: 3px solid var(--cyan); outline-offset: 2px;
   }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -165,12 +165,6 @@
   }
   .drop.over { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
   .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-  button.stock {
-    border: 2px solid var(--ink); border-radius: 999px;
-    background: transparent; color: var(--ink);
-    padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer;
-  }
-  button.stock[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
   .chosen, code { font-family: inherit; font-weight: 700; }
 
   input[type="text"], select {
@@ -226,19 +220,20 @@
 <main>
   <h1>Feed the CHOMPI</h1>
   <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
-  <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. The USB upload, this page and a few launcher fixes are added on top.</p>
+  <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. Firmware upload over USB is part of it since <a href="https://github.com/sfaber02/CHOMPI/releases/latest">launcher v1.1</a>.</p>
 
   <aside class="notice">
-    <p><strong>Use at your own risk.</strong> This is an unofficial, experimental hobby project. It is not made or supported by CHOMPI Club or by the author of the launcher, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. It has only been tested on one CHOMPI. If something goes wrong, switch CHOMPI off and on. If it no longer starts at all, it can be reflashed at <a href="https://flash.daisy.audio">flash.daisy.audio</a>.</p>
+    <p><strong>Use at your own risk.</strong> This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
   </aside>
 
   <details class="setup" id="setup">
     <summary>First time? Set up the card</summary>
     <ol>
       <li>Back up your SD card: copy everything on it to your computer.</li>
-      <li><a href="launcher/CHOMPI.bin" download>Download the launcher</a> (@sfaber02's launcher with USB upload added) and copy it to the top level of the card. Move every other <code>.bin</code> file out of the top level, because CHOMPI installs the first one it finds there.</li>
-      <li>Create a folder called <code>FIRMWARE</code> on the card. You can leave it empty and send firmwares from this page later, or copy some in now, named by key: <code>01_TAPE.bin</code> appears on key 1, <code>02_TEMPO.bin</code> on key 2. The stock firmwares are in the <a href="https://github.com/ugrossek/CHOMPI/tree/main/firmware/card-profiles">CHOMPI repository</a>.</li>
-      <li>Eject the card, put it in CHOMPI and switch it on. The lights fade through colours while the launcher is installed, then one white key lights up per firmware (or the lights pulse amber if <code>FIRMWARE</code> is empty). If the very first start hangs, switch off and on once.</li>
+      <li>Download <code>chompi-multi-firmware-card.zip</code> from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest launcher release</a> and unzip it.</li>
+      <li>Format a microSD card as FAT32 (32 GB or smaller).</li>
+      <li>Copy everything inside <code>chompi-multi-firmware-card/</code> to the top level of the card.</li>
+      <li>Put the card in CHOMPI and switch it on. The first start shows a rainbow while the launcher is installed, then the picker: key 1 TAPE, key 2 TEMPO, key 3 WAVE, key 15 USB storage.</li>
       <li>Plug CHOMPI into this computer and continue below.</li>
     </ol>
   </details>
@@ -265,8 +260,7 @@
             <label class="act">Choose a file<input type="file" id="file" accept=".bin,application/octet-stream"></label>
           </div>
         </div>
-        <p class="hint">Or install a stock firmware from the CHOMPI repository:</p>
-        <div class="row" id="stock"></div>
+        <p class="hint">TAPE, TEMPO and WAVE are already on the release card, on keys 1 to 3.</p>
         <p class="result" id="firmware-result" hidden></p>
       </div>
     </li>
@@ -307,9 +301,9 @@
   </details>
 
   <footer>
-    Works in Chrome and Edge. Safari can't talk MIDI to CHOMPI. Needs the launcher with USB upload on the card (protocol 1).
+    Works in Chrome and Edge. Safari can't talk MIDI to CHOMPI. Needs launcher v1.1 or later on the card.
     The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/midi-firmware-load/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
-    <br><a href="launcher/CHOMPI.bin" download>Download that launcher</a> and see <a href="#setup">setup</a> for how it goes on the card.
+    <br>Get the launcher from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest release</a>, see <a href="#setup">setup</a>.
   </footer>
 </main>
 
@@ -317,13 +311,8 @@
 import { Launcher, ProtocolError, NAME_RE, defaultName } from "./chompi-midi.js";
 
 const SLOTS_DEFAULT = 15;
-const RAW = "https://raw.githubusercontent.com/ugrossek/CHOMPI/main/firmware/card-profiles/";
-const STOCK = [
-  { label: "TAPE 2.0", name: "TAPE", slot: 1, path: "tape-2.0/CHOMPI_TAPEv2_0.bin" },
-  { label: "TEMPO 1.0", name: "TEMPO", slot: 2, path: "tempo-1.0/CHOMPI_TEMPOv1_0.bin" },
-  { label: "WAVE 1.0", name: "WAVE", slot: 3, path: "wave-1.0/CHOMPI_WAVE_V1_0.bin" },
-];
-const STANDARD = { 1: "TAPE", 2: "TEMPO", 3: "WAVE" };
+/* what the launcher-v1.1 release card holds, for the overwrite warning */
+const STANDARD = { 1: "TAPE", 2: "TEMPO", 3: "WAVE", 15: "USB storage" };
 
 const $ = (id) => document.getElementById(id);
 const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false };
@@ -475,7 +464,6 @@ function setImage(bytes, label, name) {
 
 async function fromFile(file) {
   if (!file) return;
-  document.querySelectorAll("button.stock").forEach((b) => b.setAttribute("aria-pressed", "false"));
   const bytes = new Uint8Array(await file.arrayBuffer());
   const name = $("name").value && file.name === "CHOMPI.bin" ? null : defaultName(file.name);
   setImage(bytes, file.name, name);
@@ -485,27 +473,6 @@ const drop = $("drop");
 drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); fromFile(e.dataTransfer.files[0]); });
-
-for (const s of STOCK) {
-  const b = document.createElement("button");
-  b.className = "stock";
-  b.type = "button";
-  b.textContent = s.label;
-  b.setAttribute("aria-pressed", "false");
-  b.addEventListener("click", async () => {
-    document.querySelectorAll("button.stock").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    show("firmware-result", `Fetching ${s.label}…`);
-    try {
-      const res = await fetch(RAW + s.path);
-      if (!res.ok) throw new Error(res.status);
-      setImage(new Uint8Array(await res.arrayBuffer()), `${s.label} (stock)`, s.name);
-      if (!state.slot) pickSlot(s.slot);
-    } catch {
-      show("firmware-result", `Couldn't download ${s.label}. Check the connection and try again.`, true);
-    }
-  });
-  $("stock").append(b);
-}
 
 /* ---- slot & name ------------------------------------------------------- */
 function pickSlot(n) {
@@ -526,7 +493,7 @@ function update() {
   const nn = state.slot ? String(state.slot).padStart(2, "0") : "NN";
   $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
   const std = STANDARD[state.slot];
-  show("slot-warn", std && name !== std ? `On a standard card, slot ${state.slot} holds ${std}. Sending replaces it.` : "");
+  show("slot-warn", std && name !== std ? `On the release card, slot ${state.slot} holds ${std}. Sending replaces it.` : "");
   $("step-slot").classList.toggle("done", !!state.slot && NAME_RE.test(name));
 
   const ready = state.info && state.image && state.slot && NAME_RE.test(name) && !state.busy;
