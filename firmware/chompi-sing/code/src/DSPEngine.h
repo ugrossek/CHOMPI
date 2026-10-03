@@ -11,7 +11,7 @@
 #include "MicFilter.h"
 #include "Harmonizer.h"
 
-/* SING prototype; defined in chompi_main.cpp, in DTCM */
+/* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
 #include "reverb.h"
 #include "RamBuffer.h"
@@ -51,13 +51,6 @@ namespace daisy
         BOTH,
         SEND_RET, // TAPE's; SING's menu does not offer it
         OFF,      // SING: no dry voice
-        LAST,
-    };
-
-    enum class VoiceMode
-    {
-        JAMMI,
-        CUBBI,
         LAST,
     };
 
@@ -121,15 +114,11 @@ namespace daisy
             bool tape_slew,
             MonitorMode mon_mode)
         {
-            voice_mode = VoiceMode::JAMMI;
-            latest_voice = 0;
             monitor_mode = mon_mode;
 
             input_env_follower.Init();
             output_env_follower.Init();
 
-            for (size_t i = 0; i < size_t(VoiceMode::LAST); i++)
-                bank[i] = 0;
 
             reverb_ = reverb;
 
@@ -145,7 +134,7 @@ namespace daisy
             dly_time_ = dly_time_target_;
 
             mic_filter_.Init(samplerate);
-            harmonizer.Init(samplerate); // SING prototype
+            harmonizer.Init(samplerate);
 
             filter_.Init(samplerate);
             filter_.SetControl(.5f);
@@ -172,10 +161,6 @@ namespace daisy
 
             resamp_env_ = resamp_env_target_ = 1.f;
 
-
-            SetVoiceMode(VoiceMode::JAMMI);
-            SetBank(0);
-            SetVoiceSlot(15, true);
 
             /* looper */
             looper.Init(samplerate, loop_buff, tape_slew);
@@ -333,17 +318,14 @@ namespace daisy
             std::fill(out[0], out[0] + size, 0.f);
             std::fill(out[1], out[1] + size, 0.f);
 
-            /* SING prototype: key-click ducking for the built-in mic, used
+            /* SING: key-click ducking for the built-in mic, used
                by the harmonizer input and by the dry mic monitor below */
             float duck[size];
             harmonizer.Duck(duck, size);
             duck_ = duck;
 
-
-
-
-            /* SING prototype: harmony voices from the live input, in the
-               place of the sample voices, so FX and looper follow as usual */
+            /* SING: harmony voices from the live input; FX and looper follow
+               as they did for TAPE's sample voices */
             if(harmonizer.Active()
                && (in_source == InputSource::MIC || in_source == InputSource::LINE_IN))
             {
@@ -490,23 +472,13 @@ namespace daisy
         }
 
 
-        /**
-         * @brief Resets the assignment of keyboard keys to voices used in voice stealing algorithm.
-         *        Call this when we change voice modes, banks, or slots 
-         *        (except for some cases involving the chompi buffer)
-         */
-        inline void ResetVoiceKeys()
-        {
-            StopAllVoices();
-        }
-
         void ProcessKeyReqs()
         {
             if (!request_fifo.IsEmpty())
             {
                 KeyRequest req = request_fifo.PopFront();
                 
-                /* SING prototype: keys play harmony voices of the live
+                /* SING: keys play harmony voices of the live
                    input instead of samples. transpose_nn_ is the key's
                    distance from the middle C in semitones. */
                 if (req.type_ == KeyRequest::Type::START)
@@ -521,14 +493,8 @@ namespace daisy
             ProcessKeyReqs();
         }
 
-        bool IsKeyPlaying(int key)
-        {
-            return harmonizer.Held(key);
-        }
-
-        /* SING prototype: knobs 1-3 drive the harmonizer */
+        /* SING: knobs 1-3 drive the harmonizer */
         void SetTranspose(float val) { harmonizer.SetTranspose(val); }
-        float GetTranspose() { return harmonizer.Transpose(); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }
         bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
         void SetLatch(bool on) { harmonizer.SetLatch(on); }
@@ -539,140 +505,8 @@ namespace daisy
 
         void SetDecay(float val) { harmonizer.SetRelease(val); }
 
-        void SetStartPointForce(float) {}
-
-        void SetEndPointForce(float) {}
-
-        bool SetStartPoint(float) { return true; }
-
-        bool SetEndPoint(float) { return true; }
-
-        void SetAutoLoop(bool) {}
-
-        void ToggleAutoLoop() {}
-
-        bool GetAutoLoop() { return false; }
-
-        void ResetGlobalPitchQuant()
-        {
-            fifth = false;
-            encoder_chunk = 0.f;
-        }
-
         // returns the value for the encoder tracking
-        float SetGlobalPitchQuantized(int16_t turns, float enc_pos)
-        {
-            encoder_chunk += turns * .25f;
-            if(encoder_chunk >= 1.f || encoder_chunk <= -1.f)
-            {
-                // get current semi
-                encoder_chunk = round(encoder_chunk);
-
-                float pitch = GetGlobalPitch();
-                float orig_pitch = pitch;
-
-                // snap to fifths and octaves
-                // calculate the consts via 2^(x/12) e.g. 2^(-5/12) for down 5 semis
-                float mul;
-                if(!GetReverse())
-                {
-                    if(fifth)
-                        mul = encoder_chunk < 0 ? .667419927085f : 1.33483985417f;
-                    else
-                        mul = encoder_chunk < 0 ? .749153538438f : 1.49830707688f;
-                }
-                else
-                {
-                    if(fifth)
-                        mul = encoder_chunk < 0 ? 1.33483985417f : .667419927085f;
-                    else
-                        mul = encoder_chunk < 0 ? 1.49830707688f : .749153538438f;                            
-                }
-
-                // jump, then do nothing if we've gone over the end
-                pitch *= mul;
-                if(pitch > 2.f || pitch < -2.f)
-                    return enc_pos;
-
-                fifth = !fifth;
-                encoder_chunk = 0.f;
-
-                // handle direction change
-                if(pitch < .0625)
-                {
-                    // we weren't already in the turn-around zone
-                    if(orig_pitch > .0625)
-                    {
-                        fifth = !fifth;
-                        pitch = orig_pitch;
-                        ToggleReverse();
-                    }
-                    // we were already in the zone, and we're headed over the middle
-                    else if((GetReverse() && turns > 0) || (!GetReverse() && turns < 0))
-                    {
-                        fifth = !fifth;
-                        pitch = orig_pitch;
-                        ToggleReverse();
-                    }
-                }
-
-                SetGlobalPitch(pitch);
-
-                if(pitch < .5f) // 0 - .33
-                    pitch = (pitch - .01) * 0.673469f;
-                else if (pitch < 1.f ) // .33 - .66
-                    pitch = (pitch - .5f) * .66f + .33f;
-                else // .66 - 1
-                    pitch = (pitch - 1.f) * .34f + .66f;
-                
-                return GetReverse() ? (1.f - pitch) * .5f : pitch * .5f + .5f;
-            }
-
-            return enc_pos;
-        }
-
-        /** unquantized pitch
-            * curved s.t.
-            *  0.f - .33f = .01x - .5x
-            *  .33f - .66f = .5x - 1x
-            *  .66f - 1.f = 1x - 2x
-        */
-        void SetGlobalPitchFree(float val)
-        {
-            val = val < .5f ? (.5f - val) * -2.f : (val - .5f) * 2.f; // 1 - 0 - 1
-
-            float pitch;
-            float inv = val < 0.f ? -1.f : 1.f;
-            if(fabsf(val) < .33f) // .01x - .5x
-                pitch = val * 1.484848f + .01f * inv;
-            else if (fabsf(val) < .66f ) // .5x - 1x
-                pitch = (val - .33f * inv) * 1.515151 + .5f * inv;
-            else // 1x - 2x
-                pitch = (val - .66 * inv) * 2.941176 + 1.f * inv;
-
-            SetGlobalPitch(fabsf(pitch));
-            SetReverse(pitch < 0.f);
-        }
-
-        void SetGlobalPitch(float) {}
-        inline float GetGlobalPitch() { return 1.f; }
-
         void SetGain(float val) { harmonizer.SetLevel(val); }
-
-        void SetPan(float) {}
-
-        float GetPan() { return .5f; }
-
-        void SetReverse(bool) {}
-        void ToggleReverse() {}
-        inline bool GetReverse() { return false; }
-
-
-
-        void SetSustainActive(bool) {}
-
-        void ToggleSustainActive() {}
-        inline bool GetSustainActive() { return false; }
 
         void SetInputGain(float gain) 
         {
@@ -802,8 +636,6 @@ namespace daisy
         inline void SetLooperScrub(float scrub) { looper.SetScrub(scrub); }
         inline float GetLooperScrub() { return looper.GetScrub(); }
 
-        bool AnyVoicesPlaying() { return harmonizer.Active(); }
-
         inline bool IsLooperPlaying() { return looper.IsPlaying(); };
         inline bool IsLooperRecording() { return looper.IsRecording(); };
         inline bool IsLooperFirstRecording() { return looper.IsFirstRecording(); };
@@ -815,90 +647,7 @@ namespace daisy
 
         inline void LooperOpenFile() { looper.OpenFile(); }
 
-        inline int GetBank() { return bank[int(voice_mode)];}
-        inline size_t GetVoiceBank() 
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-                return bank[int(voice_mode)];
-            
-            return voice_bank_; 
-        }
-        inline void IncrementBank() 
-        {
-            bank[int(voice_mode)] = (bank[int(voice_mode)] + 1) % 5;
-
-            if(voice_mode == VoiceMode::CUBBI)
-                ResetVoiceKeys();
-        }
-        inline void SetBank(size_t b) 
-        {
-            bank[int(voice_mode)] = b % 5;
-
-            if(voice_mode == VoiceMode::CUBBI)
-                ResetVoiceKeys();
-        }
-
         daisy::FIFO<KeyRequest, 32> request_fifo;
-
-        /** @brief populates expected filename for a given slot
-         *  @param slot position in the bank
-         *  @param bank bank number
-         *  @param name string to fill with filename
-         *
-         *  name must be a buffer of at least 16 bytes to fit the name:
-         *  - "chompi_xy.wav" where xy is a letter-number combo indicating bank/slot
-         */
-        static void GetFileNameForSlot(int slot, int b, VoiceMode m, char *name, bool dbl = false)
-        {
-            char bankchar;
-            switch(b)
-            {
-                case 0:
-                    bankchar = 'a';
-                    break;
-                case 1:
-                    bankchar = 'b';
-                    break;
-                case 2:
-                    bankchar = 'c';
-                    break;
-                case 3:
-                    bankchar = 'd';
-                    break;
-                default:
-                    bankchar = 'e';
-            }
-
-            char mode[10];
-
-            if(m == VoiceMode::JAMMI)
-                strcpy(mode, "jammi");
-            else if(m == VoiceMode::CUBBI)
-                strcpy(mode, "cubbi");
-
-            char dbl_suffix[10];
-            if(dbl)
-                strcpy(dbl_suffix, "_double");
-            else
-                dbl_suffix[0] = '\0';
-
-            if (name)
-            {
-                sprintf(name, "%s_%c%1d%s.wav", mode, bankchar, slot, dbl_suffix);
-            }
-        }
-
-
-
-        void SetAllCopyOccurred() {}
-
-        inline size_t GetVoiceSlot()
-        { 
-            if(voice_mode == VoiceMode::JAMMI)
-                return voice_slot_;
-            
-            return cubbi_slot_;
-        }
 
         // these should really be in a struct defined in the presets file
         float cubbi_pitch;
@@ -910,36 +659,6 @@ namespace daisy
         bool cubbi_sustain;
         float cubbi_gain;
         float cubbi_pan;
-
-        void OpenCubbiSlot(float pitch, float start, float end, float attack, float decay, bool autoloop, bool sustain, float gain, float pan)
-        {
-            cubbi_pitch = pitch;
-            cubbi_start = start;
-            cubbi_end = end;
-            cubbi_attack = attack;
-            cubbi_decay = decay;
-            cubbi_autoloop = autoloop;
-            cubbi_sustain = sustain;
-            cubbi_gain = gain;
-            cubbi_pan = pan;
-        }
-
-        void SetVoiceSlot(size_t idx, bool)
-        {
-            voice_slot_ = idx;
-            if(voice_mode == VoiceMode::JAMMI)
-                voice_bank_ = bank[int(voice_mode)];
-        }
-
-        inline VoiceMode GetVoiceMode () { return voice_mode; }
-
-        inline void SetVoiceMode(VoiceMode m)
-        {
-            if(voice_mode != m)
-                ResetVoiceKeys();
-
-            voice_mode = m;
-        }
 
         void StopAllVoices(size_t = 100) { harmonizer.AllOff(); }
 
@@ -973,23 +692,15 @@ namespace daisy
 
 
         // helper for stuck key hack
-        inline int GetPlayingKey(size_t) { return 0; }
-
     private:
-        /** @brief Converts a MIDI note number to a ratio of playback speed
-         *  @param nn number of MIDI notes to transpose above or below original speed
-         *
-         *  @todo handle as a value from 0-127 w/ Middle C being 0
-         *  @todo handle w/ lookup table to improve performance
-         */
-        float MidiNoteToPlaybackRatio(int nn) { return pow(2.f, nn * 0.08333333f); } // .0833 = 1/12
+ // .0833 = 1/12
 
         /** the looper */
         LooperEngine looper;
 
         float encoder_chunk = 0.f; // chunk up the quantized pitch controls
         float looper_encoder_chunk = 0.f;
-        bool fifth, looper_fifth;
+        bool looper_fifth;
         
         /** env followers for VU meters */
         EnvFollower input_env_follower;
@@ -1006,14 +717,6 @@ namespace daisy
 
         bool input_monitor;
 
-        VoiceMode voice_mode;
-
-        size_t voice_slot_;
-        size_t cubbi_slot_;
-
-        // in jammi mode, which bank is currently active?
-        // we can change bank pages without selecting a new slot in that bank
-        size_t voice_bank_;
 
 
         float ingain_, ingain_target_;
@@ -1023,7 +726,7 @@ namespace daisy
 
         /** FX */
         MicFilter mic_filter_;
-        const float *duck_ = nullptr; // SING prototype: this block's mic ducking
+        const float *duck_ = nullptr; // SING: this block's mic ducking
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;
@@ -1034,7 +737,6 @@ namespace daisy
         daisysp::DcBlock dcblock_fx_l_;
         daisysp::DcBlock dcblock_fx_r_;
 
-        size_t latest_voice;
 
         float dly_time_, dly_time_target_;
         float dly_feedback_, dly_feedback_target_;
@@ -1048,7 +750,6 @@ namespace daisy
         bool fx_pre_loop;
         float fx_env_, fx_env_target_;
 
-        int bank[int(VoiceMode::LAST)];
 
         InputSource in_source;
         MonitorMode monitor_mode;

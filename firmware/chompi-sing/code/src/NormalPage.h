@@ -118,7 +118,7 @@ namespace chompi
     static const float dark_orange[3] = {.77f, .38f, .06f};
     static const float yellow_green[3] = {.706f, 1.f, 0.f};
 
-    /* SING prototype: "warm stage" palette, to tell it apart from TAPE */
+    /* SING: "warm stage" palette, to tell it apart from TAPE */
     static const float sing_magenta[3] = {1.f, .12f, .47f};
     static const float sing_coral[3]   = {1.f, .42f, .30f};
     static const float sing_amber[3]   = {1.f, .55f, 0.f};
@@ -233,8 +233,6 @@ namespace chompi
                 enc_values[0][3] = .5f;
             }
 
-            fx_->SetGlobalPitch(1.f);
-            fx_->SetReverse(false);
             
             fx_->SetInputGain(.75f);
 
@@ -311,7 +309,7 @@ namespace chompi
                 }
             }
 
-            /* SING prototype: held keys magenta; the middle C dim amber and
+            /* SING: held keys magenta; the middle C dim amber and
                the outer Cs dimmer, for orientation. Idle markers stay off
                while the mic is monitored, as in TAPE. */
             /* SING: for a moment after a knob turn, the white keys show its
@@ -697,24 +695,6 @@ namespace chompi
                 break;
 
             // CC buttons
-            // case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW):
-            // {
-            //     if (!rising)
-            //     {
-            //         enc_values[0][0] = enc_defaults[0][0];
-            //         hw_->SendCC(midi_channel, cc_map[0][0], enc_values[0][0] * 127);
-            //         fx_->SetGlobalPitch(1.f);
-            //         fx_->SetReverse(false);
-
-            //         DumpValuePresets();
-            //         SetPthLedFloat(1, green[0], green[1], green[2]);
-            //     }
-
-            //     hw_->SendCC(midi_channel, key_map[buttonID], rising ? 127 : 0);
-            //     break;
-            // }
-
-            // CC buttons
             case static_cast<uint16_t>(Hardware::SwId::KEY_27): // play
             {
                 last_arm_blink = System::GetNow();
@@ -790,9 +770,8 @@ namespace chompi
             else{
                 float inc = turns * kEncoderCoarseStep;
 
-                // fine steps for pitch, sample start, and sample end
-                /* SING prototype: knobs 1-3 page 1 (volume, attack,
-                   doubler), plain coarse steps */
+                /* SING: transpose (knob 1, page 1) moves in fine steps,
+                   spread and doubler (knobs 2-3, page 1) in coarse ones */
                 if(page == 0 && encoderID == 0)
                 {
                     inc = turns * kEncoderFineStep; // SING: continuous transpose
@@ -821,7 +800,7 @@ namespace chompi
 
             if (encoderID <= 2)
             {
-                SingKnob(encoderID, page, enc_values[page][encoderID]); // SING prototype
+                SingKnob(encoderID, page, enc_values[page][encoderID]);
             }
             else if (encoderID == 4)
             {

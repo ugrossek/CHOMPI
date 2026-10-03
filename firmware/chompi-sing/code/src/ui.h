@@ -234,22 +234,6 @@ namespace chompi
 
                 Interferes with midi on :(
             */
-            // const uint32_t now = System::GetNow();
-            // if(now - last_force_off > 50)
-            // {
-            //     for(size_t i = 0; i < kMaxPoly; i++)
-            //     {
-            //         const int key = fx_->GetPlayingKey(i);
-            //         if(!hw_->button_sr.State(key))
-            //         {
-            //             fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::STOP, 0, key, 127.f));
-            //         }
-            //     }
-
-            //     last_force_off = now;
-            // }
-
-
             toggle_state = hw_->GetToggleState();
 
             if(menu_page_.IsActive() && menu_page_.IsClosable())

@@ -10,20 +10,19 @@ namespace chompi
     static constexpr size_t kChorusLen = 2048; // power of two, ~42 ms
     extern float chorus_mem[2][kChorusLen];
 
-    /** SING prototype: live harmonizer.
+    /** SING's live harmonizer.
      *
      *  Every held key gets a voice that pitch-shifts the live input by its
      *  distance from the middle C, so holding C and E while singing gives the
      *  voice and a third above it. The C key itself is unshifted (the shifter
      *  fades to dry at a ratio of 1, so it adds no delay).
      *
-     *  The voices reuse the sample voices' shifter buffers (shift_mem,
-     *  shift_ana): in this mode the sample voices never play. The dry voice is
-     *  not added here -- TAPE's own mic monitor provides it, switched by the
-     *  toggle switch as before.
+     *  Each voice runs one StereoPitchShifter on its own delay line
+     *  (shift_mem, shift_ana in chompi_main.cpp). The dry voice is not added
+     *  here: the engine's mic monitor provides it, routed by the monitor mode.
      *
      *  Init() sets every member, so the object may live in DTCM, which is
-     *  not zeroed at start-up (chompi_main.cpp puts it there: .bss is full).
+     *  not zeroed at start-up.
      */
     template <size_t kVoices>
     class Harmonizer

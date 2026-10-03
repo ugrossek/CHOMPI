@@ -35,8 +35,9 @@ int16_t DSY_SDRAM_BSS loop_mem[kMaxRamBuffSize];
 float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
 int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
 
-/* SING prototype: in DTCM because .bss is full; Harmonizer::Init() sets
- *  everything, so the missing zeroing does not matter. */
+/* The harmonizer runs per sample in the audio callback, so it lives in DTCM,
+ *  the fastest RAM. Harmonizer::Init() sets everything, so the missing
+ *  zeroing there does not matter. */
 chompi::Harmonizer<kMaxPoly> DSY_DTCMRAM_BSS harmonizer;
 float DSY_SDRAM_BSS chompi::chorus_mem[2][chompi::kChorusLen];
 
@@ -156,8 +157,6 @@ void CheckSDCardMounted()
         no_sd_card = true;
         ui.NoSDCard();
         
-        engine.SetVoiceMode(VoiceMode::JAMMI);
-        engine.SetVoiceSlot(15, true);
 
         const uint32_t start_time = System::GetNow();
         while(System::GetNow() - start_time < 3000)

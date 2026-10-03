@@ -451,7 +451,6 @@ namespace chompi
 
             if(quantized_pitch_)
             {
-                fx_->ResetGlobalPitchQuant();
                 fx_->ResetLooperPitchQuant();
             }
 
@@ -469,7 +468,6 @@ namespace chompi
             {
                 if(!quantized_pitch_)
                 {
-                    fx_->ResetGlobalPitchQuant();
                     fx_->ResetLooperPitchQuant();
                 }
                 return true;
