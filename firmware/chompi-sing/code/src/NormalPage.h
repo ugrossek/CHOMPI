@@ -3,7 +3,6 @@
 #include "hardware.h"
 #include "DSPEngine.h"
 #include "temp_led_stuff.h"
-#include "FileCopier.h"
 
 namespace chompi
 {
@@ -179,13 +178,11 @@ namespace chompi
         uint32_t init_time;
         bool init_ignore = true;
 
-        void Init(Hardware *hw, Engine *fx, FileCopier *copier, float** enc_arr, const float** def_arr, 
-                    uint8_t* page, PresetManager* pre, uint8_t midi_out_channel, bool ps_quant, bool split_delay)
+        void Init(Hardware *hw, Engine *fx, float** enc_arr, const float** def_arr, 
+                    uint8_t* page, uint8_t midi_out_channel, bool ps_quant, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
-            copier_ = copier;
-            presets_ = pre;
             enc_values = enc_arr;
             enc_defaults = def_arr;
             knob_page = page;
@@ -299,41 +296,6 @@ namespace chompi
                     const float dim = key_map[i] == 60 ? .3f : .1f;
                     SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
                 }
-                else
-                    SetSmtLed(led_map[i], 0, 0, 0);
-            }
-
-            for(size_t i = 7; false && i < (25 + 7); i++) // TAPE's sample-bank colours
-            {
-                size_t slot = KeyToSlot(i);
-                const float* color = &pink[0];
-                if(fx_->GetVoiceSlot() != 15 || fx_->GetVoiceMode() == VoiceMode::CUBBI)
-                {
-                    if(fx_->GetVoiceBank() == 0) // this shouldn't change if we're not actually on that bank
-                        color = &purple[0];
-                    else if(fx_->GetVoiceBank() == 1)
-                        color = &orange[0];
-                    else if(fx_->GetVoiceBank() == 2)
-                        color = &teal[0];
-                    else if(fx_->GetVoiceBank() == 3)
-                        color = &dark_orange[0];
-                    else if(fx_->GetVoiceBank() == 4)
-                        color = &yellow_green[0];
-                }
-
-                if (fx_->IsKeyPlaying(i))
-                    SetSmtLedFloat(led_map[i], 1.f, 1.f, 1.f);
-                else if(fx_->GetVoiceMode() == VoiceMode::CUBBI 
-                        && (switch_state || fx_->GetInputSource() != InputSource::MIC)) // no perm KB leds if we're monitoring the mic
-                {
-                    if (fx_->GetFileExists(slot - 1) && i == 28)
-                        SetSmtLedFloat(led_map[i], pink[0] * .25f, pink[1] * .25f, pink[2] * .25f);
-                    else if(fx_->GetFileExists(slot - 1) && slot != kSlotNone)
-                        SetSmtLedFloat(led_map[i], color[0] * .25f, color[1] * .25f, color[2] * .25f);
-                }
-                else if(fx_->GetVoiceMode() == VoiceMode::JAMMI && (i == 15 || i == 18 || i == 28)
-                        && (switch_state || fx_->GetInputSource() != InputSource::MIC)) // no perm KB leds if we're monitoring the mic
-                    SetSmtLedFloat(led_map[i], color[0] * .25f, color[1] * .25f, color[2] * .25f);
                 else
                     SetSmtLed(led_map[i], 0, 0, 0);
             }
@@ -647,7 +609,7 @@ namespace chompi
                       uint8_t numberOfPresses,
                       bool isRetriggering) override
         {
-            if (init_ignore || copier_->IsCopying())
+            if (init_ignore)
                 return false;
 
             bool rising = numberOfPresses == 1;
@@ -747,8 +709,7 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_28): // loop
             {
                 last_arm_blink = System::GetNow();
-                if(!fx_->Recording())
-                    fx_->LooperRecordButton(rising);
+                fx_->LooperRecordButton(rising);
                 hw_->SendCC(midi_channel, 27, rising ? 127 : 0);
                 break;
             }
@@ -780,15 +741,6 @@ namespace chompi
                     // real keypress
                     if(!isRetriggering)
                     {
-                        if(false) // SING prototype: keys don't load samples
-                        {
-                            size_t slot = KeyToSlot(buttonID);
-                            if(slot == kSlotNone)
-                                return true;
-
-                            OpenCubbiSlot(slot);
-                        }
-
                         fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::START, 
                             key_map[buttonID] - 60, buttonID, 127.f));
                     }
@@ -815,71 +767,16 @@ namespace chompi
             return true;
         }
 
-        void OpenCubbiSlot(size_t slot)
-        {
-            if(!fx_->GetFileExists(slot - 1))
-                return; // no file in that slot
-
-            size_t mode = static_cast<size_t>(fx_->GetVoiceMode());
-            size_t bank = fx_->GetBank();
-
-            bool loop = true;
-            bool sustain = true;
-            float pan = .5f;
-
-            if(!presets_->IsValid(mode, bank, slot))
-            {
-                enc_values[0][0] = enc_defaults[0][0];
-                enc_values[0][1] = enc_defaults[0][1];
-                enc_values[0][2] = enc_defaults[0][2];
-                enc_values[1][0] = enc_defaults[1][0];
-                enc_values[1][1] = enc_defaults[1][1];
-                enc_values[1][2] = enc_defaults[1][2];
-            }
-            else
-            {
-                /** TODO: this scheme is bad now. Either we mess up the order, or we don't match the old scheme's slots */
-                enc_values[0][0] = presets_->GetValue(mode, bank, slot, 0);
-                enc_values[0][1] = presets_->GetValue(mode, bank, slot, 1);
-                enc_values[0][2] = presets_->GetValue(mode, bank, slot, 2);
-                enc_values[1][1] = presets_->GetValue(mode, bank, slot, 3);
-                enc_values[1][2] = presets_->GetValue(mode, bank, slot, 4);
-                loop = presets_->GetValue(mode, bank, slot, 5);
-                sustain = presets_->GetValue(mode, bank, slot, 6);
-
-                enc_values[1][0] = presets_->GetValue(mode, bank, slot, 7);
-                pan = presets_->GetValue(mode, bank, slot, 8);
-            }
-
-            // TODO: clean up pitch code repetition
-            float val = enc_values[0][0];
-            val = val < .5f ? (.5f - val) * -2.f : (val - .5f) * 2.f; // 1 - 0 - 1
-
-            float inv = val < 0.f ? -1.f : 1.f;
-            float pitch;
-            if(fabsf(val) < .33f) // .01x - .5x
-                pitch = val * 1.484848f + .01f * inv;
-            else if (fabsf(val) < .66f ) // .5x - 1x
-                pitch = (val - .33f * inv) * 1.515151 + .5f * inv;
-            else // 1x - 2x
-                pitch = (val - .66 * inv) * 2.941176 + 1.f * inv;
-
-            fx_->OpenCubbiSlot(pitch, enc_values[0][1], enc_values[0][2], enc_values[1][1], 
-            enc_values[1][2], loop, sustain, enc_values[1][0],
-            pan);
-        }
-
         bool OnEncoderTurned(uint16_t encoderID,
                              int16_t turns,
                              uint16_t stepsPerRevolution) override
         {
-            if (init_ignore || copier_->IsCopying())
+            if (init_ignore)
                 return false;
 
             uint8_t page = knob_page[encoderID];
             float old_val = enc_values[page][encoderID];
 
-            bool update_presets = true;
 
             // overrode this to mean increment vs force knob position (used for CCs)
             if(stepsPerRevolution > 0)
@@ -938,65 +835,11 @@ namespace chompi
                 }  
             }
 
-            // don't allow end point too close to start point
-            // TODO: set here, if they don't update, don't update
-            /* SING prototype: no sample to clip */
-            if(false)
-            {
-                if ((enc_values[0][1] + .01f) >= enc_values[0][2])
-                {
-                    enc_values[page][encoderID] = old_val;
-                    // enc_values[0][2] = enc_values[0][1] + .01f;
-                }
-                else if(encoderID == 1)
-                {
-                    if(!fx_->SetStartPoint(enc_values[0][1]) && turns > 0)
-                    {
-                        update_presets = false;
-                        enc_values[page][encoderID] = old_val;
-                    }
-                }
-                else if(encoderID == 2)
-                {
-                    if(!fx_->SetEndPoint(enc_values[0][2]) && turns < 0)
-                    {
-                        update_presets = false;
-                        enc_values[page][encoderID] = old_val;                        
-                    }
-                }
-
-            }
-
             if (stepsPerRevolution == 0) {
                 hw_->SendCC(midi_channel, cc_map[page][encoderID], enc_values[page][encoderID] * 127);
             }
 
-
-            if(encoderID < 3 && update_presets)
-            {
-                DumpValuePresets();
-            }
-
             return true;
-        }
-
-        void DumpValuePresets()
-        {
-            size_t mode = static_cast<size_t>(fx_->GetVoiceMode());
-            size_t bank = fx_->GetBank();
-            size_t slot = fx_->GetVoiceSlot();
-
-            presets_->SetValue(enc_values[0][0], mode, bank, slot, 0);
-            presets_->SetValue(enc_values[0][1], mode, bank, slot, 1);
-            presets_->SetValue(enc_values[0][2], mode, bank, slot, 2);
-            presets_->SetValue(enc_values[1][1], mode, bank, slot, 3);
-            presets_->SetValue(enc_values[1][2], mode, bank, slot, 4);
-            presets_->SetValue(fx_->GetAutoLoop(), mode, bank, slot, 5);
-            presets_->SetValue(fx_->GetSustainActive(), mode, bank, slot, 6);
-
-            presets_->SetValue(enc_values[1][0], mode, bank, slot, 7);
-            presets_->SetValue(fx_->GetPan(), mode, bank, slot, 8);
-
         }
 
         void SetSwitchState(bool state)
@@ -1009,8 +852,6 @@ namespace chompi
     private:
         Hardware *hw_;
         Engine *fx_;
-        FileCopier *copier_;
-        PresetManager* presets_;
 
         float** enc_values;
         const float** enc_defaults;

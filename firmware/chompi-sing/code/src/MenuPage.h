@@ -1,7 +1,6 @@
 #include "hardware.h"
 #include "DSPEngine.h"
 #include "temp_led_stuff.h"
-#include "FileCopier.h"
 
 namespace chompi
 {
@@ -9,27 +8,13 @@ namespace chompi
     {
     public:
 
-        enum class PresetMode
-        {
-            NONE = 0,
-            ERASE_SEL,
-            ERASING,
-            COPY_SRC,
-            COPY_DEST,
-            COPYING,
-            SAVE_SEL,
-            SAVING,
-            LAST,
-        };
 
 
-        void Init(Hardware *hw, Engine *fx, FileCopier *copier, float** enc_arr, const float** def_arr,
-            uint8_t* page, PresetManager* pre, bool ps_quant, bool split_delay)
+        void Init(Hardware *hw, Engine *fx, float** enc_arr, const float** def_arr,
+            uint8_t* page, bool ps_quant, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
-            copier_ = copier;
-            presets_ = pre;
             enc_values = enc_arr;
             enc_defaults = def_arr;
             knob_page = page;
@@ -37,13 +22,11 @@ namespace chompi
             quantized_pitch_ = ps_quant;
             split_delay_ = split_delay;
 
-            key_color = &purple[0];
 
             last_blink = System::GetNow();
 
             chompi_key_pressed = false;
 
-            preset_mode = PresetMode::NONE;
 
             input_toggled = false;
 
@@ -56,7 +39,6 @@ namespace chompi
             fx_->SetDelayTime(delay_time);
             fx_->SetWarble(warble);
 
-            ss_bank = fx_->GetBank();
         }
 
         void Draw(const daisy::UiCanvasDescriptor &canvasDescriptor) override
@@ -72,26 +54,11 @@ namespace chompi
             }
 
             // chompi key
-            if (chompi_key_pressed && preset_mode == PresetMode::NONE)
+            if (chompi_key_pressed)
             {
                 r = .67f;
                 g = 0.f;
                 b = 1.f;
-            }
-            else if (
-                    (preset_mode == PresetMode::SAVE_SEL
-                    || preset_mode == PresetMode::ERASE_SEL
-                    || preset_mode == PresetMode::COPY_DEST)
-                    && selected_slot != kSlotNone)
-            {
-                r = blink_state;
-                g = b = 0.f;
-            }
-            else if (preset_mode == PresetMode::SAVING 
-                        || preset_mode == PresetMode::COPYING 
-                        || preset_mode == PresetMode::ERASING)
-            {
-                r = g = b = blink_state;
             }
             else
             {
@@ -100,7 +67,6 @@ namespace chompi
             SetPthLedFloat(0, r, g, b);
         
             // play / overdub keys
-            if(preset_mode == PresetMode::NONE)
             {
                 const float gain = fx_->GetLooperDubGain();
                 SetPthLedFloat(7, gain, gain, gain);
@@ -133,54 +99,6 @@ namespace chompi
                         SetPthLedFloat(led_off, 0.f, 0.f, 0.f);
                     }
                 }
-            }
-
-            else if (preset_mode == PresetMode::COPY_SRC
-                || preset_mode == PresetMode::COPY_DEST)
-            {
-                SetPthLedFloat(5, 0.f, 0.f, 0.f);
-                SetPthLedFloat(6, 0.f, 0.f, 0.f);                
-
-                if(selected_slot == 16)
-                {
-                    SetPthLedFloat(7, blue[0], blue[1], blue[2]);
-                    SetPthLedFloat(8, blue[0], blue[1], blue[2]);
-                }
-                else if(copy_src == 16)
-                {
-                    SetPthLedFloat(7, green[0], green[1], green[2]);
-                    SetPthLedFloat(8, green[0], green[1], green[2]);
-                }
-                else if(!blink_state)
-                {
-                    SetPthLedFloat(7, 0.f, 0.f, 0.f);
-                    SetPthLedFloat(8, 0.f, 0.f, 0.f);
-                }
-                else if(fx_->GetLooperIsEmpty() && preset_mode == PresetMode::COPY_DEST)
-                {
-                    SetPthLedFloat(7, .4f, .4f, .4f);
-                    SetPthLedFloat(8, .4f, .4f, .4f);
-
-                }
-                else if(!fx_->GetLooperIsEmpty())
-                {
-                    SetPthLedFloat(7, .4f * pink[0], .4f * pink[1], .4f * pink[2]);
-                    SetPthLedFloat(8, .4f * pink[0], .4f * pink[1], .4f * pink[2]);
-                }
-                // unselected, invalid destination
-                else
-                {
-                    SetPthLedFloat(7, 0.f, 0.f, 0.f);
-                    SetPthLedFloat(8, 0.f, 0.f, 0.f);
-                }
-            }
-            else
-            {
-                SetPthLedFloat(5, 0.f, 0.f, 0.f);
-                SetPthLedFloat(6, 0.f, 0.f, 0.f);                
-
-                SetPthLedFloat(7, 0.f, 0.f, 0.f);
-                SetPthLedFloat(8, 0.f, 0.f, 0.f);                
             }
 
             // shift encoder display
@@ -293,82 +211,8 @@ namespace chompi
                 return true;
 
             float r, g, b;
-            if(preset_mode == PresetMode::NONE)
             {
-                if(encoderID == 0)
-                {
-                    if(page == 0) // stepped pitch
-                    {
-                        if(quantized_pitch_)
-                            enc_values[0][0] = fx_->SetGlobalPitchQuantized(turns, enc_values[0][0]);                                
-                        else
-                        {
-                            enc_values[page][encoderID] += turns * kEncoderFineStep;
-                            enc_values[page][encoderID] = fclamp(enc_values[page][encoderID], 0.f, 1.f);
-                            fx_->SetGlobalPitchFree(enc_values[0][0]);
-                        } 
-                    }
-                    else if(page == 1) // pan
-                    {
-                        fx_->SetPan(fx_->GetPan() + inc);
-                    }
-
-                    DumpValuePresets();
-                }
-                // move sample window (both start and end pos)
-                else if ( (encoderID == 1 && page == 0)
-                         || (encoderID == 2 && page == 0)
-                )
-                {
-                    // positive and negative get blocked from moving out of bounds
-                    if( !(turns > 0 && enc_values[0][2] + inc > 1.f) // positive clip
-                        && !(turns < 0 && enc_values[0][1] + inc < 0.f) ) // negative clip
-                    {
-                        enc_values[0][1] += inc;
-                        enc_values[0][2] += inc;
-                        fx_->SetStartPointForce(enc_values[0][1]);
-                        fx_->SetEndPointForce(enc_values[0][2]);
-
-                        DumpValuePresets();
-                    }
-
-                    // start point
-                    r = color_xfade(yellow[0], orange[0], enc_values[0][1]);
-                    g = color_xfade(yellow[1], orange[1], enc_values[0][1]);
-                    b = color_xfade(yellow[2], orange[2], enc_values[0][1]);
-                    SetPthLedFloat(2, r, g, b);
-
-                    // end point
-                    r = color_xfade(orange[0], red[0], enc_values[0][2]);
-                    g = color_xfade(orange[1], red[1], enc_values[0][2]);
-                    b = color_xfade(orange[2], red[2], enc_values[0][2]);
-                    SetPthLedFloat(3, r, g, b);
-                    knob_page[1] = knob_page[2] = 0;
-                }
-                // set both attack and decay at once
-                else if ( (encoderID == 1 && page == 1)
-                         || (encoderID == 2 && page == 1)
-                )
-                {
-                    float val = encoderID == 1 ? enc_values[1][1] : enc_values[1][2];
-                    val = fclamp(val + inc, 0.f, 1.f);
-                    fx_->SetAttack(val);
-                    fx_->SetDecay(val);
-
-                    DumpValuePresets();
-
-                    // att.
-                    r = color_xfade(purple[0] * .2f, purple[0], val);
-                    g = color_xfade(purple[1] * .2f, purple[1], val);
-                    b = color_xfade(purple[2] * .2f, purple[2], val);
-                    SetPthLedFloat(2, r, g, b);
-                    SetPthLedFloat(3, r, g, b);
-
-                    enc_values[1][1] = val;
-                    enc_values[1][2] = val;
-                    knob_page[1] = knob_page[2] = 1;
-                }
-                else if (encoderID == 3)
+                if (encoderID == 3)
                 {
                     if(page == 0) // magic
                     {
@@ -418,83 +262,6 @@ namespace chompi
 
 
             return true;
-        }
-
-        void DumpValuePresets()
-        {
-            size_t mode = static_cast<size_t>(fx_->GetVoiceMode());
-            size_t bank = fx_->GetBank();
-            size_t slot = fx_->GetVoiceSlot();
-
-            presets_->SetValue(enc_values[0][0], mode, bank, slot, 0);
-            presets_->SetValue(enc_values[0][1], mode, bank, slot, 1);
-            presets_->SetValue(enc_values[0][2], mode, bank, slot, 2);
-            presets_->SetValue(enc_values[1][1], mode, bank, slot, 3);
-            presets_->SetValue(enc_values[1][2], mode, bank, slot, 4);
-            presets_->SetValue(fx_->GetAutoLoop(), mode, bank, slot, 5);
-            presets_->SetValue(fx_->GetSustainActive(), mode, bank, slot, 6);
-
-            presets_->SetValue(enc_values[1][0], mode, bank, slot, 7);
-            presets_->SetValue(fx_->GetPan(), mode, bank, slot, 8);        
-        }
-
-        void SetVoiceSlot(size_t slot)
-        {
-            // fx_->SetVoiceSlot(slot, true);
-
-            size_t mode = static_cast<size_t>(fx_->GetVoiceMode());
-            size_t bank = fx_->GetBank();
-
-            if(!presets_->IsValid(mode, bank, slot))
-            {
-                enc_values[0][0] = enc_defaults[0][0];
-                enc_values[0][1] = enc_defaults[0][1];
-                enc_values[0][2] = enc_defaults[0][2];
-                enc_values[1][0] = enc_defaults[1][0];
-                enc_values[1][1] = enc_defaults[1][1];
-                enc_values[1][2] = enc_defaults[1][2];
-                fx_->SetAutoLoop(true);
-                fx_->SetSustainActive(true);
-                fx_->SetPan(.5f);
-            }
-            else
-            {
-                enc_values[0][0] = presets_->GetValue(mode, bank, slot, 0);
-                enc_values[0][1] = presets_->GetValue(mode, bank, slot, 1);
-                enc_values[0][2] = presets_->GetValue(mode, bank, slot, 2);
-                enc_values[1][1] = presets_->GetValue(mode, bank, slot, 3);
-                enc_values[1][2] = presets_->GetValue(mode, bank, slot, 4);
-                fx_->SetAutoLoop(presets_->GetValue(mode, bank, slot, 5));
-                fx_->SetSustainActive(presets_->GetValue(mode, bank, slot, 6));
-
-                enc_values[1][0] = presets_->GetValue(mode, bank, slot, 7);
-                fx_->SetPan(presets_->GetValue(mode, bank, slot, 8));
-            }
-
-            // TODO: clean up pitch code repetition
-            float val = enc_values[0][0];
-            val = val < .5f ? (.5f - val) * -2.f : (val - .5f) * 2.f; // 1 - 0 - 1
-
-            float inv = val < 0.f ? -1.f : 1.f;
-            float pitch;
-            if(fabsf(val) < .33f) // .01x - .5x
-                pitch = val * 1.484848f + .01f * inv;
-            else if (fabsf(val) < .66f ) // .5x - 1x
-                pitch = (val - .33f * inv) * 1.515151 + .5f * inv;
-            else // 1x - 2x
-                pitch = (val - .66 * inv) * 2.941176 + 1.f * inv;
-
-            fx_->SetGlobalPitch(fabsf(pitch));
-            fx_->SetReverse(pitch < 0.f);
-
-            fx_->SetStartPointForce(enc_values[0][1]);
-            fx_->SetEndPointForce(enc_values[0][2]);
-
-            fx_->SetGain(enc_values[1][0]);
-            fx_->SetAttack(enc_values[1][1]);
-            fx_->SetDecay(enc_values[1][2]);
-
-            fx_->SetVoiceSlot(slot, true);
         }
 
         bool OnButton(uint16_t buttonID,
@@ -647,62 +414,33 @@ namespace chompi
 
             input_toggled = false;
 
-            ss_bank = fx_->GetBank();
-            copy_src = kSlotNone;
-            selected_slot = fx_->GetVoiceSlot();
-            preset_mode = PresetMode::NONE;
         }
 
         inline void SetSwitchState(bool state) { switch_state = state; }
 
+        /** the menu stays open while the chompi key is held (SING: the toggle
+         *  switch is the dry voice here, so it must not close the menu) */
         bool IsClosable()
         { 
-            if(
-                System::GetNow() - blink_startt > 1000                              // animation done AND
-                && ((preset_mode == PresetMode::SAVING && !copier_->IsCopying())    // (finished saving OR
-                || (preset_mode == PresetMode::COPYING && !copier_->IsCopying())    // finished copying OR
-                || (preset_mode == PresetMode::ERASING && !fx_->IsErasing())        // finished erasing OR
-                || (preset_mode == PresetMode::NONE && !chompi_key_pressed)         // did nothing OR
-                || (preset_mode != PresetMode::COPYING  && preset_mode != PresetMode::SAVING 
-                    && preset_mode != PresetMode::ERASING && !switch_state)) // NOT working on a copy/save/erase and the mode switch went up)
-            )
+            if(System::GetNow() - blink_startt > 1000 && !chompi_key_pressed)
             {
-                if((preset_mode == PresetMode::SAVING || preset_mode == PresetMode::COPYING) && selected_slot == 16)
-                {
-                    fx_->LooperOpenFile();
-                    enc_values[0][4] = enc_defaults[0][4];
-                }
-                else if((preset_mode == PresetMode::COPYING || preset_mode == PresetMode::SAVING) && ss_mode != VoiceMode::CUBBI)
-                {
-                    SetVoiceSlot(selected_slot);
-                }
-                else if(preset_mode == PresetMode::ERASING
-                    && fx_->GetVoiceMode() == VoiceMode::JAMMI
-                    && fx_->GetVoiceSlot() == selected_slot)
-                {
-                    SetVoiceSlot(15);
-                }
-
                 if(!quantized_pitch_)
                 {
                     fx_->ResetGlobalPitchQuant();
                     fx_->ResetLooperPitchQuant();
                 }
-
                 return true;
             }
-
             return false;
         }
 
+        bool switch_state = false;
         bool no_sd_card_ = false;
         inline void NoSDCard() { no_sd_card_ = true; }
 
     private:
         Hardware *hw_;
         Engine *fx_;
-        FileCopier *copier_;
-        PresetManager* presets_;
         float** enc_values;
         const float** enc_defaults;
         uint8_t* knob_page;
@@ -710,7 +448,6 @@ namespace chompi
         bool quantized_pitch_;
         bool split_delay_;
 
-        const float* key_color;
 
         bool input_toggled;
 
@@ -725,14 +462,5 @@ namespace chompi
         bool fx_reset = false;
         bool pitch_reset = false;
 
-        uint8_t selected_slot = kSlotNone;
-        uint8_t ss_bank = kSlotNone;
-        VoiceMode ss_mode = VoiceMode::LAST;
-        uint8_t copy_src = kSlotNone;
-        uint8_t cs_bank = kSlotNone;
-        VoiceMode cs_mode = VoiceMode::LAST;
-        bool switch_state;
-
-        PresetMode preset_mode = PresetMode::NONE;
     };
 } // namespace chompi

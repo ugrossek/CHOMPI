@@ -3,12 +3,10 @@
  */
 #pragma once
 #include "daisy.h"
-#include "FileStreamingManager.h"
 #include "LooperEngine.h"
 #include "daisysp.h"
 #include "DJFilter.h"
 #include "Warble.h"
-#include "PresetManager.h"
 #include "EnvFollower.h"
 #include "MicFilter.h"
 #include "Harmonizer.h"
@@ -101,29 +99,6 @@ namespace daisy
 
     };
 
-    // This shouldn't live here, but it's visible where it's needed, so...
-    static const uint8_t kSlotNone = 100;
-    static size_t const KeyToSlot(size_t buttonID)
-    {
-        if (buttonID == 7)
-            return kSlotNone;
-        else if (buttonID < 12)
-            return buttonID - 6;
-        else if (buttonID < 15)
-            return kSlotNone;
-        else if (buttonID == 15)
-            return 1;
-        else if (buttonID < 21)
-            return buttonID - 10;
-        else if (buttonID < 24)
-            return kSlotNone;
-        else if (buttonID < 29)
-            return buttonID - 13;
-
-        return kSlotNone;
-    }
-
-
     /** @brief core engine for running entire modules audio
      *
      *  For now now abstraction for various sampling modes,
@@ -137,18 +112,11 @@ namespace daisy
         Engine() {}
         ~Engine() {}
 
-        FileStreamingManager* GetFileManager()
-        {
-            return &file_manager;
-        }
-
         void Init(
             float samplerate, 
             daisysp::Reverb* reverb, 
             chompi::InterpolatedDelayLine::AudioSample* del,
             RamBufferMemory* loop_buff,
-            RamBufferMemory* chompi_buff,
-            bool latch,
             bool tape_slew,
             MonitorMode mon_mode)
         {
@@ -196,7 +164,6 @@ namespace daisy
             dcblock_fx_l_.Init(samplerate);
             dcblock_fx_r_.Init(samplerate);
 
-            file_manager.Init(samplerate);
 
             fx_pre_loop = true;
             fx_env_ = fx_env_target_ = 1.f;
@@ -204,9 +171,6 @@ namespace daisy
 
             resamp_env_ = resamp_env_target_ = 1.f;
 
-            chompi_writer.Init(chompi_buff);
-            record = false;
-            record_latch = latch;
 
             SetVoiceMode(VoiceMode::JAMMI);
             SetBank(0);
@@ -223,49 +187,6 @@ namespace daisy
         }
 
         // fill chompi buffer with 2 second long cosine
-        void FillDefaultSample(float samplerate)
-        {
-            float rads_l = 1.f;
-            float rads_r = 0.f;
-            float detune = 1.01f;
-            float inc_r = .5f * 523.2511f * (TWOPI_F / samplerate) ; // hz -> increment in rads
-            float inc_l = .5f * 523.2511f * detune * (TWOPI_F / samplerate) ;
-            float envelope;
-
-            for(size_t i = 0; i < 3 * samplerate; i++)
-            {
-                if (i > 24000) {
-                    float decay_rate = 0.00007195578f;
-                    envelope = expf(-decay_rate * (i - 24000));
-                }
-                else {
-                    envelope = 1.f;
-                }
-                
-                const size_t end = (4 * samplerate) - 2000;
-                float gain = 1.f;
-                if(i < 2000)
-                    gain = i / 2000.f;
-                else if(i > end)
-                    gain = 1.f - (i - end) / 2000.f;
-
-                rads_l += inc_l;
-                if(rads_l >= TWOPI_F)
-                    rads_l -= TWOPI_F;
-
-                rads_r += inc_r;
-                if(rads_r >= TWOPI_F)
-                    rads_r -= TWOPI_F;
-
-                float tri_l = 2.0f * fabsf(rads_l / TWOPI_F - 0.5f) - 1.0f;
-                float tri_r = 2.0f * fabsf(rads_r / TWOPI_F - 0.5f) - 1.0f;
-                // sum and output
-                const int16_t sum_l = f2s16(gain * .4f * tri_l * envelope);
-                const int16_t sum_r = f2s16(gain * .4f * tri_r * envelope);
-                chompi_writer.StereoWrite(sum_l, sum_r, false, true);
-            }
-        }
-
         void ApplyFx(float* outl, float* outr, size_t size)
         {
             for(size_t i = 0; i < size; i++)
@@ -417,9 +338,6 @@ namespace daisy
             harmonizer.Duck(duck, size);
             duck_ = duck;
 
-            /** TODO: debug why this is happening */
-            if(record != true && record != false)
-                record = false;
 
 
 
@@ -521,21 +439,6 @@ namespace daisy
             }
 
 
-            /** voice write */
-            if (record)
-            {
-                for (size_t i = 0; i < size; i++)
-                {
-                    const int16_t inl = f2s16(monitor[0][i]);
-                    const int16_t inr = f2s16(monitor[1][i]);
-
-                    chompi_writer.StereoWrite(inl, inr, false, true);
-                }
-            }
-
-            if(record && chompi_writer.WriteFullLength())
-                StopRecording();
-
             /** main gain control */
             for(size_t i = 0; i < size; i++)
             {
@@ -585,44 +488,6 @@ namespace daisy
             return 0.f;
         }
 
-        /** @brief Opens a new file and enables recording for a file
-         *  @param slot position in the bank to record the sample (ignored for now)
-         *
-         *  @todo add delay/preprocessing for declicking
-         */
-        void StartNewRecording(int slot)
-        {
-            /** if the looper is overdubbing, stop it */
-            if(looper.IsRecording())
-                looper.ToggleRecord();
-
-            /** if it was the first recording, stop it overdubbing :\ */
-            if(looper.IsRecording())
-                looper.ToggleRecord();
-
-            /** Send open file request and toggle record flag */
-            char name_buffer[32];
-            strcpy(name_buffer, "temp_rec.wav");
-
-            // char name_buffer_dbl[32];
-            // strcpy(name_buffer_dbl, "temp_rec_double.wav");
-
-            /** For now we only need to record to the first-voices file..
-             *  since all voices will be using the same file for playback
-             */
-            chompi_writer.Reset();
-            record = true;
-        }
-
-        /** @brief stops recording, and syncs file
-         *  @todo add delay/preprocessing for declicking (fade, etc.)
-         */
-        /** @brief stops recording */
-        void StopRecording()
-        {
-            record = false;
-        }
-        inline bool Recording() const { return record; }
 
         /**
          * @brief Resets the assignment of keyboard keys to voices used in voice stealing algorithm.
@@ -648,15 +513,6 @@ namespace daisy
                 else if (req.type_ == KeyRequest::Type::STOP)
                     harmonizer.NoteOff(req.key_);
             }
-        }
-
-        /** Do SD Card stuff
-            return true if there are more requests to complete
-        */
-        bool ProcessFileRequests()
-        {
-            file_manager.ProcessRequests();
-            return !file_manager.request_fifo.IsEmpty();
         }
 
         void Prepare()
@@ -952,7 +808,6 @@ namespace daisy
         inline bool IsLooperFirstRecording() { return looper.IsFirstRecording(); };
         inline bool IsLooperRecordArmed() { return looper.GetRecordArm(); };
 
-        inline bool GetRecordLatch() { return record_latch; }
 
         inline void IncrementLooperDubGain(float gain) { looper.IncrementDubGain(gain); }
         inline float GetLooperDubGain() { return looper.GetDubGain(); }
@@ -1032,65 +887,9 @@ namespace daisy
             }
         }
 
-        char fname[32];
-        char fname_double[32];
-        uint8_t erasing = 0;
-        void EraseStart(uint8_t target, int b, VoiceMode m)
-        {
-            SetFileExists(target - 1, b, m, false);
 
-            GetFileNameForSlot(target, b, m, fname);
-            GetFileNameForSlot(target, b, m, fname_double, true);
-
-            FileRequest req(FileRequest::Type::UNLINK, nullptr, fname, 0, nullptr, this);
-            file_manager.request_fifo.PushBack(req);
-
-            FileRequest double_req(FileRequest::Type::UNLINK, nullptr, fname_double, 0, nullptr, this);
-            file_manager.request_fifo.PushBack(double_req);
-            erasing += 2;
-        }
-
-        inline void EraseFinished()
-        { 
-            if(erasing != 0)
-                erasing--; 
-        }
-
-        inline bool IsErasing() { return erasing != 0; }
 
         void SetAllCopyOccurred() {}
-
-        void UpdateFileExists()
-        {
-            for(size_t m = 0; m < 2; m++)
-            {
-                for(size_t b = 0; b < 5; b++)
-                {
-                    for(size_t s = 0; s < 15; s++)
-                    {
-                        if (s >= 14)
-                        {
-                            file_exists[m][b][s] = true;
-                        }
-                        else
-                        {
-                            GetFileNameForSlot(s + 1, b, VoiceMode(m), fname);
-                            file_exists[m][b][s] = f_stat(fname, nullptr) == FR_OK;
-                        }
-                    }
-                }
-            }
-        }
-
-        inline void SetFileExists(size_t slot, size_t bank, VoiceMode mode, bool exists)
-        {
-            file_exists[int(mode)][bank][slot] = exists;
-        }
-
-        inline bool GetFileExists(size_t slot)
-        { 
-            return file_exists[int(voice_mode)][GetBank()] [slot];
-        }
 
         inline size_t GetVoiceSlot()
         { 
@@ -1165,7 +964,6 @@ namespace daisy
         inline void IncrementMonitorMode() { monitor_mode = MonitorMode( (int(monitor_mode) + 1) % int(MonitorMode::LAST) ); }
         inline MonitorMode GetMonitorMode() { return monitor_mode; }
 
-        inline bool IsManagerEmpty() __attribute__((optimize("-O0"))) { return file_manager.request_fifo.IsEmpty(); }
 
         // helper for stuck key hack
         inline int GetPlayingKey(size_t) { return 0; }
@@ -1191,8 +989,6 @@ namespace daisy
         EnvFollower output_env_follower;
 
         /** Sampling Bits */
-        daisy::FileStreamingManager file_manager;
-        RamBuffer chompi_writer;
 
         chompi::Limiter lim_hp_l_;
         chompi::Limiter lim_hp_r_;
@@ -1201,12 +997,10 @@ namespace daisy
 
 
 
-        bool record, record_latch;
         bool input_monitor;
 
         VoiceMode voice_mode;
 
-        bool file_exists[2][5][15]; // mode, bank, slot
         size_t voice_slot_;
         size_t cubbi_slot_;
 

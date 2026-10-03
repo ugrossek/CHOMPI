@@ -1,5 +1,6 @@
 #pragma once
-#include "FileStreamingManager.h"
+#include "daisy.h"
+#include "fatfs.h"
 #include "core_json.h"
 
 #define OPT_VERSION "1"

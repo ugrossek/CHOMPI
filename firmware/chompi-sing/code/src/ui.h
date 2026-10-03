@@ -7,7 +7,6 @@
 #include "NoSDPage.h"
 #include "RainbowWavePage.h"
 #include "DSPEngine.h"
-#include "FileCopier.h"
 // #include "StereoDelayEffect.h"
 
 namespace chompi
@@ -46,17 +45,13 @@ namespace chompi
     class UserInterface
     {
     public:
-        void Init(Hardware *hw, Engine *fx, FileCopier* copier, PresetManager* pre,
+        void Init(Hardware *hw, Engine *fx,
                     uint8_t ch_in, uint8_t ch_out, bool pitch_shift_quant, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
-            manager = fx_->GetFileManager();
-            presets_manager = pre;
 
             midi_in_ch = ch_in;
-
-            InitFromPresets();
 
             /** Describe UI special controls - if any */
             daisy::UI::SpecialControlIds specialControlIds; /**< None here */
@@ -74,15 +69,15 @@ namespace chompi
                     {ledDisplayDescriptor},
                     canvasLedDisplay);
 
-            normal_page_.Init(hw_, fx_, copier, enc_rows, 
-                def_rows, knob_page, presets_manager, ch_out, pitch_shift_quant, split_delay);
+            normal_page_.Init(hw_, fx_, enc_rows, 
+                def_rows, knob_page, ch_out, pitch_shift_quant, split_delay);
             ui.OpenPage(normal_page_);
 
             boot_page_.Init(hw_, fx_);
             ui.OpenPage(boot_page_);
 
-            menu_page_.Init(hw_, fx_, copier, enc_rows, def_rows, knob_page,
-                presets_manager, pitch_shift_quant, split_delay);
+            menu_page_.Init(hw_, fx_, enc_rows, def_rows, knob_page,
+                pitch_shift_quant, split_delay);
 
             test_page_.Init(hw_, fx_);
 
@@ -154,15 +149,6 @@ namespace chompi
                         if(key > 48|| key < 0)
                             break;
 
-                        if(fx_->GetVoiceMode() == VoiceMode::CUBBI)
-                        {
-                            size_t slot = KeyToSlot(midi2key[key]);
-                            if(slot == kSlotNone)
-                                break;
-
-                            normal_page_.OpenCubbiSlot(slot);
-                        }
- 
                         if(!test_page_.IsActive()) {
                             fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::START, 
                                 key - 36, midi2key[key], event.data[1] + 1));
@@ -356,110 +342,10 @@ namespace chompi
             }
         }
 
-        FileStreamingManager* manager;
-        FIL fptr_pre;
-        char fname[32];
-        static const size_t kPreFileSize = 8192;
-        char presets_file[kPreFileSize]; // too big? not big enough?
-
-        // pitch, start, end, att, decay, autoloop, sustainactive, gain, pan
-        const float defaults[9] = {   enc_defaults[0][0], enc_defaults[0][1], enc_defaults[0][2],
-                                enc_defaults[1][1], enc_defaults[1][2], 1.f,
-                                1.f, enc_defaults[1][0], .5f};
-
-        void InitFromPresets()
-        {
-            presets_manager->Init(defaults);
-
-            strcpy(fname, "presets.json");
-
-            FRESULT fres;
-            fres = f_open(&fptr_pre, fname, (FA_OPEN_ALWAYS | FA_WRITE | FA_READ));
-
-            if(fres == FR_OK)
-            {
-                UINT br;
-                fres = f_read(&fptr_pre, presets_file, kPreFileSize, &br);
-                if(fres == FR_OK)
-                {
-                    presets_manager->Parse(presets_file, kPreFileSize);
-                    fres = f_lseek(&fptr_pre, 0);
-                    fres = f_write(&fptr_pre, presets_file, strlen(presets_file), nullptr);
-                    fres = f_truncate(&fptr_pre);
-                    fres = f_sync(&fptr_pre);
-                }
-            }
-            // else?
-
-
-        }
-
         void DoEvents() { ui.Process(); }
 
         uint32_t file_len = 0;
-        uint8_t write_stage = 0;
         // for some reason this causes clicking if you optimize it higher than this...
-        void TestPresets()
-        {
-            if(write_stage == 0) // start chunked write
-            {
-                PresetManager::Result res = presets_manager->WriteWholeFile(presets_file, kPreFileSize);
-                if(res == PresetManager::Result::OK)
-                {
-                    write_stage = 1;
-                }    
-            }
-        }
-
-
-        void WritePresets() __attribute__((optimize("-O0")))
-        {
-            if(write_stage == 0)
-            {
-                // do nothing
-            }
-            else if(write_stage == 1)
-            {
-                file_len = strlen(presets_file);
-
-                char name[32];
-                strcpy(name, "presets_temp.json");
-                f_open(&fptr_pre, name, (FA_OPEN_ALWAYS | FA_WRITE | FA_READ));
-
-                f_lseek(&fptr_pre, 0);
-
-                write_stage = 2;
-            }
-            else if(f_tell(&fptr_pre) < file_len && write_stage == 2) // write the next chunk
-            {
-                uint32_t write_size = kMaxFileWriteChunkSize;
-                if(f_tell(&fptr_pre) + write_size >= file_len)
-                    write_size = file_len - f_tell(&fptr_pre);
-
-                f_write(&fptr_pre, &presets_file[f_tell(&fptr_pre)], write_size, nullptr);
-                f_sync(&fptr_pre);
-
-                if(f_tell(&fptr_pre) >= file_len)
-                    write_stage = 3;
-            }
-            else if(write_stage == 3)
-            {
-                f_truncate(&fptr_pre);
-                f_sync(&fptr_pre);
-
-                char from[32];
-                char to[32];
-
-                strcpy(from, "presets_temp.json");
-                strcpy(to, "presets.json");
-
-                f_unlink(to);
-                f_rename(from, to);
-
-                write_stage = 0;
-            }
-        }
-
         // inline void TrigClear() { normal_page_.TrigClear(); }
 
     inline void TestPowerCable(bool cable) { test_page_.SetPowerCable(cable); }
@@ -480,7 +366,6 @@ namespace chompi
         daisy::UI ui;
         Hardware *hw_;
         Engine *fx_;
-        PresetManager* presets_manager;
 
         bool toggle_state;
 

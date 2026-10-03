@@ -5,7 +5,6 @@
 #include "fatfs.h"
 #include "diskio.h"
 #include "DSPEngine.h"
-#include "FileCopier.h"
 #include "RamBuffer.h"
 #include "InterpolatedDelayLine.h"
 #include "OptionsManager.h"
@@ -23,7 +22,6 @@ UserInterface ui;
 SdmmcHandler sdmmc;
 FatFSInterface fsi;
 Engine engine;
-PresetManager presets;
 OptionsManager options;
 
 daisysp::Reverb DSY_DTCMRAM_BSS reverb;
@@ -32,8 +30,6 @@ chompi::InterpolatedDelayLine::AudioSample DSY_SDRAM_BSS del_mem[kMaxDelayTime];
 RamBufferMemory loop_buff;
 int16_t DSY_SDRAM_BSS loop_mem[kMaxRamBuffSize]; 
 
-RamBufferMemory chompi_buff;
-int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 
 // pitch shifter delay lines, one per voice
 float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
@@ -75,12 +71,11 @@ extern "C" void *_sbrk(ptrdiff_t incr)
 daisysp::Oscillator osc;
 
 // CpuLoadMeter meter;
-uint32_t pret, sd_checkt;
+uint32_t sd_checkt;
 // bool log_batt;
 bool booting = true;
 bool rainbow_done = false;
 
-FileCopier copier;
 
 /** breakdown:
  *  Inputs:
@@ -187,22 +182,9 @@ void SDCallback(void* data)
     else if(no_sd_card)
         return;
 
-    if(copier.CopyProcess())
-    {
-        ui.DoEvents();
-        return;
-    }
-
-    engine.ProcessFileRequests();
-
-    if(now - pret > 50 && !engine.AnyVoicesPlaying())
-    {
-        pret = now;
-        ui.WritePresets();
-    }    
 }
 
-uint32_t uit, now, pre_startt;
+uint32_t uit, now;
 
 #if !NO_BATT
 uint32_t batt, usbt;
@@ -210,9 +192,6 @@ bool prev_int_state = true;
 bool usb_handoff = false;
 #endif
 
-uint8_t preset = 0;
-uint8_t bank = 0; 
-uint8_t mode = 0;
 
 
 void MainLoop(void* data)
@@ -221,40 +200,9 @@ void MainLoop(void* data)
     {
         hw.LowBatteryLockoutCheck();
 
-        if(!copier.IsCopying())
-        {
-            if(copier.NeedsOverwrite(preset, VoiceMode(mode), bank))
-            {
-                FileCopier::CopyRequest req(preset + 1, bank, VoiceMode(mode),
-                    preset + 1,bank, VoiceMode(mode), false,
-                    FileCopier::CopyRequest::RamDir::NONE,
-                    FileCopier::CopyRequest::RamDir::NONE);
-
-                copier.req_fifo.PushBack(req);
-
-                System::Delay(5); // fixes data race
-            }
-
-            preset++;
-            if(preset >= 14)
-            {
-                preset = 0;
-                bank++;
-
-                if(bank >= 5)
-                {
-                    bank = 0;
-                    mode++;
-
-                    if(mode >= 2)
-                    {
-                        engine.UpdateFileExists();
-                        booting = false;
-                    }
-                }
-            }
-        }
-
+        /* TAPE converted old sample files here before letting the audio
+           start; SING has no samples, so booting ends straight away */
+        booting = false;
         return;
     }
     else if(!rainbow_done)
@@ -275,11 +223,6 @@ void MainLoop(void* data)
         uit = now;
     }
 
-    if (now - pre_startt > 5000)
-    {
-        ui.TestPresets();
-        pre_startt = now;
-    }
 
     // update now to actually be now
     now = daisy::System::GetNow();
@@ -400,7 +343,7 @@ int main(void)
     options.Init();
 
     LedSetup();
-    ui.Init(&hw, &engine, &copier, &presets,
+    ui.Init(&hw, &engine,
         options.midi_ch_in, options.midi_ch_out, options.pitch_shift_quantization, options.delay_split);
 
     hw.StartLowPriorityCallback(SDCallback, 1000);
@@ -411,10 +354,8 @@ int main(void)
     // meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
 
     loop_buff.Init(&loop_mem[0]);
-    chompi_buff.Init(&chompi_mem[0]);
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 
-                &loop_buff, &chompi_buff, 
-                options.record_latch, options.tape_slew_on,
+                &loop_buff, options.tape_slew_on,
                 MonitorMode(options.monitor_position));
 
     osc.Init(hw.seed.AudioSampleRate());
@@ -422,8 +363,6 @@ int main(void)
 
     now = daisy::System::GetNow();
     uit = now;
-    pret = now;
-    pre_startt = now;
 
     #if !NO_BATT
     usbt = now;
@@ -456,8 +395,6 @@ int main(void)
     daisy::System::Delay(1); // Wait a sec
     hw.usb_sw.Write(true);     // take USB control
     
-    copier.Init(hw.seed.AudioSampleRate(), &engine, &chompi_buff, &loop_buff);
-    engine.FillDefaultSample(hw.seed.AudioSampleRate());
 
     while (1)
     {
