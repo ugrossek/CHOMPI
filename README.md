@@ -8,7 +8,7 @@
 > [pitch-shift experiment](https://github.com/ugrossek/CHOMPI/tree/true-pitch-shift). Controls, install and known limits are in
 > [`firmware/chompi-sing`](firmware/chompi-sing/).
 >
-> **[Download the firmware](../../releases/tag/sing-v1)** — a ready-to-flash `.bin`.
+> **[Download the firmware](../../releases/tag/sing-beta)** — a ready-to-flash `.bin` (beta).
 >
 > **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
 > tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
