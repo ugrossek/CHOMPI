@@ -89,10 +89,10 @@ namespace chompi
 
         /* ---- knobs, each 0..1 ------------------------------------------ */
 
-        /** knob 1, page 1: -12..+12 semitones on every voice, .5 = none */
+        /** knob 2, page 2: -5..+5 semitones on every voice, .5 = none */
         void SetTranspose(float v)
         {
-            transpose_ = roundf((v - .5f) * 24.f);
+            transpose_ = roundf((v - .5f) * 10.f);
             for (size_t i = 0; i < kVoices; i++)
                 UpdateRatio(voices_[i], i);
         }
@@ -101,7 +101,7 @@ namespace chompi
         /** knob 1, page 2: harmony volume, .5 = about as loud as the dry voice */
         void SetLevel(float v) { level_ = v * 2.f * kLevel; }
 
-        /** knob 2, page 2: 2 ms .. 500 ms */
+        /** knob 2, page 1: 2 ms .. 500 ms */
         void SetAttack(float v) { attack_ = 1.f / (.002f * powf(250.f, v) * sr_); }
 
         /** knob 3, page 2: 20 ms .. 3 s */

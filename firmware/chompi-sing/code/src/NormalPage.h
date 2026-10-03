@@ -143,7 +143,7 @@ namespace chompi
       private:
         /* SING prototype: knobs 1-3, two pages each (press to switch).
          *    knob 1: harmony volume | spread
-         *    knob 2: transpose      | attack
+         *    knob 2: attack         | transpose (-5..+5)
          *    knob 3: doubler        | release
          *  The defaults in ui.h and Harmonizer::Init must match. */
         void SingKnob(int knob, int page, float v)
@@ -152,8 +152,8 @@ namespace chompi
             {
                 case 0: fx_->SetGain(v); break;
                 case 1: fx_->SetSpread(v); break;
-                case 2: fx_->SetTranspose(v); break;
-                case 3: fx_->SetAttack(v); break;
+                case 2: fx_->SetAttack(v); break;
+                case 3: fx_->SetTranspose(v); break;
                 case 4: fx_->SetDoubler(v); break;
                 case 5: fx_->SetDecay(v); break;
                 default: break;
@@ -167,7 +167,7 @@ namespace chompi
             {
                 case 0: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;      // volume
                 case 1: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
-                case 2: SingMix(sing_coral, sing_gold, fabsf(v - .5f) * 2.f, r, g, b); break;      // transpose
+                case 3: SingMix(sing_coral, sing_gold, fabsf(v - .5f) * 2.f, r, g, b); break;      // transpose
                 case 4: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
                 default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // attack, release
             }
@@ -925,9 +925,13 @@ namespace chompi
                 float inc = turns * kEncoderCoarseStep;
 
                 // fine steps for pitch, sample start, and sample end
-                /* SING prototype: knobs 1-3 page 1 (volume, transpose,
+                /* SING prototype: knobs 1-3 page 1 (volume, attack,
                    doubler), plain coarse steps */
-                if(page == 0 && encoderID <= 2)
+                if(page == 1 && encoderID == 1)
+                {
+                    inc = turns * .1f; // SING transpose: one detent = one semitone
+                }
+                else if(page == 0 && encoderID <= 2)
                 {
                 }
                 else if((encoderID == 0 && page == 0 && quantized_pitch_)
