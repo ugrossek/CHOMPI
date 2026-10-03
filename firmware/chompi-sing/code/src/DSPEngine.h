@@ -674,6 +674,8 @@ namespace daisy
         float GetTranspose() { return harmonizer.Transpose(); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }
         bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
+        void ToggleLatch() { harmonizer.SetLatch(!harmonizer.Latched()); }
+        bool IsLatched() { return harmonizer.Latched(); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 
         void SetAttack(float val) { harmonizer.SetAttack(val); }

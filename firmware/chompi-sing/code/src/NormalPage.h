@@ -245,8 +245,6 @@ namespace chompi
         uint32_t last_arm_blink;
         bool arm_blink = true;
 
-        uint32_t last_record_blink;
-        bool record_blink = false;
 
         void ResetSmtLeds()
         {
@@ -609,34 +607,14 @@ namespace chompi
 
             // chompi key
             fx_->SetInputMonitor(!switch_state);
-            if (!switch_state)
+            if (fx_->IsLatched()) // SING: latch on
             {
-                if(copier_->IsCopying())
-                {
-                    if(now - last_record_blink > 300)
-                    {
-                        record_blink = !record_blink;
-                        last_record_blink = now;
-                    }
-
-                    if(record_blink)
-                    {
-                        r = pink[0];
-                        g = pink[1];
-                        b = pink[2];
-                    }
-                    else
-                    {
-                        r = g = b = 0.f;
-                    }
-                }
-                else if (fx_->Recording())
-                {
-                    r = red[0];
-                    g = red[1];
-                    b = red[2];
-                }
-                else
+                r = sing_magenta[0];
+                g = sing_magenta[1];
+                b = sing_magenta[2];
+            }
+            else if (!switch_state)
+            {
                 {
                     float vu_sample = fx_->GetVUSample(VUTarget::VU_INPUT);
                 
@@ -787,23 +765,10 @@ namespace chompi
                     midi_channel = rising;
                 }
 
-                // chompi mode
-                if(!switch_state)
-                {
-                    bool latch = fx_->GetRecordLatch();
-                    bool rec = fx_->Recording();
-
-                    if (rising && !rec)
-                    {
-                        fx_->StartNewRecording(0);
-                        last_record_blink = System::GetNow();
-                        record_blink = false;
-                    }
-                    else if(!rising && !latch && rec)
-                        StopVoiceRecording();
-                    else if(rising && rec && latch)
-                        StopVoiceRecording();
-                }
+                /* SING: a tap toggles latch. A hold opens the menu instead
+                   (ui.h), and then the release goes to the menu, not here. */
+                if(!rising)
+                    fx_->ToggleLatch();
  
                 break;
             }
@@ -1036,24 +1001,7 @@ namespace chompi
 
         void SetSwitchState(bool state)
         {
-            if(state && !switch_state && fx_->Recording() && !copier_->IsCopying())
-            {
-                StopVoiceRecording();
-            }
-
             switch_state = state; 
-        }
-
-        void StopVoiceRecording()
-        {
-            enc_values[0][0] = enc_defaults[0][0];
-            enc_values[0][1] = enc_defaults[0][1];
-            enc_values[0][2] = enc_defaults[0][2];
-            enc_values[1][0] = enc_defaults[1][0];
-            enc_values[1][1] = enc_defaults[1][1];
-            enc_values[1][2] = enc_defaults[1][2];
-
-            fx_->StopRecording();
         }
 
         inline void SetInitIgnore(bool ignore) { init_ignore = ignore; }

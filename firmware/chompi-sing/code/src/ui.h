@@ -307,18 +307,32 @@ namespace chompi
                 }
                 else if (hw_->button_sr.RisingEdge(i))
                 {
-                    // chompi key changes page to MenuPage
-                    if (i == static_cast<int>(Hardware::SwId::KEY_26)
-                        && toggle_state
-                        && normal_page_.IsActive()
-                        && !boot_page_.IsActive()
-                        && !rainbow_page_.IsActive()
-                        && !test_page_.IsActive())
+                    // SING: holding the chompi key opens the menu, below
+                    if (i == static_cast<int>(Hardware::SwId::KEY_26))
                     {
-                        // normal_page_.CacheLeds();
-                        ui.OpenPage(menu_page_);             
+                        chompi_down_t_   = System::GetNow();
+                        chompi_hold_arm_ = true;
                     }
                     event_queue.AddButtonPressed(i, 1);
+                }
+            }
+
+            /* SING: the chompi key is latch on a tap; held for kMenuHoldMs it
+               opens the menu, which then stays open while the key is held
+               (as in TAPE). The release then goes to the menu, so it does
+               not also toggle latch. */
+            if (chompi_hold_arm_)
+            {
+                if (!hw_->button_sr.State(static_cast<int>(Hardware::SwId::KEY_26)))
+                    chompi_hold_arm_ = false;
+                else if (System::GetNow() - chompi_down_t_ > kMenuHoldMs
+                         && normal_page_.IsActive()
+                         && !boot_page_.IsActive()
+                         && !rainbow_page_.IsActive()
+                         && !test_page_.IsActive())
+                {
+                    chompi_hold_arm_ = false;
+                    ui.OpenPage(menu_page_);
                 }
             }
 
@@ -455,6 +469,9 @@ namespace chompi
     BootPage boot_page_;
     NormalPage normal_page_;
     MenuPage menu_page_;
+    static constexpr uint32_t kMenuHoldMs = 600;
+    uint32_t chompi_down_t_   = 0;
+    bool     chompi_hold_arm_ = false;
     TestPage test_page_;
     NoSDPage no_sd_page_;
     RainbowPage rainbow_page_;

@@ -42,6 +42,7 @@ namespace chompi
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
+            latch_ = false;
 
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
@@ -135,10 +136,22 @@ namespace chompi
 
         void NoteOff(int key)
         {
+            duck_hold_ = duck_len_;
+            if (latch_)
+                return; // held by the chompi key
             if (Voice *v = Find(key))
                 v->gate = false;
-            duck_hold_ = duck_len_;
         }
+
+        /** chompi key: keep the voices of the held keys sounding after the
+         *  keys are let go; switching it off releases everything */
+        void SetLatch(bool on)
+        {
+            latch_ = on;
+            if (!on)
+                AllOff();
+        }
+        bool Latched() const { return latch_; }
 
         /** release every voice (they ring out with the release time) */
         void AllOff()
@@ -295,6 +308,7 @@ namespace chompi
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
+        bool             latch_;
         float            sr_, transpose_, level_, doubler_, spread_;
         float            lfo_[2];
         size_t           chorus_w_;
