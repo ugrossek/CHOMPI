@@ -7,7 +7,6 @@
 #include "NoSDPage.h"
 #include "RainbowWavePage.h"
 #include "DSPEngine.h"
-#include "SingSettings.h"
 // #include "StereoDelayEffect.h"
 
 namespace chompi
@@ -93,26 +92,6 @@ namespace chompi
             // state should be debounced
             if (state >= 480)
                 event_queue.AddButtonPressed(static_cast<int>(Hardware::SwId::SW_TOG), 1);
-        }
-
-        /** SING: the settings as they are now (knobs 1-3, monitor mode) */
-        void CaptureSettings(SingSettings &s)
-        {
-            for (int p = 0; p < 2; p++)
-                for (int k = 0; k < 3; k++)
-                    s.knob[p][k] = enc_values[p][k];
-            s.monitor = int(fx_->GetMonitorMode());
-        }
-
-        /** SING: saved knobs 1-3 into the knobs and the engine. Call after
-         *  Engine::Init, which resets the harmonizer to the defaults. The
-         *  monitor mode goes to Engine::Init itself. */
-        void ApplySettings(const SingSettings &s)
-        {
-            for (int p = 0; p < 2; p++)
-                for (int k = 0; k < 3; k++)
-                    enc_values[p][k] = s.knob[p][k];
-            normal_page_.ApplySingKnobs();
         }
 
         inline bool InTestMode() { return test_page_.IsActive(); }

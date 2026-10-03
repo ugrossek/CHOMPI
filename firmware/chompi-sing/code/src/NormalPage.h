@@ -843,15 +843,6 @@ namespace chompi
 
         inline void SetInitIgnore(bool ignore) { init_ignore = ignore; }
 
-        /** SING: send knobs 1-3 (both pages) to the engine, after the saved
-         *  settings were put into enc_values */
-        void ApplySingKnobs()
-        {
-            for (int page = 0; page < 2; page++)
-                for (int knob = 0; knob < 3; knob++)
-                    SingKnob(knob, page, enc_values[page][knob]);
-        }
-
     private:
         Hardware *hw_;
         Engine *fx_;

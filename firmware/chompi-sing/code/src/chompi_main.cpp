@@ -24,13 +24,6 @@ FatFSInterface fsi;
 Engine engine;
 OptionsManager options;
 
-/* SING: knobs 1-3 and the monitor mode, kept in /SING/settings.txt.
- *  saved_settings is what the card holds; the main loop writes the current
- *  settings once they have stopped changing for kSettleMs. */
-SingSettings saved_settings, pending_settings;
-uint32_t     settings_checkt, settings_changet;
-static constexpr uint32_t kSettleMs = 3000;
-
 daisysp::Reverb DSY_DTCMRAM_BSS reverb;
 chompi::InterpolatedDelayLine::AudioSample DSY_SDRAM_BSS del_mem[kMaxDelayTime];
 
@@ -294,23 +287,6 @@ void MainLoop(void* data)
     }
     #endif
 
-    if (now - settings_checkt > 250 && !no_sd_card && !ui.InTestMode())
-    {
-        settings_checkt = now;
-        SingSettings cur;
-        ui.CaptureSettings(cur);
-        if (!cur.Same(pending_settings))
-        {
-            pending_settings = cur; // still moving
-            settings_changet = now;
-        }
-        else if (!cur.Same(saved_settings) && now - settings_changet > kSettleMs)
-        {
-            cur.Save();
-            saved_settings = cur;
-        }
-    }
-
     System::DelayUs(10);
 }
 
@@ -365,10 +341,6 @@ int main(void)
 
     options.Init();
 
-    saved_settings.SetDefaults(enc_defaults);
-    saved_settings.Load();
-    pending_settings = saved_settings;
-
     LedSetup();
     ui.Init(&hw, &engine,
         options.midi_ch_in, options.midi_ch_out, options.pitch_shift_quantization, options.delay_split);
@@ -383,8 +355,7 @@ int main(void)
     loop_buff.Init(&loop_mem[0]);
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 
                 &loop_buff, options.tape_slew_on,
-                MonitorMode(saved_settings.monitor)); // SING: not options.json's
-    ui.ApplySettings(saved_settings);
+                MonitorMode(options.monitor_position));
 
     osc.Init(hw.seed.AudioSampleRate());
     osc.SetAmp(.2f);
