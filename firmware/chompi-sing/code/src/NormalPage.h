@@ -177,6 +177,18 @@ namespace chompi
             }
         }
 
+        /** white key 0..14 left to right for a MIDI note of the keyboard
+         *  (48..72), or -1 for a black key */
+        static int WhiteKeyIndex(int note)
+        {
+            static const int8_t kWhite[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
+            const int n = note - 48;
+            if (n < 0 || n > 24)
+                return -1;
+            const int w = kWhite[n % 12];
+            return w < 0 ? -1 : w + 7 * (n / 12);
+        }
+
         static void SingKnobColour(int knob, int page, float v, float &r, float &g, float &b)
         {
             float lvl = 1.f;
@@ -302,11 +314,45 @@ namespace chompi
             /* SING prototype: held keys magenta; the middle C dim amber and
                the outer Cs dimmer, for orientation. Idle markers stay off
                while the mic is monitored, as in TAPE. */
+            /* SING: for a moment after a knob turn, the white keys show its
+               position as a bar (transpose: from the middle C outwards) */
+            const uint32_t shown_age = System::GetNow() - shown_t_;
+            const bool  show_value = shown_t_ != 0 && shown_age < kShowMs;
+            float       bar_lo = 0.f, bar_hi = 0.f, bar_lvl = 0.f;
+            if (show_value)
+            {
+                const float v = enc_values[shown_page_][shown_knob_];
+                if (shown_knob_ == 0 && shown_page_ == 0) // transpose
+                {
+                    bar_lo = v < .5f ? v : .5f;
+                    bar_hi = v < .5f ? .5f : v;
+                }
+                else
+                {
+                    bar_lo = 0.f;
+                    bar_hi = v;
+                }
+                const float fade = shown_age < kShowMs - 400 ? 1.f
+                                   : (kShowMs - shown_age) / 400.f;
+                bar_lvl = .45f * fade;
+            }
+
             for(size_t i = 7; i < (25 + 7); i++)
             {
                 const bool c_key = key_map[i] % 12 == 0;
+                const int  w     = WhiteKeyIndex(key_map[i]); // 0..14, -1 black
                 if (fx_->IsHarmonyKeyHeld(i))
                     SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
+                else if (show_value)
+                {
+                    /* key w covers [w/15, (w+1)/15); lit if the bar reaches into it */
+                    const float k0 = w / 15.f, k1 = (w + 1) / 15.f;
+                    const bool  on = w >= 0 && bar_hi > k0 && bar_lo < k1;
+                    if (on)
+                        SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
+                    else
+                        SetSmtLed(led_map[i], 0, 0, 0);
+                }
                 else if (c_key)
                 {
                     const float dim = key_map[i] == 60 ? .3f : .1f;
@@ -793,6 +839,11 @@ namespace chompi
                 }  
             }
 
+            /* SING: show where this knob now is on the white keys, briefly */
+            shown_knob_  = encoderID;
+            shown_page_  = page;
+            shown_t_     = System::GetNow();
+
             if (stepsPerRevolution == 0) {
                 hw_->SendCC(midi_channel, cc_map[page][encoderID], enc_values[page][encoderID] * 127);
             }
@@ -825,6 +876,11 @@ namespace chompi
         */ 
         uint8_t midi_channel = 0;
         bool switch_state = false;
+
+        /* SING: the knob last turned, shown on the white keys for a while */
+        static constexpr uint32_t kShowMs = 1500;
+        int      shown_knob_ = 0, shown_page_ = 0;
+        uint32_t shown_t_    = 0;
         bool chompi_key_pressed = false;
         uint8_t* knob_page;
         bool quantized_pitch_;

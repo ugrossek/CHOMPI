@@ -38,6 +38,7 @@ namespace chompi
                 voices_[v].env  = 0.f;
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
+                voices_[v].pan   = 0.f;
             }
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
@@ -117,7 +118,8 @@ namespace chompi
                 UpdateRatio(voices_[i], i);
         }
 
-        /** knob 2, page 1: voices placed by pitch, low left, high right */
+        /** knob 2, page 1: held voices, ordered by pitch, go alternately left
+         *  and right (lowest left), so highs and lows end up on both sides */
         void SetSpread(float v) { spread_ = v; }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
@@ -205,10 +207,10 @@ namespace chompi
                 if (!vo.gate && vo.env <= 0.f)
                     continue;
 
-                /* constant-power pan by pitch: centre at the reference C */
-                float p = (vo.semis + transpose_) / 12.f * spread_;
-                p = p < -1.f ? -1.f : (p > 1.f ? 1.f : p);
-                const float a  = (p + 1.f) * .7853982f; // 0..pi/2
+                /* constant-power pan, glides so a voice that changes side
+                   when a key is added doesn't jump */
+                vo.pan += (PanTarget(v) - vo.pan) * .15f;
+                const float a  = (vo.pan + 1.f) * .7853982f; // 0..pi/2
                 const float gl = cosf(a) * 1.4142136f * level_;
                 const float gr = sinf(a) * 1.4142136f * level_;
 
@@ -265,6 +267,7 @@ namespace chompi
             int                key;
             float              ratio;
             float              semis;
+            float              pan;
             float              env;
             bool               gate;
         };
@@ -275,6 +278,25 @@ namespace chompi
         {
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
+        }
+
+        /** -1..1 for voice v: its rank by pitch among the sounding voices,
+         *  alternating sides; a lone voice stays in the middle */
+        float PanTarget(size_t v) const
+        {
+            int rank = 0, count = 0;
+            for (size_t o = 0; o < kVoices; o++)
+            {
+                if (!voices_[o].gate && voices_[o].env <= 0.f)
+                    continue;
+                count++;
+                if (voices_[o].semis < voices_[v].semis
+                    || (voices_[o].semis == voices_[v].semis && o < v))
+                    rank++;
+            }
+            if (count < 2)
+                return 0.f;
+            return (rank & 1 ? 1.f : -1.f) * spread_;
         }
 
         Voice *Find(int key)
