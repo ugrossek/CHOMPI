@@ -1,18 +1,22 @@
 # CHOMPI — Open Source
 
-> ### This fork: TAPE with speed-independent pitch
+> ### This branch: SING — a live harmonizer for CHOMPI (prototype)
 >
-> An experimental **TAPE** build where changing a voice's pitch no longer changes its
-> playback speed. Details, build notes and known limits are in
-> [`firmware/chompi-tape`](firmware/chompi-tape/#pitch-shift-experiment-this-fork).
+> Sing into the mic and hold keys: each key adds your voice, pitch-shifted by its distance
+> from the middle C. Hold C and E and you sing a third. Built on TAPE and its
+> [pitch-shift experiment](https://github.com/ugrossek/CHOMPI/tree/true-pitch-shift); looper
+> and effects work as in TAPE. Controls, install and known limits are in
+> [`firmware/chompi-tape`](firmware/chompi-tape/#sing-prototype-this-branch).
 >
-> **[Download the firmware](../../releases/latest)** — a ready-to-flash `.bin`, with install steps.
+> **[Download the firmware](../../releases/tag/sing-prototype-v1)** — a ready-to-flash `.bin`.
 >
-> This is not an official CHOMPI Club release. Everything below is their original README.
+> **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
+> tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
+> original README.
 >
-> **Use at your own risk.** This is unofficial software provided as-is, with no warranty,
-> and it has only been tested on one unit. It is loaded from the SD card like any firmware
-> update and never touches the bootloader.
+> **Use at your own risk.** Unofficial, experimental software, provided as-is with no
+> warranty. It is loaded from the SD card like any firmware update and never touches the
+> bootloader.
 
 ---
 
