@@ -367,7 +367,8 @@ namespace daisy
         {
             for (size_t i = 0; i < size; i++)
             {
-                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain);
+                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain
+                                                    * (duck_ ? duck_[i] : 1.f));
                 sig = mic_filter_.Process(sig);
 
                 monitor[i] += sig;
@@ -416,6 +417,12 @@ namespace daisy
             std::fill(out[0], out[0] + size, 0.f);
             std::fill(out[1], out[1] + size, 0.f);
 
+            /* SING prototype: key-click ducking for the built-in mic, used
+               by the harmonizer input and by the dry mic monitor below */
+            float duck[size];
+            harmonizer.Duck(duck, size);
+            duck_ = duck;
+
             /** TODO: debug why this is happening */
             if(record != true && record != false)
                 record = false;
@@ -451,7 +458,7 @@ namespace daisy
                 float live[size];
                 const bool mic = in_source == InputSource::MIC;
                 for(size_t i = 0; i < size; i++)
-                    live[i] = mic ? in[0][i] * ingain_ * kMicGain
+                    live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
                                   : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
                 harmonizer.Process(live, mic, out[0], out[1], size);
             }
@@ -583,6 +590,8 @@ namespace daisy
 
                 output_env_follower.Process((out[0][i] + out[1][i]));
             }
+
+            duck_ = nullptr; // it pointed into this block's stack
         }
 
         inline void SetInputMonitor(bool monitor) 
@@ -1592,6 +1601,7 @@ namespace daisy
 
         /** FX */
         MicFilter mic_filter_;
+        const float *duck_ = nullptr; // SING prototype: this block's mic ducking
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;

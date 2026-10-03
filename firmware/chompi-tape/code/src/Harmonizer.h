@@ -39,6 +39,33 @@ namespace chompi
             /* linear ramps, per sample */
             attack_  = 1.f / (.005f * samplerate);
             release_ = 1.f / (.150f * samplerate);
+
+            /* key-click ducking, see Duck() */
+            duck_      = 1.f;
+            duck_hold_ = 0;
+            duck_len_  = int(.035f * samplerate);
+            duck_down_ = 1.f / (.003f * samplerate);
+            duck_up_   = 1.f / (.025f * samplerate);
+        }
+
+        /** Gain for the built-in mic, one value per sample of this block.
+         *  The mic sits on the same board as the keys and hears every click,
+         *  and a key press is exactly when a new voice starts. So for a moment
+         *  after every key change the mic is pulled down (3 ms), held, and
+         *  brought back (25 ms). */
+        void Duck(float *gain, size_t size)
+        {
+            for (size_t i = 0; i < size; i++)
+            {
+                if (duck_hold_ > 0)
+                {
+                    duck_hold_--;
+                    duck_ = duck_ - duck_down_ > kDuckFloor ? duck_ - duck_down_ : kDuckFloor;
+                }
+                else
+                    duck_ = duck_ + duck_up_ < 1.f ? duck_ + duck_up_ : 1.f;
+                gain[i] = duck_;
+            }
         }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
@@ -52,12 +79,14 @@ namespace chompi
             v->key   = key;
             v->ratio = powf(2.f, semis / 12.f);
             v->gate  = true;
+            duck_hold_ = duck_len_;
         }
 
         void NoteOff(int key)
         {
             if (Voice *v = Find(key))
                 v->gate = false;
+            duck_hold_ = duck_len_;
         }
 
         bool Active() const
@@ -140,12 +169,15 @@ namespace chompi
             return best;
         }
 
-        static constexpr float kLevel = .7f;
+        static constexpr float kLevel     = 1.4f;  /* about as loud as the dry voice */
+        static constexpr float kDuckFloor = .03f;  /* -30 dB while a key clicks */
 
         Voice            voices_[kVoices];
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
+        float            duck_, duck_down_, duck_up_;
+        int              duck_hold_, duck_len_;
     };
 
 } // namespace chompi
