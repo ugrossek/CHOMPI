@@ -14,10 +14,10 @@ namespace chompi
 {
 
     static const float enc_defaults[3][6] = {
-        /* SING prototype: knob 1-3 = transpose (.5 = 0), doubler, spread /
-           harmony volume, attack, release -- must match Harmonizer::Init */
-        {.5f, 0.f, 0.f, 0.f, .75f, .84f},  // page 1
-        {.5f, .1f, .5f, 0.f, 0.f, .75f},   // page 2
+        /* SING prototype, knobs 1-3: harmony volume, transpose (.5 = 0),
+           doubler / spread, attack, release -- must match Harmonizer::Init */
+        {.5f, .5f, 0.f, 0.f, .75f, .84f},  // page 1
+        {0.f, .1f, .5f, 0.f, 0.f, .75f},   // page 2
         {0.f, 0.f, 0.f, .5f, 0.f, 0.f},   // page 3
     };
 

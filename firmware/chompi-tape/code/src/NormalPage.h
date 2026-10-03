@@ -140,6 +140,41 @@ namespace chompi
 
     class NormalPage : public daisy::UiPage
     {
+      private:
+        /* SING prototype: knobs 1-3, two pages each (press to switch).
+         *    knob 1: harmony volume | spread
+         *    knob 2: transpose      | attack
+         *    knob 3: doubler        | release
+         *  The defaults in ui.h and Harmonizer::Init must match. */
+        void SingKnob(int knob, int page, float v)
+        {
+            switch(knob * 2 + page)
+            {
+                case 0: fx_->SetGain(v); break;
+                case 1: fx_->SetSpread(v); break;
+                case 2: fx_->SetTranspose(v); break;
+                case 3: fx_->SetAttack(v); break;
+                case 4: fx_->SetDoubler(v); break;
+                case 5: fx_->SetDecay(v); break;
+                default: break;
+            }
+        }
+
+        static void SingKnobColour(int knob, int page, float v, float &r, float &g, float &b)
+        {
+            float lvl = 1.f;
+            switch(knob * 2 + page)
+            {
+                case 0: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;      // volume
+                case 1: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
+                case 2: SingMix(sing_coral, sing_gold, fabsf(v - .5f) * 2.f, r, g, b); break;      // transpose
+                case 4: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
+                default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // attack, release
+            }
+            r *= lvl; g *= lvl; b *= lvl;
+        }
+
+      public:
     public:
         uint32_t init_time;
         bool init_ignore = true;
@@ -316,73 +351,14 @@ namespace chompi
                 float b = 0.f;
                 switch (i)
                 {
-                case 0: // speed, gain, pan
+                case 0: // SING: knobs 1-3, see SingKnob()
+                case 1:
+                case 2:
                 {
+                    SingKnobColour(i, page, value, r, g, b);
                     if(!switch_state)
-                    {
                         r = g = b = 0.f;
-                    }
-                    else if(page == 0) // SING: transpose, coral at 0 -> gold at +-12
-                    {
-                        SingMix(sing_coral, sing_gold, fabsf(value - .5f) * 2.f, r, g, b);
-                    }
-                    else if(page == 1) // SING: harmony volume, warm white -> gold
-                    {
-                        SingMix(sing_warm, sing_gold, value, r, g, b);
-                        const float lvl = .2f + .8f * value;
-                        r *= lvl; g *= lvl; b *= lvl;
-                        fx_->SetGain(value);
-                    }
-
-                    SetPthLedFloat(1, r, g, b);
-                }
-                break;
-                case 1: // start point
-                {
-                    if (page == 0) // SING: doubler, rose -> magenta
-                    {
-                        SingMix(sing_rose, sing_magenta, value, r, g, b);
-                        const float lvl = .15f + .85f * value;
-                        r *= lvl; g *= lvl; b *= lvl;
-                    }
-                    else // SING: attack, warm white -> gold
-                    {
-                        SingMix(sing_warm, sing_gold, value, r, g, b);
-                        const float lvl = .2f + .8f * value;
-                        r *= lvl; g *= lvl; b *= lvl;
-                        fx_->SetAttack(value);
-                    }
-
-                    if(!switch_state)
-                    {
-                        r = g = b = 0.f;
-                    }   
-
-                    SetPthLedFloat(2, r, g, b);
-                    break;
-                }
-                case 2: // end point
-                {
-                    if (page == 0) // SING: spread, amber -> coral
-                    {
-                        SingMix(sing_amber, sing_coral, value, r, g, b);
-                        const float lvl = .15f + .85f * value;
-                        r *= lvl; g *= lvl; b *= lvl;
-                    }
-                    else // SING: release, warm white -> gold
-                    {
-                        SingMix(sing_warm, sing_gold, value, r, g, b);
-                        const float lvl = .2f + .8f * value;
-                        r *= lvl; g *= lvl; b *= lvl;
-                        fx_->SetDecay(value);
-                    }
-
-                    if(!switch_state)
-                    {
-                        r = g = b = 0.f;
-                    }
-
-                    SetPthLedFloat(3, r, g, b);
+                    SetPthLedFloat(i + 1, r, g, b);
                     break;
                 }
                 case 3: // magic
@@ -949,8 +925,8 @@ namespace chompi
                 float inc = turns * kEncoderCoarseStep;
 
                 // fine steps for pitch, sample start, and sample end
-                /* SING prototype: knob 1-3 page 1 are transpose/doubler/
-                   spread, plain coarse steps */
+                /* SING prototype: knobs 1-3 page 1 (volume, transpose,
+                   doubler), plain coarse steps */
                 if(page == 0 && encoderID <= 2)
                 {
                 }
@@ -973,9 +949,9 @@ namespace chompi
             // clip
             enc_values[page][encoderID] = fclamp(enc_values[page][encoderID], 0.f, 1.f);
 
-            if (encoderID == 0 && page == 0)
+            if (encoderID <= 2)
             {
-                fx_->SetTranspose(enc_values[0][0]); // SING prototype
+                SingKnob(encoderID, page, enc_values[page][encoderID]); // SING prototype
             }
             else if (encoderID == 4)
             {
@@ -995,13 +971,8 @@ namespace chompi
 
             // don't allow end point too close to start point
             // TODO: set here, if they don't update, don't update
-            /* SING prototype: no sample to clip, knobs 2/3 page 1 are
-               doubler and spread */
-            if(page == 0 && encoderID == 1)
-                fx_->SetDoubler(enc_values[0][1]);
-            else if(page == 0 && encoderID == 2)
-                fx_->SetSpread(enc_values[0][2]);
-            else if(false)
+            /* SING prototype: no sample to clip */
+            if(false)
             {
                 if ((enc_values[0][1] + .01f) >= enc_values[0][2])
                 {
