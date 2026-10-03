@@ -242,71 +242,13 @@ namespace chompi
 
                 SetPthLedFloat(9, r, g, b);
 
-                // pitch knob
-                if(pitch_reset)
-                {
-                    r = g = b = 1.f;
-                }
-                else if(knob_page[0] == 0)
-                {
-                    float idx = enc_values[0][0] < .5f ? enc_values[0][0] * 2.f : (1.f - enc_values[0][0]) * 2.f; // 0 - 1 - 0
-                    r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                    g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                    b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-                }
-                else if(knob_page[0] == 1)
-                {
-                    r = color_triple_xfade(purple[0], 0.f, yellow[0], fx_->GetPan());
-                    g = color_triple_xfade(purple[1], 0.f, yellow[1], fx_->GetPan());
-                    b = color_triple_xfade(purple[2], 0.f, yellow[2], fx_->GetPan());
-                }
-
-                SetPthLedFloat(1, r, g, b);
+                SetPthLedFloat(1, 0.f, 0.f, 0.f); // SING: knob 1 has no menu function
             }
 
-            // save key
-            if((preset_mode == PresetMode::SAVE_SEL 
-                || preset_mode == PresetMode::SAVING
-                || preset_mode == PresetMode::NONE)
-                && !no_sd_card_)
-            {
-                if(fx_->GetFileExists(14))
-                    SetSmtLedFloat(9, blue[0], blue[1], blue[2]);
-                else
-                    SetSmtLedFloat(9, .1f, .1f, .1f);
-    
-            }
-            else
-            {
-                SetSmtLedFloat(9, 0.f, 0.f, 0.f);
-            }
-
-            // copy key
-            if((preset_mode == PresetMode::COPY_SRC 
-                || preset_mode == PresetMode::COPY_DEST
-                || preset_mode == PresetMode::COPYING
-                || preset_mode == PresetMode::NONE)
-                && !no_sd_card_)
-            {
-                SetSmtLedFloat(8, green[0], green[1], green[2]); // copy
-            }
-            else
-            {
-                SetSmtLedFloat(8, 0.f, 0.f, 0.f);
-            }
-
-            // erase key
-            if((preset_mode == PresetMode::ERASE_SEL 
-                || preset_mode == PresetMode::ERASING
-                || preset_mode == PresetMode::NONE)
-                && !no_sd_card_)
-            {
-                SetSmtLedFloat(7, red[0], red[1], red[2]); // erase
-            }
-            else
-            {
-                SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            }
+            // SING: no preset keys (TAPE: save / copy / erase)
+            SetSmtLedFloat(7, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(8, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(9, 0.f, 0.f, 0.f);
 
             // FX pre / post looper
             int led_sel = fx_->GetFxPreLooper() ? 5 : 6;
@@ -322,84 +264,11 @@ namespace chompi
             SetSmtLedFloat(4, 0.f, 0.f, 0.f);
             SetSmtLedFloat(led_sel, pink[0], .7f * pink[1], .7f * pink[2]);
 
-            // white keys
+            // SING: no slots or banks on the keys
             for (uint8_t i = 1; i < 16; i++)
-            {
-                if(no_sd_card_ && i != 15)
-                    SetSmtLedFloat(25 - i, red[0], red[1], red[2]);
-                else if(preset_mode == PresetMode::SAVE_SEL && i == 15)
-                    SetSmtLedFloat(25 - i, pink[0], pink[1], pink[2]);
-                else if(ss_bank == fx_->GetBank() && selected_slot == i && preset_mode == PresetMode::SAVE_SEL && fx_->GetVoiceMode() == ss_mode)
-                    SetSmtLedFloat(25 - i, blue[0], blue[1], blue[2]);
-                else if(ss_bank == fx_->GetBank() && selected_slot == i && preset_mode == PresetMode::ERASE_SEL && fx_->GetVoiceMode() == ss_mode)
-                    SetSmtLedFloat(25 - i, red[0], red[1], red[2]);
-                else if(ss_bank == fx_->GetBank() && selected_slot == i && preset_mode == PresetMode::COPY_DEST && fx_->GetVoiceMode() == ss_mode)
-                    SetSmtLedFloat(25 - i, blue[0], blue[1], blue[2]);
-                else if( (ss_bank == fx_->GetBank() && selected_slot == i && preset_mode == PresetMode::COPY_SRC && fx_->GetVoiceMode() == ss_mode)
-                            || (cs_bank == fx_->GetBank() && copy_src == i && preset_mode == PresetMode::COPY_DEST && fx_->GetVoiceMode() == cs_mode) )
-                    SetSmtLedFloat(25 - i, green[0], green[1], green[2]);
-                else if( ((size_t(fx_->GetBank()) == fx_->GetVoiceBank() && fx_->GetVoiceSlot() == i) || (fx_->GetVoiceSlot() == 15 && i == 15))
-                        && preset_mode == PresetMode::NONE 
-                        && fx_->GetVoiceMode() == VoiceMode::JAMMI)
-                    SetSmtLedFloat(25 - i, 1.f, 1.f, 1.f);
-                else if (
-                    preset_mode == PresetMode::SAVE_SEL 
-                    || preset_mode == PresetMode::ERASE_SEL
-                    || preset_mode == PresetMode::COPY_SRC
-                    || preset_mode == PresetMode::COPY_DEST
-                )
-                {
-                    if (!blink_state)
-                        SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
-                    else if(preset_mode == PresetMode::ERASE_SEL && i == 15)
-                        SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
-                    else if(i == 15 && fx_->GetFileExists(i - 1))
-                        SetSmtLedFloat(25 - i, .4f * pink[0], .4f * pink[1], .4f * pink[2]);
-                    else if(fx_->GetFileExists(i - 1))
-                        SetSmtLedFloat(25 - i, .4f * key_color[0], .4f * key_color[1], .4f * key_color[2]);
-                    else if (
-                        preset_mode == PresetMode::SAVE_SEL
-                        || preset_mode == PresetMode::COPY_DEST
-                    )
-                    {
-                        SetSmtLedFloat(25 - i, .4f, .4f, .4f);
-                    }
-                    else
-                        SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
-                }
-                else if(i == 15 && fx_->GetFileExists(i - 1))
-                        SetSmtLedFloat(25 - i, pink[0], pink[1], pink[2]);
-                else if(fx_->GetFileExists(i - 1))
-                        SetSmtLedFloat(25 - i, key_color[0], key_color[1], key_color[2]);
-                else
-                    SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
-            }
-
-            // banks
-            int mode = int(fx_->GetVoiceMode());
-            SetSmtLedFloat(mode == 0 ? 1 : 0, 0.f, 0.f, 0.f);
-            switch(fx_->GetBank())
-            {
-                case 0:
-                    key_color = &purple[0];
-                    break;
-                case 1:
-                    key_color = &orange[0];
-                    break;
-                case 2:
-                    key_color = &teal[0];
-                    break;
-                case 3:
-                    key_color = &dark_orange[0];
-                    break;
-              default:
-                    key_color = &yellow_green[0];
-            }                
-
-            if(!no_sd_card_)
-                SetSmtLedFloat(mode, key_color[0], key_color[1], key_color[2]);
-            else
-                SetSmtLedFloat(mode, 0.f, 0.f, 0.f);
+                SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(0, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(1, 0.f, 0.f, 0.f);
 
             // ========   send the data   =========
             fill_led_data();
@@ -416,6 +285,12 @@ namespace chompi
             // we're receiving a knob position via CC
             if(stepsPerRevolution > 0)
                 return false; // fall through to normalpage
+
+            /* SING: knobs 1-3 have no second-level function (in TAPE they
+               moved the sample window etc.); swallow them so the menu does
+               not also change the normal page */
+            if(encoderID <= 2)
+                return true;
 
             float r, g, b;
             if(preset_mode == PresetMode::NONE)
@@ -642,56 +517,16 @@ namespace chompi
                 break;
 
 
-            case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // pitch knob
-            {
-                const int page = knob_page[0];
-                pitch_reset = rising;
-
-                if(rising)
-                {
-                    if(page == 0)
-                    {
-                        enc_values[0][0] = enc_defaults[0][0];
-                        fx_->SetGlobalPitch(1.f);
-                        fx_->SetReverse(false);
-                        fx_->ResetGlobalPitchQuant();
-                    }
-                    else if(rising && page == 1)
-                    {
-                        enc_values[1][0] = enc_defaults[1][0];
-                        fx_->SetPan(.5f);
-                        fx_->SetGain(.704f);
-                    }
-
-                    DumpValuePresets();
-                    SetPthLedFloat(1, 1.f, 1.f, 1.f);
-                }
-            break;
-            }
+            case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
+                break; // SING: nothing to reset (TAPE: sample pitch / pan)
 
             // reset the looper pitch via fall through
             case ENC_5_SW:
                 return false;
 
-            case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // attack knob
-                if(rising)
-                {
-                    fx_->ToggleAutoLoop();
-                    float on = fx_->GetAutoLoop();
-                    DumpValuePresets();
-                    SetPthLedFloat(2, on, on, on);
-                }
-            break;
-
-            case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // decay knob
-                if(rising)
-                {
-                    fx_->ToggleSustainActive();
-                    float on = fx_->GetSustainActive();
-                    DumpValuePresets();
-                    SetPthLedFloat(3, on, on, on);
-                }
-            break;
+            case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
+            case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // knob 3
+                break; // SING: no autoloop / sustain toggles
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_6_SW): // volume
                 if(rising)
@@ -733,110 +568,12 @@ namespace chompi
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_26): // chompi
-            {
-                chompi_key_pressed = rising;
-
-                if(rising && selected_slot != kSlotNone)
-                {
-                    if(preset_mode == PresetMode::SAVE_SEL)
-                    {
-                        fx_->StopAllVoices();
-
-                        FileCopier::CopyRequest::RamDir looper = selected_slot == 16 ? 
-                                                                FileCopier::CopyRequest::RamDir::TO
-                                                                : FileCopier::CopyRequest::RamDir::NONE;
-
-                        FileCopier::CopyRequest req( 15, cs_bank, cs_mode, 
-                            selected_slot, ss_bank, ss_mode, selected_slot != 16, 
-                            FileCopier::CopyRequest::RamDir::FROM, looper);
-
-                        copier_->req_fifo.PushBack(req);
-
-                        blink_startt = System::GetNow();
-
-                        preset_mode = PresetMode::SAVING;
-                        presets_->Save(static_cast<uint8_t>(ss_mode), ss_bank, selected_slot);
-                    }
-                    else if(preset_mode == PresetMode::COPY_DEST)
-                    {
-                        fx_->StopAllVoices();
-
-                        FileCopier::CopyRequest::RamDir looper = FileCopier::CopyRequest::RamDir::NONE;
-                        FileCopier::CopyRequest::RamDir chompi = FileCopier::CopyRequest::RamDir::NONE;
-
-                        if(copy_src == 15)
-                            chompi = FileCopier::CopyRequest::RamDir::FROM;
-                        else if(copy_src == 16)
-                            looper = FileCopier::CopyRequest::RamDir::FROM;
-
-                        if(selected_slot == 15)
-                            chompi = FileCopier::CopyRequest::RamDir::TO;
-                        else if(selected_slot == 16)
-                            looper = FileCopier::CopyRequest::RamDir::TO;
-
-                        bool set_slot = !(selected_slot == 16) && !(selected_slot == 15 && ss_mode == VoiceMode::CUBBI);
-                        FileCopier::CopyRequest req( copy_src, cs_bank, cs_mode,
-                            selected_slot, ss_bank, ss_mode, set_slot,
-                            chompi, looper);
-
-                        copier_->req_fifo.PushBack(req);
-
-                        blink_startt = System::GetNow();
-
-                        preset_mode = PresetMode::COPYING;
-                        presets_->Copy(static_cast<uint8_t>(cs_mode), cs_bank, copy_src, static_cast<uint8_t>(ss_mode), ss_bank, selected_slot);
-                    }
-                    else if(preset_mode == PresetMode::ERASE_SEL)
-                    {
-                        // if a voice is playing that slot, stop it
-                        fx_->StopAllVoices();
-
-                        fx_->EraseStart(selected_slot, ss_bank, ss_mode);
-                        preset_mode = PresetMode::ERASING;
-            
-                        blink_startt = System::GetNow();
-
-                        presets_->Invalidate(static_cast<uint8_t>(ss_mode), ss_bank, selected_slot);
-                    }
-                }
-                return false;
+                chompi_key_pressed = rising; // the menu closes on its release
                 break;
-            }
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_16): // Jammi mode bank, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_17): // Cubbi mode bank
-            {                
-                if(rising && !no_sd_card_)
-                {
-                    VoiceMode mode;
-                    if(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_16))
-                        mode = VoiceMode::JAMMI;
-                    else
-                        mode = VoiceMode::CUBBI;
-
-                    if(fx_->GetVoiceMode() == mode)
-                    {
-                        fx_->IncrementBank();
-                        if(mode == VoiceMode::CUBBI)
-                            fx_->StopAllVoices();
-                    }
-                    else
-                    {
-                        fx_->SetVoiceMode(mode); // change modes
-                        if(mode == VoiceMode::JAMMI)
-                        {
-                            fx_->SetBank(fx_->GetVoiceBank());
-                            SetVoiceSlot(fx_->GetVoiceSlot()); // crucially, includes settings
-                        }
-
-                        fx_->StopAllVoices();
-                    }
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
-            }
-            break;
+            case static_cast<uint16_t>(Hardware::SwId::KEY_16): // TAPE: banks
+            case static_cast<uint16_t>(Hardware::SwId::KEY_17):
+                break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_18): // mic in, fall through
             case static_cast<uint16_t>(Hardware::SwId::KEY_19): // aux in, fall through
@@ -875,163 +612,22 @@ namespace chompi
             }
 
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // erase
-            {
-                if(rising && !no_sd_card_)
-                {
-                    if(preset_mode == PresetMode::NONE)
-                        preset_mode = PresetMode::ERASE_SEL;
-                    else if(preset_mode == PresetMode::ERASE_SEL)
-                        preset_mode = PresetMode::NONE;
-                    else
-                        break;
-
-                    selected_slot = kSlotNone;
-                    ss_bank = kSlotNone;
-                    ss_mode = VoiceMode::LAST;
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
+            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase,
+            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy,
+            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // save presets
                 break;
-            }
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy
-            {
-                if(rising && !no_sd_card_)
-                {                    
-                    if(preset_mode == PresetMode::NONE)
-                        preset_mode = PresetMode::COPY_SRC;
-                    else if(preset_mode == PresetMode::COPY_SRC 
-                            || preset_mode == PresetMode::COPY_DEST)
-                        preset_mode = PresetMode::NONE;
-                    else
-                        break;
-
-                    copy_src = kSlotNone;
-                    selected_slot = kSlotNone;
-                    ss_bank = kSlotNone;
-                    cs_bank = kSlotNone;
-                    ss_mode = VoiceMode::LAST;
-                    cs_mode = VoiceMode::LAST;
-
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
-                break;
-            }
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // save
-            {
-                if(rising && fx_->GetFileExists(14) && !no_sd_card_)
-                {
-                    if(preset_mode == PresetMode::NONE)
-                        preset_mode = PresetMode::SAVE_SEL;
-                    else if(preset_mode == PresetMode::SAVE_SEL)
-                        preset_mode = PresetMode::NONE;
-                    else
-                        break;
-
-                    copy_src = kSlotNone;
-                    selected_slot = kSlotNone;
-                    ss_bank = kSlotNone;
-                    cs_bank = kSlotNone;
-                    ss_mode = VoiceMode::LAST;
-                    cs_mode = VoiceMode::LAST;
-                }                
-                else if(!rising)
-                    return false; // note off falls through
-
-                break;
-            }
 
             // white keys and play/pause
             default:
                 // play pause, overdub gain setting
-                if((buttonID == 33 || buttonID == 34) && preset_mode == PresetMode::NONE)
+                if(buttonID == 33 || buttonID == 34)
                 {
                     const float gain = buttonID == 33 ? -.1f : .1f;
                     fx_->IncrementLooperDubGain(gain);
+                    break;
                 }
-
-                if (rising)
-                {
-                    size_t slot_req = KeyToSlot(buttonID);
-                    if(buttonID == 33 || buttonID == 34)
-                        slot_req = 16;
-
-                    if(slot_req == kSlotNone)
-                    {
-                        // do nothing
-                    }
-                    else if(slot_req == 16)
-                    {
-                        if (preset_mode == PresetMode::COPY_DEST && copy_src != 16)
-                        {
-                            selected_slot = slot_req;
-                            ss_bank = fx_->GetBank();
-                            ss_mode = fx_->GetVoiceMode();
-                        }
-                        else if (preset_mode == PresetMode::COPY_SRC && !fx_->GetLooperIsEmpty())
-                        {
-                            copy_src = slot_req;
-                            cs_bank = fx_->GetBank();
-                            cs_mode = fx_->GetVoiceMode();
-                            preset_mode = PresetMode::COPY_DEST;
-                        }
-                    }
-                    else if(
-                        preset_mode == PresetMode::COPY_SRC
-                        && fx_->GetFileExists(slot_req - 1)
-                    )
-                    {
-                        copy_src = slot_req;
-                        cs_bank = fx_->GetBank();
-                        cs_mode = fx_->GetVoiceMode();
-
-                        preset_mode = PresetMode::COPY_DEST;
-                    }
-                    else if(preset_mode == PresetMode::COPY_DEST 
-                            && (copy_src != slot_req || fx_->GetBank() != cs_bank || fx_->GetVoiceMode() != cs_mode)
-                            )
-                    {
-                        ss_bank = fx_->GetBank();
-                        ss_mode = fx_->GetVoiceMode();
-                        selected_slot = slot_req;
-                    }
-                    else if(preset_mode == PresetMode::NONE 
-                            && fx_->GetFileExists(slot_req - 1)
-                            && fx_->GetVoiceMode() == VoiceMode::JAMMI
-                            && !no_sd_card_)
-                    {
-                        ss_bank = fx_->GetBank();
-                        ss_mode = fx_->GetVoiceMode();
-                        selected_slot = slot_req;
-                        SetVoiceSlot(selected_slot);
-                    }
-                    else if(
-                        preset_mode == PresetMode::ERASE_SEL 
-                        && slot_req != 15
-                        && fx_->GetFileExists(slot_req - 1)
-                    )
-                    {
-                        ss_bank = fx_->GetBank();
-                        ss_mode = fx_->GetVoiceMode();
-                        selected_slot = slot_req;
-                    }
-                    else if(preset_mode == PresetMode::SAVE_SEL && slot_req != 15)
-                    {
-                        ss_bank = fx_->GetBank();
-                        ss_mode = fx_->GetVoiceMode();
-                        selected_slot = slot_req;
-                    }
-                }
-                else if(buttonID < 29) // white keys, no play / pause
-                {
-                    return false; // allow releasing notes in shift menu
-                }
-                break;
+                // SING: the keys keep playing harmonies while the menu is open
+                return false;
             }
 
             return true;
