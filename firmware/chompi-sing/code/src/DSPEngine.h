@@ -4,7 +4,6 @@
 #pragma once
 #include "daisy.h"
 #include "FileStreamingManager.h"
-#include "SampleReader.h"
 #include "LooperEngine.h"
 #include "daisysp.h"
 #include "DJFilter.h"
@@ -205,11 +204,6 @@ namespace daisy
 
             resamp_env_ = resamp_env_target_ = 1.f;
 
-            /* voices */
-            for (size_t i = 0; i < kMaxPoly; i++)
-            {
-                chompi_voice[i].Init(file_manager, samplerate, chompi_buff, chompi::shift_mem[i], chompi::shift_ana[i]);
-            }
             chompi_writer.Init(chompi_buff);
             record = false;
             record_latch = latch;
@@ -427,28 +421,7 @@ namespace daisy
             if(record != true && record != false)
                 record = false;
 
-            for (size_t voice = 0; voice < kMaxPoly; voice++)
-                // cache the first block of samples as needed
-                chompi_voice[voice].CacheSamples();
 
-
-            /** voice read*/
-            chompi::StereoPitchShifter::NewBlock(size);
-            for (size_t voice = 0; voice < kMaxPoly; voice++)
-            {
-                if (chompi_voice[voice].IsPlaying() || chompi_voice[voice].deferred_trig)
-                {
-                    for (size_t i = 0; i < size; i++)
-                    {
-                        float aol = 0.f;
-                        float aor = 0.f;
-
-                        chompi_voice[voice].PopStereoSamps(&aol, &aor);
-                        out[0][i] += aol;
-                        out[1][i] += aor;
-                    }
-                }
-            }
 
             /* SING prototype: harmony voices from the live input, in the
                place of the sample voices, so FX and looper follow as usual */
@@ -644,18 +617,9 @@ namespace daisy
         /** @brief stops recording, and syncs file
          *  @todo add delay/preprocessing for declicking (fade, etc.)
          */
+        /** @brief stops recording */
         void StopRecording()
         {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                chompi_voice[i].RestoreDefaults();
-                chompi_voice[i].StopPlaying();
-                chompi_voice[i].CloseFile();
-
-                SetVoiceMode(VoiceMode::JAMMI);
-                SetVoiceSlot(15, false);
-            }
-
             record = false;
         }
         inline bool Recording() const { return record; }
@@ -668,141 +632,6 @@ namespace daisy
         inline void ResetVoiceKeys()
         {
             StopAllVoices();
-
-            for(size_t i = 0; i < kMaxPoly; i++)
-                playing_key[i] = 0;
-        }
-
-        /** @brief Voice stealing algorithm.
-         *  Starts playback of sample in slot at desired playback ratio
-         *  @param transpose_nn MIDI note number transposition to play w/ middle C being 0
-         */
-        void StartPlayback(float transpose_nn, int key, float vel)
-        {
-            /** Is this key already playing? */
-            int free_idx = -1;
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                if(playing_key[i] == key)
-                {
-                    free_idx = i;
-                    break;
-                }
-            }
-
-            /** Otherwise, take over an available voice with no key assigned */
-            if (free_idx < 0)
-            {
-                for (size_t i = 0; i < kMaxPoly; i++)
-                {
-                    if (!chompi_voice[i].IsPlaying() && playing_key[i] == 0)
-                    {
-                        free_idx = i;
-                        break;
-                    }
-                }
-            }
-
-            /** Otherwise, take the first available voice we can get */
-            if (free_idx < 0)
-            {
-                for (size_t i = 0; i < kMaxPoly; i++)
-                {
-                    if (!chompi_voice[i].IsPlaying())
-                    {
-                        free_idx = i;
-                        break;
-                    }
-                }
-            }
-
-            /** No available voice, take over oldest */
-            if (free_idx < 0)
-            {
-                free_idx = 0;
-                uint32_t oldest_time = play_start_time[0];
-                for(size_t i = 1; i < kMaxPoly; i++)
-                {
-                    if(play_start_time[i] <= oldest_time)
-                    {
-                        free_idx = i;
-                        oldest_time = play_start_time[i];
-                    }
-                }
-            }
-
-            // we're only using one file for now. That gets opened on init, or on record end
-            uint32_t now = System::GetNow();
-            play_start_time[free_idx] = now;
-
-            const bool copy_occurred = chompi_voice[free_idx].GetCopyOccurred();
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                char name_buffer[32];
-                size_t slot = KeyToSlot(key);
-                if(slot == kSlotNone)
-                    return;
-
-                if(!file_exists[1][bank[int(voice_mode)]][slot - 1])
-                    return; // no file in that slot
-
-                // reopen the file if it's not a retrigger, or we just switched modes or banks on this voice
-                if(slot != 15 && 
-                    (playing_key[free_idx] != key 
-                        || !chompi_voice[free_idx].GetCubbiMode()
-                        || chompi_voice[free_idx].GetBank() != bank[int(voice_mode)]
-                        || copy_occurred
-                    ))
-                {
-                    GetFileNameForSlot(slot, bank[int(voice_mode)], voice_mode, name_buffer);
-                    chompi_voice[free_idx].OpenFile(name_buffer, true); 
-                    chompi_voice[free_idx].SetSlot(slot); 
-                    chompi_voice[free_idx].SetUsingRam(false, true); 
-                }
-                else if(slot == 15)
-                    chompi_voice[free_idx].SetUsingRam(true, true); 
-
-                cubbi_slot_ = slot;
-                latest_voice = free_idx;
-                SetGlobalPitch(fabsf(cubbi_pitch));
-                SetReverse(cubbi_pitch < 0.f);
-                SetStartPoint(cubbi_start);
-                SetEndPoint(cubbi_end);
-                SetAttack(cubbi_attack);
-                SetDecay(cubbi_decay);
-                SetAutoLoop(cubbi_autoloop);
-                SetSustainActive(cubbi_sustain);
-                SetGain(cubbi_gain);
-                SetPan(cubbi_pan);
-            }
-
-            playing_key[free_idx] = key;
-
-            // hacks to fix issue with cubbi voices not changing samples sometimes
-            chompi_voice[free_idx].SetCubbiMode(voice_mode == VoiceMode::CUBBI);
-            chompi_voice[free_idx].SetBank(bank[int(voice_mode)]);
-
-            chompi_voice[free_idx].SetVelocity(vel);
-
-            if(voice_mode == VoiceMode::JAMMI)
-                chompi_voice[free_idx].SetVarispeed(MidiNoteToPlaybackRatio(transpose_nn));
-            else if(voice_mode == VoiceMode::CUBBI)
-                chompi_voice[free_idx].SetVarispeed(1.f);
-
-
-            chompi_voice[free_idx].StartPlaying();
-        }
-
-        void StopPlayback(int key)
-        {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                if(playing_key[i] == key)
-                {
-                    chompi_voice[i].StopPlaying();
-                    // chompi_voice[i].JumpToStart();
-                }
-            }
         }
 
         void ProcessKeyReqs()
@@ -837,15 +666,7 @@ namespace daisy
 
         bool IsKeyPlaying(int key)
         {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                if (playing_key[i] == key && chompi_voice[i].IsPlaying())
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return harmonizer.Held(key);
         }
 
         /* SING prototype: knobs 1-3 drive the harmonizer */
@@ -855,126 +676,23 @@ namespace daisy
         bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 
-        void SetAttack(float val)
-        {
-            harmonizer.SetAttack(val); // SING prototype
-            return;
-            val = powf(val, 3.f) + .01f;
+        void SetAttack(float val) { harmonizer.SetAttack(val); }
 
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetAttack(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetAttack(val);            
-            }
-        }
+        void SetDecay(float val) { harmonizer.SetRelease(val); }
 
-        void SetDecay(float val)
-        {
-            harmonizer.SetRelease(val); // SING prototype
-            return;
-            val = powf(val, 3.f) + .01f;
+        void SetStartPointForce(float) {}
 
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetDecay(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetDecay(val);            
-            }
-        }
+        void SetEndPointForce(float) {}
 
-        void SetStartPointForce(float val)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetStartPointForce(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                {
-                    chompi_voice[i].SetStartPointForce(val);
-                }
-            }
-        }
+        bool SetStartPoint(float) { return true; }
 
-        void SetEndPointForce(float val)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetEndPointForce(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                {
-                    chompi_voice[i].SetEndPointForce(val);
-                }
-            }   
-        }
+        bool SetEndPoint(float) { return true; }
 
-        bool SetStartPoint(float val)
-        {
-            bool ret = false;
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                ret = chompi_voice[latest_voice].SetStartPoint(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    ret = chompi_voice[i].SetStartPoint(val);            
-            }
+        void SetAutoLoop(bool) {}
 
-            return ret;
-        }
+        void ToggleAutoLoop() {}
 
-        bool SetEndPoint(float val)
-        {
-            bool ret = false;
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                ret = chompi_voice[latest_voice].SetEndPoint(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    ret = chompi_voice[i].SetEndPoint(val);            
-            }
-
-            return ret;
-        }
-
-        void SetAutoLoop(bool loop)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetAutoLoop(loop);
-            }
-            else
-            {
-                for(size_t i = 0; i< kMaxPoly; i++)
-                {
-                    chompi_voice[i].SetAutoLoop(loop);
-                }
-            }        
-        }
-
-        void ToggleAutoLoop()
-        {
-            for(size_t i = 0; i< kMaxPoly; i++)
-            {
-                chompi_voice[i].ToggleAutoLoop();
-            }
-        }
-
-        bool GetAutoLoop() { return chompi_voice[latest_voice].GetAutoLoop(); }
+        bool GetAutoLoop() { return false; }
 
         void ResetGlobalPitchQuant()
         {
@@ -1077,96 +795,25 @@ namespace daisy
             SetReverse(pitch < 0.f);
         }
 
-        void SetGlobalPitch(float val)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetGlobalPitch(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetGlobalPitch(val);            
-            }
-        }
-        inline float GetGlobalPitch() { return chompi_voice[latest_voice].GetGlobalPitch(); }
+        void SetGlobalPitch(float) {}
+        inline float GetGlobalPitch() { return 1.f; }
 
-        void SetGain(float val)
-        {
-            harmonizer.SetLevel(val); // SING prototype
-            return;
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetGain(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetGain(val);            
-            }
-        }
+        void SetGain(float val) { harmonizer.SetLevel(val); }
 
-        void SetPan(float val)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetPan(val);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetPan(val);            
-            }            
-        }
+        void SetPan(float) {}
 
-        float GetPan() 
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-                return chompi_voice[latest_voice].GetPan();
+        float GetPan() { return .5f; }
 
-            return chompi_voice[0].GetPan();            
-        }
-
-        void SetReverse(bool rev)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetReverse(rev);
-            }
-            else
-            {
-                for(size_t i = 0; i < kMaxPoly; i++)
-                    chompi_voice[i].SetReverse(rev);            
-            }
-        }
-        void ToggleReverse() { SetReverse(!chompi_voice[latest_voice].GetReverse()); }
-        inline bool GetReverse() { return chompi_voice[latest_voice].GetReverse(); }
+        void SetReverse(bool) {}
+        void ToggleReverse() {}
+        inline bool GetReverse() { return false; }
 
 
 
-        void SetSustainActive(bool sus)
-        {
-            if(voice_mode == VoiceMode::CUBBI)
-            {
-                chompi_voice[latest_voice].SetSustainActive(sus);
-            }
-            else
-            {
-                for(size_t i = 0; i< kMaxPoly; i++)
-                {
-                    chompi_voice[i].SetSustainActive(sus);
-                }
-            }        
-        }
+        void SetSustainActive(bool) {}
 
-        void ToggleSustainActive() 
-        {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                chompi_voice[i].ToggleSustainActive();
-            }
-        }
-        inline bool GetSustainActive() { return chompi_voice[latest_voice].GetSustainActive(); }
+        void ToggleSustainActive() {}
+        inline bool GetSustainActive() { return false; }
 
         void SetInputGain(float gain) 
         {
@@ -1296,16 +943,7 @@ namespace daisy
         inline void SetLooperScrub(float scrub) { looper.SetScrub(scrub); }
         inline float GetLooperScrub() { return looper.GetScrub(); }
 
-        bool AnyVoicesPlaying() 
-        {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            { 
-                if(chompi_voice[i].IsPlaying())
-                    return true;
-            }
-
-            return false;
-        }
+        bool AnyVoicesPlaying() { return harmonizer.Active(); }
 
         inline bool IsLooperPlaying() { return looper.IsPlaying(); };
         inline bool IsLooperRecording() { return looper.IsRecording(); };
@@ -1418,11 +1056,7 @@ namespace daisy
 
         inline bool IsErasing() { return erasing != 0; }
 
-        inline void SetAllCopyOccurred()
-        {
-            for(size_t i = 0; i < kMaxPoly; i++)
-                chompi_voice[i].SetCopyOccurred();
-        }
+        void SetAllCopyOccurred() {}
 
         void UpdateFileExists()
         {
@@ -1488,29 +1122,11 @@ namespace daisy
             cubbi_pan = pan;
         }
 
-        void SetVoiceSlot(size_t idx, bool click)
+        void SetVoiceSlot(size_t idx, bool)
         {
             voice_slot_ = idx;
-            
             if(voice_mode == VoiceMode::JAMMI)
-            {
                 voice_bank_ = bank[int(voice_mode)];
-            }
-
-            char name_buffer[32];
-            GetFileNameForSlot(idx, bank[int(voice_mode)], voice_mode, name_buffer);
-
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                if(idx != 15)
-                {
-                    chompi_voice[i].OpenFile(name_buffer, true);
-                }
-
-                chompi_voice[i].SetSlot(idx); 
-                chompi_voice[i].SetCubbiMode(voice_mode == VoiceMode::CUBBI);
-                chompi_voice[i].SetUsingRam(idx == 15, click);
-            }
         }
 
         inline VoiceMode GetVoiceMode () { return voice_mode; }
@@ -1523,14 +1139,7 @@ namespace daisy
             voice_mode = m;
         }
 
-        void StopAllVoices(size_t idx = 100)
-        {
-            for(size_t i = 0; i < kMaxPoly; i++)
-            {
-                if(idx == 100 || idx == chompi_voice[i].GetSlot())
-                    chompi_voice[i].Choke();
-            }
-        }
+        void StopAllVoices(size_t = 100) { harmonizer.AllOff(); }
 
         // otherwise, they are post looper
         void SetFxPreLooper(bool pre)
@@ -1557,7 +1166,7 @@ namespace daisy
         inline bool IsManagerEmpty() __attribute__((optimize("-O0"))) { return file_manager.request_fifo.IsEmpty(); }
 
         // helper for stuck key hack
-        inline int GetPlayingKey(size_t idx) { return playing_key[idx]; }
+        inline int GetPlayingKey(size_t) { return 0; }
 
     private:
         /** @brief Converts a MIDI note number to a ratio of playback speed
@@ -1581,7 +1190,6 @@ namespace daisy
 
         /** Sampling Bits */
         daisy::FileStreamingManager file_manager;
-        daisy::FileSampleReader chompi_voice[kMaxPoly];
         RamBuffer chompi_writer;
 
         chompi::Limiter lim_hp_l_;
@@ -1593,7 +1201,6 @@ namespace daisy
 
         bool record, record_latch;
         bool input_monitor;
-        int playing_key[kMaxPoly];
 
         VoiceMode voice_mode;
 
@@ -1605,7 +1212,6 @@ namespace daisy
         // we can change bank pages without selecting a new slot in that bank
         size_t voice_bank_;
 
-        uint32_t play_start_time[kMaxPoly];
 
         float ingain_, ingain_target_;
         float resamp_env_, resamp_env_target_;

@@ -140,6 +140,13 @@ namespace chompi
             duck_hold_ = duck_len_;
         }
 
+        /** release every voice (they ring out with the release time) */
+        void AllOff()
+        {
+            for (size_t v = 0; v < kVoices; v++)
+                voices_[v].gate = false;
+        }
+
         /** a key that is held down right now (not just ringing out) */
         bool Held(int key) const
         {
@@ -162,6 +169,9 @@ namespace chompi
          *  @param mic   true: apply the mic filter as TAPE's monitor does */
         void Process(const float *in, bool mic, float *outl, float *outr, size_t size)
         {
+            /* the shifters share a per-block budget for their splice search */
+            StereoPitchShifter::NewBlock(size);
+
             float in_[size]; /* one audio block, 48 samples */
             for (size_t i = 0; i < size; i++)
             {
