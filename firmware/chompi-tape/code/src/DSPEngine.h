@@ -848,8 +848,16 @@ namespace daisy
             return false;
         }
 
+        /* SING prototype: knobs 1-3 drive the harmonizer */
+        void SetTranspose(float val) { harmonizer.SetTranspose(val); }
+        float GetTranspose() { return harmonizer.Transpose(); }
+        void SetDoubler(float val) { harmonizer.SetDoubler(val); }
+        void SetSpread(float val) { harmonizer.SetSpread(val); }
+
         void SetAttack(float val)
         {
+            harmonizer.SetAttack(val); // SING prototype
+            return;
             val = powf(val, 3.f) + .01f;
 
             if(voice_mode == VoiceMode::CUBBI)
@@ -865,6 +873,8 @@ namespace daisy
 
         void SetDecay(float val)
         {
+            harmonizer.SetRelease(val); // SING prototype
+            return;
             val = powf(val, 3.f) + .01f;
 
             if(voice_mode == VoiceMode::CUBBI)
@@ -1082,6 +1092,8 @@ namespace daisy
 
         void SetGain(float val)
         {
+            harmonizer.SetLevel(val); // SING prototype
+            return;
             if(voice_mode == VoiceMode::CUBBI)
             {
                 chompi_voice[latest_voice].SetGain(val);

@@ -6,6 +6,10 @@
 
 namespace chompi
 {
+    /** doubler delay lines (L, R), in SDRAM: chompi_main.cpp */
+    static constexpr size_t kChorusLen = 2048; // power of two, ~42 ms
+    extern float chorus_mem[2][kChorusLen];
+
     /** SING prototype: live harmonizer.
      *
      *  Every held key gets a voice that pitch-shifts the live input by its
@@ -33,12 +37,27 @@ namespace chompi
                 voices_[v].key  = -1;
                 voices_[v].env  = 0.f;
                 voices_[v].gate = false;
+                voices_[v].semis = 0.f;
             }
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
-            /* linear ramps, per sample */
-            attack_  = 1.f / (.005f * samplerate);
-            release_ = 1.f / (.150f * samplerate);
+            sr_ = samplerate;
+
+            /* the knob defaults in ui.h, so start-up matches the knobs even
+               before a page is shown */
+            SetTranspose(.5f);
+            SetLevel(.5f);
+            SetAttack(.1f);
+            SetRelease(.5f);
+            SetDoubler(0.f);
+            SetSpread(0.f);
+
+            for (size_t c = 0; c < 2; c++)
+                for (size_t i = 0; i < kChorusLen; i++)
+                    chorus_mem[c][i] = 0.f; // SDRAM is not zeroed at start-up
+            chorus_w_  = 0;
+            lfo_[0]    = 0.f;
+            lfo_[1]    = .37f;
 
             /* key-click ducking, see Duck() */
             duck_      = 1.f;
@@ -68,6 +87,37 @@ namespace chompi
             }
         }
 
+        /* ---- knobs, each 0..1 ------------------------------------------ */
+
+        /** knob 1, page 1: -12..+12 semitones on every voice, .5 = none */
+        void SetTranspose(float v)
+        {
+            transpose_ = roundf((v - .5f) * 24.f);
+            for (size_t i = 0; i < kVoices; i++)
+                UpdateRatio(voices_[i], i);
+        }
+        float Transpose() const { return transpose_; }
+
+        /** knob 1, page 2: harmony volume, .5 = about as loud as the dry voice */
+        void SetLevel(float v) { level_ = v * 2.f * kLevel; }
+
+        /** knob 2, page 2: 2 ms .. 500 ms */
+        void SetAttack(float v) { attack_ = 1.f / (.002f * powf(250.f, v) * sr_); }
+
+        /** knob 3, page 2: 20 ms .. 3 s */
+        void SetRelease(float v) { release_ = 1.f / (.02f * powf(150.f, v) * sr_); }
+
+        /** knob 2, page 1: chorus taps + slight detune per voice */
+        void SetDoubler(float v)
+        {
+            doubler_ = v;
+            for (size_t i = 0; i < kVoices; i++)
+                UpdateRatio(voices_[i], i);
+        }
+
+        /** knob 3, page 1: voices placed by pitch, low left, high right */
+        void SetSpread(float v) { spread_ = v; }
+
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
         {
@@ -77,7 +127,8 @@ namespace chompi
             if (v->key != key || v->env <= 0.f)
                 v->shifter.Reset();     // fresh history: fades in from silence
             v->key   = key;
-            v->ratio = powf(2.f, semis / 12.f);
+            v->semis = semis;
+            UpdateRatio(*v, size_t(v - voices_));
             v->gate  = true;
             duck_hold_ = duck_len_;
         }
@@ -111,11 +162,22 @@ namespace chompi
                 in_[i] = x;
             }
 
+            float hl[size], hr[size];
+            for (size_t i = 0; i < size; i++)
+                hl[i] = hr[i] = 0.f;
+
             for (size_t v = 0; v < kVoices; v++)
             {
                 Voice &vo = voices_[v];
                 if (!vo.gate && vo.env <= 0.f)
                     continue;
+
+                /* constant-power pan by pitch: centre at the reference C */
+                float p = (vo.semis + transpose_) / 12.f * spread_;
+                p = p < -1.f ? -1.f : (p > 1.f ? 1.f : p);
+                const float a  = (p + 1.f) * .7853982f; // 0..pi/2
+                const float gl = cosf(a) * 1.4142136f * level_;
+                const float gr = sinf(a) * 1.4142136f * level_;
 
                 for (size_t i = 0; i < size; i++)
                 {
@@ -126,11 +188,40 @@ namespace chompi
 
                     float l = in_[i], r = in_[i];
                     vo.shifter.Process(vo.ratio, &l, &r);
-                    outl[i] += l * vo.env * kLevel;
-                    outr[i] += r * vo.env * kLevel;
+                    hl[i] += l * vo.env * gl;
+                    hr[i] += r * vo.env * gr;
                 }
                 if (!vo.gate && vo.env <= 0.f)
                     vo.key = -1;
+            }
+
+            /* doubler: two slowly wandering taps (12 and 17 ms, +-3 ms),
+               one per side, mixed in by the knob */
+            const float lfo_inc = .35f / sr_;
+            for (size_t i = 0; i < size; i++)
+            {
+                const float m = (hl[i] + hr[i]) * .5f;
+                chorus_mem[0][chorus_w_] = m;
+
+                float wet[2];
+                for (size_t c = 0; c < 2; c++)
+                {
+                    lfo_[c] += lfo_inc * (c ? 1.3f : 1.f);
+                    if (lfo_[c] >= 1.f)
+                        lfo_[c] -= 1.f;
+                    const float d = ((c ? .017f : .012f)
+                                     + .003f * sinf(6.2831853f * lfo_[c])) * sr_;
+                    const float rp = float(chorus_w_) - d;
+                    const float fl = floorf(rp);
+                    const size_t i0 = size_t(int(fl)) & (kChorusLen - 1);
+                    const size_t i1 = (i0 + 1) & (kChorusLen - 1);
+                    const float  fr = rp - fl;
+                    wet[c] = chorus_mem[0][i0] + (chorus_mem[0][i1] - chorus_mem[0][i0]) * fr;
+                }
+                chorus_w_ = (chorus_w_ + 1) & (kChorusLen - 1);
+
+                outl[i] += hl[i] + wet[0] * doubler_;
+                outr[i] += hr[i] + wet[1] * doubler_;
             }
         }
 
@@ -140,9 +231,18 @@ namespace chompi
             StereoPitchShifter shifter;
             int                key;
             float              ratio;
+            float              semis;
             float              env;
             bool               gate;
         };
+
+        /** pitch = key + transpose, plus a few cents of alternating detune
+         *  when the doubler is up, so stacked voices thicken */
+        void UpdateRatio(Voice &v, size_t idx)
+        {
+            const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
+            v.ratio = powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
+        }
 
         Voice *Find(int key)
         {
@@ -176,6 +276,9 @@ namespace chompi
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
+        float            sr_, transpose_, level_, doubler_, spread_;
+        float            lfo_[2];
+        size_t           chorus_w_;
         float            duck_, duck_down_, duck_up_;
         int              duck_hold_, duck_len_;
     };

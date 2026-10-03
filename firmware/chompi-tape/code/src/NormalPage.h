@@ -820,7 +820,7 @@ namespace chompi
                     // real keypress
                     if(!isRetriggering)
                     {
-                        if(fx_->GetVoiceMode() == VoiceMode::CUBBI)
+                        if(false) // SING prototype: keys don't load samples
                         {
                             size_t slot = KeyToSlot(buttonID);
                             if(slot == kSlotNone)
@@ -930,7 +930,12 @@ namespace chompi
                 float inc = turns * kEncoderCoarseStep;
 
                 // fine steps for pitch, sample start, and sample end
-                if((encoderID == 0 && page == 0 && quantized_pitch_)
+                /* SING prototype: knob 1-3 page 1 are transpose/doubler/
+                   spread, plain coarse steps */
+                if(page == 0 && encoderID <= 2)
+                {
+                }
+                else if((encoderID == 0 && page == 0 && quantized_pitch_)
                     || (encoderID == 4 && quantized_pitch_))
                 {
                     inc = 0.f;
@@ -951,10 +956,7 @@ namespace chompi
 
             if (encoderID == 0 && page == 0)
             {
-                if(quantized_pitch_)
-                    enc_values[0][0] = fx_->SetGlobalPitchQuantized(turns, enc_values[0][0]);
-                else
-                    fx_->SetGlobalPitchFree(enc_values[0][0]);
+                fx_->SetTranspose(enc_values[0][0]); // SING prototype
             }
             else if (encoderID == 4)
             {
@@ -974,7 +976,13 @@ namespace chompi
 
             // don't allow end point too close to start point
             // TODO: set here, if they don't update, don't update
-            if(page == 0 && (encoderID == 1 || encoderID == 2))
+            /* SING prototype: no sample to clip, knobs 2/3 page 1 are
+               doubler and spread */
+            if(page == 0 && encoderID == 1)
+                fx_->SetDoubler(enc_values[0][1]);
+            else if(page == 0 && encoderID == 2)
+                fx_->SetSpread(enc_values[0][2]);
+            else if(false)
             {
                 if ((enc_values[0][1] + .01f) >= enc_values[0][2])
                 {
