@@ -12,6 +12,10 @@
 #include "PresetManager.h"
 #include "EnvFollower.h"
 #include "MicFilter.h"
+#include "Harmonizer.h"
+
+/* SING prototype; defined in chompi_main.cpp, in DTCM */
+extern chompi::Harmonizer<7> harmonizer;
 #include "reverb.h"
 #include "RamBuffer.h"
 #include "limiter.h"
@@ -173,6 +177,7 @@ namespace daisy
             dly_time_ = dly_time_target_;
 
             mic_filter_.Init(samplerate);
+            harmonizer.Init(samplerate); // SING prototype
 
             filter_.Init(samplerate);
             filter_.SetControl(.5f);
@@ -436,6 +441,19 @@ namespace daisy
                         out[1][i] += aor;
                     }
                 }
+            }
+
+            /* SING prototype: harmony voices from the live input, in the
+               place of the sample voices, so FX and looper follow as usual */
+            if(harmonizer.Active()
+               && (in_source == InputSource::MIC || in_source == InputSource::LINE_IN))
+            {
+                float live[size];
+                const bool mic = in_source == InputSource::MIC;
+                for(size_t i = 0; i < size; i++)
+                    live[i] = mic ? in[0][i] * ingain_ * kMicGain
+                                  : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
+                harmonizer.Process(live, mic, out[0], out[1], size);
             }
 
             for(size_t i = 0; i < size; i++)
@@ -784,10 +802,13 @@ namespace daisy
             {
                 KeyRequest req = request_fifo.PopFront();
                 
+                /* SING prototype: keys play harmony voices of the live
+                   input instead of samples. transpose_nn_ is the key's
+                   distance from the middle C in semitones. */
                 if (req.type_ == KeyRequest::Type::START)
-                    StartPlayback(req.transpose_nn_, req.key_, req.vel_);
+                    harmonizer.NoteOn(req.key_, req.transpose_nn_);
                 else if (req.type_ == KeyRequest::Type::STOP)
-                    StopPlayback(req.key_);
+                    harmonizer.NoteOff(req.key_);
             }
         }
 
