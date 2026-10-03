@@ -142,6 +142,7 @@
   .steps h2 { margin: 4px 0 6px; font-size: 1.35rem; font-weight: 700; }
   .steps p { margin: 0 0 12px; max-width: 36em; }
   .hint { color: var(--ink-soft); font-size: .95rem; }
+  .hint a, .lede a, .credit a { color: inherit; }
   .warn { color: var(--pink); font-weight: 600; }
 
   button.act, label.act {
@@ -154,7 +155,7 @@
   }
   button.act.big { background: var(--amber); color: #1D1B3A; font-size: 1.15rem; padding: 14px 28px; }
   button.act:disabled { opacity: .35; cursor: not-allowed; }
-  button.act:focus-visible, label.act:focus-within, input:focus-visible, select:focus-visible {
+  button.act:focus-visible, label.act:focus-within, button.stock:focus-visible, input:focus-visible, select:focus-visible {
     outline: 3px solid var(--cyan); outline-offset: 2px;
   }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -165,6 +166,12 @@
   }
   .drop.over { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
   .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  button.stock {
+    border: 2px solid var(--ink); border-radius: 999px;
+    background: transparent; color: var(--ink);
+    padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.stock[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
   .chosen, code { font-family: inherit; font-weight: 700; }
 
   input[type="text"], select {
@@ -260,7 +267,8 @@
             <label class="act">Choose a file<input type="file" id="file" accept=".bin,application/octet-stream"></label>
           </div>
         </div>
-        <p class="hint">TAPE, TEMPO and WAVE are already on the release card, on keys 1 to 3.</p>
+        <p class="hint">Or send one of the firmwares from the <a href="https://github.com/sfaber02/CHOMPI/releases/tag/launcher-v1.1">launcher v1.1 release card</a>:</p>
+        <div class="row" id="stock"></div>
         <p class="result" id="firmware-result" hidden></p>
       </div>
     </li>
@@ -311,8 +319,16 @@
 import { Launcher, ProtocolError, NAME_RE, defaultName } from "./chompi-midi.js";
 
 const SLOTS_DEFAULT = 15;
+/* The firmwares on the launcher-v1.1 release card, unchanged (sha256 of the
+   release zip checked), served from this site so the page can fetch them. */
+const STOCK = [
+  { label: "TAPE", name: "TAPE", slot: 1, path: "firmware/launcher-v1.1/01_TAPE.bin" },
+  { label: "TEMPO", name: "TEMPO", slot: 2, path: "firmware/launcher-v1.1/02_TEMPO.bin" },
+  { label: "WAVE", name: "WAVE", slot: 3, path: "firmware/launcher-v1.1/03_WAVE.bin" },
+  { label: "USB storage", name: "USB_STORAGE", slot: 15, path: "firmware/launcher-v1.1/15_USB_STORAGE.bin" },
+];
 /* what the launcher-v1.1 release card holds, for the overwrite warning */
-const STANDARD = { 1: "TAPE", 2: "TEMPO", 3: "WAVE", 15: "USB storage" };
+const STANDARD = Object.fromEntries(STOCK.map((s) => [s.slot, s]));
 
 const $ = (id) => document.getElementById(id);
 const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false };
@@ -398,7 +414,7 @@ async function connectTo(pair) {
   try {
     state.info = await state.launcher.ping();
     buildKeys(state.info.slots);
-    if (state.slot) pickSlot(state.slot);
+    if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
     screen(`Connected to ${pair.name}. Pick a slot.`, "ok");
     show("connect-result", `Connected. The launcher has ${state.info.slots} slots.`);
     $("step-connect").classList.add("done");
@@ -464,6 +480,7 @@ function setImage(bytes, label, name) {
 
 async function fromFile(file) {
   if (!file) return;
+  document.querySelectorAll("button.stock").forEach((b) => b.setAttribute("aria-pressed", "false"));
   const bytes = new Uint8Array(await file.arrayBuffer());
   const name = $("name").value && file.name === "CHOMPI.bin" ? null : defaultName(file.name);
   setImage(bytes, file.name, name);
@@ -474,10 +491,33 @@ drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.ad
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); fromFile(e.dataTransfer.files[0]); });
 
+for (const s of STOCK) {
+  const b = document.createElement("button");
+  b.className = "stock";
+  b.type = "button";
+  b.textContent = s.label;
+  b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", async () => {
+    document.querySelectorAll("button.stock").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    show("firmware-result", `Fetching ${s.label}…`);
+    try {
+      const res = await fetch(s.path);
+      if (!res.ok) throw new Error(res.status);
+      setImage(new Uint8Array(await res.arrayBuffer()), `${s.label} (launcher v1.1)`, s.name);
+      if (!state.slotChosen) pickSlot(s.slot, false); /* suggest its own slot */
+    } catch {
+      show("firmware-result", `Couldn't download ${s.label}. Check the connection and try again.`, true);
+    }
+  });
+  $("stock").append(b);
+}
+
 /* ---- slot & name ------------------------------------------------------- */
-function pickSlot(n) {
+/* chosen: pressed by the user, which a firmware button then leaves alone */
+function pickSlot(n, chosen = true) {
   if (state.busy) return;
   state.slot = n;
+  state.slotChosen ||= chosen;
   keys.forEach((k, i) => k.setAttribute("aria-pressed", String(i + 1 === n)));
   update();
 }
@@ -493,7 +533,7 @@ function update() {
   const nn = state.slot ? String(state.slot).padStart(2, "0") : "NN";
   $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
   const std = STANDARD[state.slot];
-  show("slot-warn", std && name !== std ? `On the release card, slot ${state.slot} holds ${std}. Sending replaces it.` : "");
+  show("slot-warn", std && name !== std.name ? `On the release card, slot ${state.slot} holds ${std.label}. Sending replaces it.` : "");
   $("step-slot").classList.toggle("done", !!state.slot && NAME_RE.test(name));
 
   const ready = state.info && state.image && state.slot && NAME_RE.test(name) && !state.busy;
