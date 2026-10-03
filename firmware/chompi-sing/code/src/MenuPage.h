@@ -136,6 +136,10 @@ namespace chompi
                             g = orange[1];
                             b = orange[2];
                             break;
+                        case MonitorMode::OFF: // SING: dry voice off
+                            r = .15f;
+                            g = b = 0.f;
+                            break;
                         case MonitorMode::SEND_RET:
                         default:
                             r = yellow[0];
@@ -160,7 +164,12 @@ namespace chompi
 
                 SetPthLedFloat(9, r, g, b);
 
-                SetPthLedFloat(1, 0.f, 0.f, 0.f); // SING: knob 1 has no menu function
+                // knob 1: transpose (fifths and octaves here), or dark on page 2
+                if(knob_page[0] == 0)
+                    SingTransposeColour(enc_values[0][0], r, g, b);
+                else
+                    r = g = b = 0.f;
+                SetPthLedFloat(1, r, g, b);
             }
 
             // SING: no preset keys (TAPE: save / copy / erase)
@@ -204,9 +213,30 @@ namespace chompi
             if(stepsPerRevolution > 0)
                 return false; // fall through to normalpage
 
-            /* SING: knobs 1-3 have no second-level function (in TAPE they
-               moved the sample window etc.); swallow them so the menu does
-               not also change the normal page */
+            /* SING: knob 1 (transpose page) jumps through fifths and octaves
+               here, like TAPE's quantised pitch; one step per detent */
+            if(encoderID == 0 && page == 0)
+            {
+                static const float kSteps[] = {-12.f, -7.f, 0.f, 7.f, 12.f};
+                const float cur = (enc_values[0][0] - .5f) * 24.f;
+                float next = cur;
+                if(turns > 0)
+                {
+                    for(float st : kSteps)
+                        if(st > cur + .01f) { next = st; break; }
+                }
+                else if(turns < 0)
+                {
+                    for(int k = 4; k >= 0; k--)
+                        if(kSteps[k] < cur - .01f) { next = kSteps[k]; break; }
+                }
+                enc_values[0][0] = next / 24.f + .5f;
+                fx_->SetTranspose(enc_values[0][0]);
+                return true;
+            }
+
+            /* the other pages of knobs 1-3 have no second-level function
+               (in TAPE they moved the sample window etc.) */
             if(encoderID <= 2)
                 return true;
 
@@ -285,7 +315,20 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
-                break; // SING: nothing to reset (TAPE: sample pitch / pan)
+                if(rising) // SING: back to no transpose / default volume
+                {
+                    if(knob_page[0] == 0)
+                    {
+                        enc_values[0][0] = .5f;
+                        fx_->SetTranspose(.5f);
+                    }
+                    else
+                    {
+                        enc_values[1][0] = enc_defaults[1][0];
+                        fx_->SetGain(enc_values[1][0]);
+                    }
+                }
+                break;
 
             // reset the looper pitch via fall through
             case ENC_5_SW:

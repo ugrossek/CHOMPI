@@ -126,6 +126,10 @@ namespace chompi
     static const float sing_rose[3]    = {1.f, .45f, .60f};
     static const float sing_warm[3]    = {1.f, .85f, .65f};
 
+    /** knob 1 transpose ring: warm white at 0, coral below, gold above,
+     *  brighter the further out */
+    static inline void SingTransposeColour(float v, float &r, float &g, float &b);
+
     /** colour between a and b at t, into r/g/b */
     static inline void SingMix(const float *a, const float *b, float t,
                                float &r, float &g, float &bl)
@@ -135,24 +139,38 @@ namespace chompi
         bl = a[2] + (b[2] - a[2]) * t;
     }
 
+    static inline void SingTransposeColour(float v, float &r, float &g, float &b)
+    {
+        const float semis = (v - .5f) * 24.f;
+        if (fabsf(semis) < .15f)
+        {
+            r = sing_warm[0]; g = sing_warm[1]; b = sing_warm[2];
+            return;
+        }
+        const float *c   = semis < 0.f ? sing_coral : sing_gold;
+        const float  lvl = .35f + .65f * fminf(fabsf(semis) / 12.f, 1.f);
+        r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
+    }
+
     static const uint8_t knob_num_pages[6] = {2, 2, 2, 3, 1, 2};
 
     class NormalPage : public daisy::UiPage
     {
       private:
-        /* SING prototype: knobs 1-3, two pages each (press to switch).
-         *    knob 1: harmony volume | spread
-         *    knob 2: attack         | transpose (-5..+5)
-         *    knob 3: doubler        | release
+        /* SING: knobs 1-3, two pages each (press to switch), laid out like
+         * TAPE (page 1 = sound, page 2 = level and envelope):
+         *    knob 1: transpose | harmony volume
+         *    knob 2: spread    | attack
+         *    knob 3: doubler   | release
          *  The defaults in ui.h and Harmonizer::Init must match. */
         void SingKnob(int knob, int page, float v)
         {
             switch(knob * 2 + page)
             {
-                case 0: fx_->SetGain(v); break;
-                case 1: fx_->SetSpread(v); break;
-                case 2: fx_->SetAttack(v); break;
-                case 3: fx_->SetTranspose(v); break;
+                case 0: fx_->SetTranspose(v); break;
+                case 1: fx_->SetGain(v); break;
+                case 2: fx_->SetSpread(v); break;
+                case 3: fx_->SetAttack(v); break;
                 case 4: fx_->SetDoubler(v); break;
                 case 5: fx_->SetDecay(v); break;
                 default: break;
@@ -164,11 +182,10 @@ namespace chompi
             float lvl = 1.f;
             switch(knob * 2 + page)
             {
-                case 0: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;      // volume
-                case 1: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
-                case 3: SingMix(sing_coral, sing_gold, fabsf(v - .5f) * 2.f, r, g, b); break;      // transpose
+                case 0: SingTransposeColour(v, r, g, b); return;
+                case 2: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
                 case 4: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
-                default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // attack, release
+                default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // volume, attack, release
             }
             r *= lvl; g *= lvl; b *= lvl;
         }
@@ -288,10 +305,9 @@ namespace chompi
             for(size_t i = 7; i < (25 + 7); i++)
             {
                 const bool c_key = key_map[i] % 12 == 0;
-                const bool show_idle = switch_state || fx_->GetInputSource() != InputSource::MIC;
                 if (fx_->IsHarmonyKeyHeld(i))
                     SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
-                else if (c_key && show_idle)
+                else if (c_key)
                 {
                     const float dim = key_map[i] == 60 ? .3f : .1f;
                     SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
@@ -316,8 +332,6 @@ namespace chompi
                 case 2:
                 {
                     SingKnobColour(i, page, value, r, g, b);
-                    if(!switch_state)
-                        r = g = b = 0.f;
                     SetPthLedFloat(i + 1, r, g, b);
                     break;
                 }
@@ -357,10 +371,6 @@ namespace chompi
                         SingMix(sing_coral, sing_warm, value, r, g, b); // SING: filter
                     }
 
-                    if(!switch_state)
-                    {
-                        r = g = b = 0.f;
-                    }
 
                     SetPthLedFloat(4, r, g, b);
 
@@ -383,12 +393,6 @@ namespace chompi
                         g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
                         b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
 
-                        if(!switch_state)
-                        {
-                            r *= kRecDim;
-                            g *= kRecDim;
-                            b *= kRecDim;
-                        }
 
                         SetPthLedFloat(led_on, r, g, b);
 
@@ -400,12 +404,6 @@ namespace chompi
                             g = color_xfade(0.f, red[1], dim);
                             b = color_xfade(0.f, red[2], dim);
 
-                            if(!switch_state)
-                            {
-                                r *= kRecDim;
-                                g *= kRecDim;
-                                b *= kRecDim;
-                            }
 
                             SetPthLedFloat(led_off, r, g, b);
                         }
@@ -513,12 +511,6 @@ namespace chompi
                 b = position;
             }
 
-            if(!switch_state)
-            {
-                r *= kRecDim;
-                g *= kRecDim;
-                b *= kRecDim;
-            }
             SetPthLedFloat(led_map[33], r, g, b);
 
             // loop key
@@ -559,45 +551,23 @@ namespace chompi
                 b = position;
             }
 
-            if(!switch_state)
-            {
-                r *= kRecDim;
-                g *= kRecDim;
-                b *= kRecDim;
-            }
             SetPthLedFloat(led_map[34], r, g, b);
 
             // chompi key
-            fx_->SetInputMonitor(!switch_state);
+            fx_->SetInputMonitor(true); // SING: dry voice per monitor mode (menu, knob 6)
             if (fx_->IsLatched()) // SING: latch on
             {
                 r = sing_magenta[0];
                 g = sing_magenta[1];
                 b = sing_magenta[2];
             }
-            else if (!switch_state)
+            else // input level, as TAPE shows while monitoring
             {
-                {
-                    float vu_sample = fx_->GetVUSample(VUTarget::VU_INPUT);
-                
-                    r = color_quad_xfade(.1f, green[0], yellow[0], pink[0], vu_sample);
-                    g = color_quad_xfade(.1f, green[1], yellow[1], pink[1], vu_sample);
-                    b = color_quad_xfade(.1f, green[2], yellow[2], pink[2], vu_sample);
-                }
+                float vu_sample = fx_->GetVUSample(VUTarget::VU_INPUT);
+                r = color_quad_xfade(.1f, green[0], yellow[0], pink[0], vu_sample);
+                g = color_quad_xfade(.1f, green[1], yellow[1], pink[1], vu_sample);
+                b = color_quad_xfade(.1f, green[2], yellow[2], pink[2], vu_sample);
             }
-            else
-            {
-                if (chompi_key_pressed)
-                {
-                    r = .67f;
-                    g = 0.f;
-                    b = 1.f;
-                }
-                else
-                {
-                    r = g = b = 0.f;
-                }
-            } 
 
             SetPthLedFloat(led_map[5], r, g, b);
 
@@ -717,19 +687,7 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_26):
             {
                 chompi_key_pressed = rising;
-                if (!switch_state)
-                {
-                    hw_->SendCC(midi_channel, key_map[buttonID], rising ? 127 : 0);
-                }
-                else
-                {
-                    midi_channel = rising;
-                }
-
-                /* SING: a tap toggles latch. A hold opens the menu instead
-                   (ui.h), and then the release goes to the menu, not here. */
-                if(!rising)
-                    fx_->ToggleLatch();
+                hw_->SendCC(midi_channel, key_map[buttonID], rising ? 127 : 0);
  
                 break;
             }
@@ -789,9 +747,9 @@ namespace chompi
                 // fine steps for pitch, sample start, and sample end
                 /* SING prototype: knobs 1-3 page 1 (volume, attack,
                    doubler), plain coarse steps */
-                if(page == 1 && encoderID == 1)
+                if(page == 0 && encoderID == 0)
                 {
-                    inc = turns * .1f; // SING transpose: one detent = one semitone
+                    inc = turns * kEncoderFineStep; // SING: continuous transpose
                 }
                 else if(page == 0 && encoderID <= 2)
                 {
@@ -842,8 +800,11 @@ namespace chompi
             return true;
         }
 
+        /** SING: the toggle switch is latch */
         void SetSwitchState(bool state)
         {
+            if (state != switch_state)
+                fx_->SetLatch(state);
             switch_state = state; 
         }
 

@@ -17,13 +17,15 @@ namespace chompi
 
         void RandomColors()
         {
-            r = System::GetNow() % 66;
-            g = System::GetNow() % 53;
-            b = System::GetNow() % 36;
-
-            r = r / 66.f;
-            g = g / 53.f;
-            b = b / 36.f;
+            /* SING: a colour from the "warm stage" palette */
+            static const float kWarm[6][3] = {
+                {1.f, .12f, .47f}, {1.f, .45f, .60f}, {1.f, .42f, .30f},
+                {1.f, .55f, 0.f},  {1.f, .78f, .10f}, {1.f, .85f, .65f},
+            };
+            const float *c = kWarm[System::GetNow() % 6];
+            r = c[0];
+            g = c[1];
+            b = c[2];
         }
 
         void Draw(const daisy::UiCanvasDescriptor &canvasDescriptor) override

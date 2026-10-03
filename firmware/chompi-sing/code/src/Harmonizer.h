@@ -47,7 +47,7 @@ namespace chompi
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
             SetTranspose(.5f);
-            SetLevel(.5f);
+            SetLevel(.75f);
             SetAttack(.1f);
             SetRelease(.5f);
             SetDoubler(0.f);
@@ -90,10 +90,11 @@ namespace chompi
 
         /* ---- knobs, each 0..1 ------------------------------------------ */
 
-        /** knob 2, page 2: -5..+5 semitones on every voice, .5 = none */
+        /** knob 1, page 1: continuous -12..+12 semitones on every voice,
+         *  .5 = none. In the menu the knob steps through fifths and octaves. */
         void SetTranspose(float v)
         {
-            transpose_ = roundf((v - .5f) * 10.f);
+            transpose_ = (v - .5f) * 24.f;
             for (size_t i = 0; i < kVoices; i++)
                 UpdateRatio(voices_[i], i);
         }
@@ -102,13 +103,13 @@ namespace chompi
         /** knob 1, page 2: harmony volume, .5 = about as loud as the dry voice */
         void SetLevel(float v) { level_ = v * 2.f * kLevel; }
 
-        /** knob 2, page 1: 2 ms .. 500 ms */
+        /** knob 2, page 2: 2 ms .. 500 ms */
         void SetAttack(float v) { attack_ = 1.f / (.002f * powf(250.f, v) * sr_); }
 
         /** knob 3, page 2: 20 ms .. 3 s */
         void SetRelease(float v) { release_ = 1.f / (.02f * powf(150.f, v) * sr_); }
 
-        /** knob 2, page 1: chorus taps + slight detune per voice */
+        /** knob 3, page 1: chorus taps + slight detune per voice */
         void SetDoubler(float v)
         {
             doubler_ = v;
@@ -116,7 +117,7 @@ namespace chompi
                 UpdateRatio(voices_[i], i);
         }
 
-        /** knob 3, page 1: voices placed by pitch, low left, high right */
+        /** knob 2, page 1: voices placed by pitch, low left, high right */
         void SetSpread(float v) { spread_ = v; }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
@@ -143,8 +144,8 @@ namespace chompi
                 v->gate = false;
         }
 
-        /** chompi key: keep the voices of the held keys sounding after the
-         *  keys are let go; switching it off releases everything */
+        /** toggle switch: keep the voices of the held keys sounding after
+         *  the keys are let go; switching it off releases everything */
         void SetLatch(bool on)
         {
             latch_ = on;

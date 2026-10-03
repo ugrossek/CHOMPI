@@ -10,9 +10,11 @@ namespace chompi
         void Init() {}
 
         // roygbivr (roll over at end for programming ease)
-        const int reds[8] = {255, 255, 255, 0, 0, 75, 238, 255};
-        const int greens[8] = {0, 146, 255, 255, 0, 0, 130, 0};
-        const int blues[8] = {0, 0, 0, 0, 255, 130, 238, 0};
+        /* SING "warm stage": magenta, rose, coral, amber, gold, warm white,
+           coral, back to magenta */
+        const int reds[8] = {255, 255, 255, 255, 255, 255, 255, 255};
+        const int greens[8] = {31, 115, 107, 140, 199, 217, 107, 31};
+        const int blues[8] = {120, 153, 77, 0, 26, 166, 77, 120};
 
         const float kPthStep = 6.f / kNumPthLeds;
         const float kSmtStepBlack = 6.f / 10;

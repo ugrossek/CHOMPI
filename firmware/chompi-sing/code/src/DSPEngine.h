@@ -49,7 +49,8 @@ namespace daisy
     {
         HP = 0,
         BOTH,
-        SEND_RET,
+        SEND_RET, // TAPE's; SING's menu does not offer it
+        OFF,      // SING: no dry voice
         LAST,
     };
 
@@ -530,7 +531,7 @@ namespace daisy
         float GetTranspose() { return harmonizer.Transpose(); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }
         bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
-        void ToggleLatch() { harmonizer.SetLatch(!harmonizer.Latched()); }
+        void SetLatch(bool on) { harmonizer.SetLatch(on); }
         bool IsLatched() { return harmonizer.Latched(); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 
@@ -961,7 +962,13 @@ namespace daisy
             in_source = source;
         }
 
-        inline void IncrementMonitorMode() { monitor_mode = MonitorMode( (int(monitor_mode) + 1) % int(MonitorMode::LAST) ); }
+        /** SING: headphones -> all outputs -> off (the dry voice) */
+        inline void IncrementMonitorMode()
+        {
+            monitor_mode = monitor_mode == MonitorMode::HP     ? MonitorMode::BOTH
+                         : monitor_mode == MonitorMode::BOTH   ? MonitorMode::OFF
+                                                               : MonitorMode::HP;
+        }
         inline MonitorMode GetMonitorMode() { return monitor_mode; }
 
 

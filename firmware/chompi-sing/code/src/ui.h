@@ -13,10 +13,10 @@ namespace chompi
 {
 
     static const float enc_defaults[3][6] = {
-        /* SING, knobs 1-3: harmony volume, attack, doubler /
-           spread, transpose (.5 = 0), release -- must match Harmonizer::Init */
-        {.5f, .1f, 0.f, 0.f, .75f, .84f},  // page 1
-        {0.f, .5f, .5f, 0.f, 0.f, .75f},   // page 2
+        /* SING, knobs 1-3: transpose (.5 = 0), spread, doubler /
+           harmony volume, attack, release -- must match Harmonizer::Init */
+        {.5f, 0.f, 0.f, 0.f, .75f, .84f},  // page 1
+        {.75f, .1f, .5f, 0.f, 0.f, .75f},  // page 2
         {0.f, 0.f, 0.f, .5f, 0.f, 0.f},   // page 3
     };
 
@@ -293,32 +293,17 @@ namespace chompi
                 }
                 else if (hw_->button_sr.RisingEdge(i))
                 {
-                    // SING: holding the chompi key opens the menu, below
-                    if (i == static_cast<int>(Hardware::SwId::KEY_26))
+                    // chompi key opens the menu (SING: whatever the toggle says,
+                    // which is latch here)
+                    if (i == static_cast<int>(Hardware::SwId::KEY_26)
+                        && normal_page_.IsActive()
+                        && !boot_page_.IsActive()
+                        && !rainbow_page_.IsActive()
+                        && !test_page_.IsActive())
                     {
-                        chompi_down_t_   = System::GetNow();
-                        chompi_hold_arm_ = true;
+                        ui.OpenPage(menu_page_);
                     }
                     event_queue.AddButtonPressed(i, 1);
-                }
-            }
-
-            /* SING: the chompi key is latch on a tap; held for kMenuHoldMs it
-               opens the menu, which then stays open while the key is held
-               (as in TAPE). The release then goes to the menu, so it does
-               not also toggle latch. */
-            if (chompi_hold_arm_)
-            {
-                if (!hw_->button_sr.State(static_cast<int>(Hardware::SwId::KEY_26)))
-                    chompi_hold_arm_ = false;
-                else if (System::GetNow() - chompi_down_t_ > kMenuHoldMs
-                         && normal_page_.IsActive()
-                         && !boot_page_.IsActive()
-                         && !rainbow_page_.IsActive()
-                         && !test_page_.IsActive())
-                {
-                    chompi_hold_arm_ = false;
-                    ui.OpenPage(menu_page_);
                 }
             }
 
@@ -355,9 +340,6 @@ namespace chompi
     BootPage boot_page_;
     NormalPage normal_page_;
     MenuPage menu_page_;
-    static constexpr uint32_t kMenuHoldMs = 600;
-    uint32_t chompi_down_t_   = 0;
-    bool     chompi_hold_arm_ = false;
     TestPage test_page_;
     NoSDPage no_sd_page_;
     RainbowPage rainbow_page_;
