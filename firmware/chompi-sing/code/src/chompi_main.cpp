@@ -39,6 +39,11 @@ int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
 int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
 
+/* SING prototype: in DTCM because .bss is full; Harmonizer::Init() sets
+ *  everything, so the missing zeroing does not matter. */
+chompi::Harmonizer<kMaxPoly> DSY_DTCMRAM_BSS harmonizer;
+float DSY_SDRAM_BSS chompi::chorus_mem[2][chompi::kChorusLen];
+
 /* The heap, for the few things that malloc -- chiefly the USB serial port,
  *  which calloc's ~550 bytes when a computer configures the device.
  *
@@ -376,6 +381,11 @@ int main(void)
     sdmmc.Init(sd_cfg);
     fsi.Init(FatFSInterface::Config::MEDIA_SD);
     f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
+
+    /* Keep SING's files (settings, looper recordings) in /SING, out of the
+     *  card root, like the launcher's other firmwares. Every path it opens is
+     *  relative. Without the folder it stays in the root. */
+    f_chdir("/SING");
 
     // delete the battery log if it exists
     char filename[32];

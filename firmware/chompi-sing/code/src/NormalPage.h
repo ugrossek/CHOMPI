@@ -119,10 +119,62 @@ namespace chompi
     static const float dark_orange[3] = {.77f, .38f, .06f};
     static const float yellow_green[3] = {.706f, 1.f, 0.f};
 
+    /* SING prototype: "warm stage" palette, to tell it apart from TAPE */
+    static const float sing_magenta[3] = {1.f, .12f, .47f};
+    static const float sing_coral[3]   = {1.f, .42f, .30f};
+    static const float sing_amber[3]   = {1.f, .55f, 0.f};
+    static const float sing_gold[3]    = {1.f, .78f, .10f};
+    static const float sing_rose[3]    = {1.f, .45f, .60f};
+    static const float sing_warm[3]    = {1.f, .85f, .65f};
+
+    /** colour between a and b at t, into r/g/b */
+    static inline void SingMix(const float *a, const float *b, float t,
+                               float &r, float &g, float &bl)
+    {
+        r  = a[0] + (b[0] - a[0]) * t;
+        g  = a[1] + (b[1] - a[1]) * t;
+        bl = a[2] + (b[2] - a[2]) * t;
+    }
+
     static const uint8_t knob_num_pages[6] = {2, 2, 2, 3, 1, 2};
 
     class NormalPage : public daisy::UiPage
     {
+      private:
+        /* SING prototype: knobs 1-3, two pages each (press to switch).
+         *    knob 1: harmony volume | spread
+         *    knob 2: transpose      | attack
+         *    knob 3: doubler        | release
+         *  The defaults in ui.h and Harmonizer::Init must match. */
+        void SingKnob(int knob, int page, float v)
+        {
+            switch(knob * 2 + page)
+            {
+                case 0: fx_->SetGain(v); break;
+                case 1: fx_->SetSpread(v); break;
+                case 2: fx_->SetTranspose(v); break;
+                case 3: fx_->SetAttack(v); break;
+                case 4: fx_->SetDoubler(v); break;
+                case 5: fx_->SetDecay(v); break;
+                default: break;
+            }
+        }
+
+        static void SingKnobColour(int knob, int page, float v, float &r, float &g, float &b)
+        {
+            float lvl = 1.f;
+            switch(knob * 2 + page)
+            {
+                case 0: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;      // volume
+                case 1: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
+                case 2: SingMix(sing_coral, sing_gold, fabsf(v - .5f) * 2.f, r, g, b); break;      // transpose
+                case 4: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
+                default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // attack, release
+            }
+            r *= lvl; g *= lvl; b *= lvl;
+        }
+
+      public:
     public:
         uint32_t init_time;
         bool init_ignore = true;
@@ -235,7 +287,25 @@ namespace chompi
                 }
             }
 
+            /* SING prototype: held keys magenta; the middle C dim amber and
+               the outer Cs dimmer, for orientation. Idle markers stay off
+               while the mic is monitored, as in TAPE. */
             for(size_t i = 7; i < (25 + 7); i++)
+            {
+                const bool c_key = key_map[i] % 12 == 0;
+                const bool show_idle = switch_state || fx_->GetInputSource() != InputSource::MIC;
+                if (fx_->IsHarmonyKeyHeld(i))
+                    SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
+                else if (c_key && show_idle)
+                {
+                    const float dim = key_map[i] == 60 ? .3f : .1f;
+                    SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
+                }
+                else
+                    SetSmtLed(led_map[i], 0, 0, 0);
+            }
+
+            for(size_t i = 7; false && i < (25 + 7); i++) // TAPE's sample-bank colours
             {
                 size_t slot = KeyToSlot(i);
                 const float* color = &pink[0];
@@ -281,83 +351,14 @@ namespace chompi
                 float b = 0.f;
                 switch (i)
                 {
-                case 0: // speed, gain, pan
+                case 0: // SING: knobs 1-3, see SingKnob()
+                case 1:
+                case 2:
                 {
+                    SingKnobColour(i, page, value, r, g, b);
                     if(!switch_state)
-                    {
                         r = g = b = 0.f;
-                    }
-                    else if(page == 0) // speed
-                    {
-                        float idx = enc_values[0][0] < .5f ? enc_values[0][0] * 2.f : (1.f - enc_values[0][0]) * 2.f; // 0 - 1 - 0
-                        r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                        g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                        b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-                    }
-                    else if(page == 1) // gain
-                    {
-                        r = color_triple_xfade(blue[0], pink[0], red[0], value);
-                        g = color_triple_xfade(blue[1], pink[1], red[1], value);
-                        b = color_triple_xfade(blue[2], pink[2], red[2], value);
-
-                        fx_->SetGain(value);
-                    }
-
-                    SetPthLedFloat(1, r, g, b);
-                }
-                break;
-                case 1: // start point
-                {
-                    if (page == 0) // start point
-                    {
-                        r = color_xfade(yellow[0], orange[0], value);
-                        g = color_xfade(yellow[1], orange[1], value);
-                        b = color_xfade(yellow[2], orange[2], value);
-
-                        // fx_->SetStartPoint(value);
-                    }
-                    else // env. attack
-                    {
-                        r = color_xfade(purple[0] * .2f, purple[0], value);
-                        g = color_xfade(purple[1] * .2f, purple[1], value);
-                        b = color_xfade(purple[2] * .2f, purple[2], value);
-
-                        fx_->SetAttack(value);
-                    }
-
-                    if(!switch_state)
-                    {
-                        r = g = b = 0.f;
-                    }   
-
-                    SetPthLedFloat(2, r, g, b);
-                    break;
-                }
-                case 2: // end point
-                {
-                    if (page == 0) // end point
-                    {
-                        r = color_xfade(orange[0], red[0], value);
-                        g = color_xfade(orange[1], red[1], value);
-                        b = color_xfade(orange[2], red[2], value);
-
-                        // fx_->SetEndPoint(value);
-                    }
-                    else // env. decay
-                    {
-                        r = color_xfade(purple[0] * .2f, purple[0], value);
-                        g = color_xfade(purple[1] * .2f, purple[1], value);
-                        b = color_xfade(purple[2] * .2f, purple[2], value);
-
-                        fx_->SetDecay(value);
-                    }
-
-                    if(!switch_state)
-                    {
-                        r = g = b = 0.f;
-                    }
-
-                    SetPthLedFloat(3, r, g, b);
+                    SetPthLedFloat(i + 1, r, g, b);
                     break;
                 }
                 case 3: // magic
@@ -374,32 +375,26 @@ namespace chompi
                                 fx_->SetDelayFeedback(0.f);
                             }
 
-                            r = color_triple_xfade(green[0], (green[0] + blue[0]) * .5f, blue[0], value);
-                            g = color_triple_xfade(green[1], (green[1] + blue[1]) * .5f, blue[1], value);
-                            b = color_triple_xfade(green[2], (green[2] + blue[2]) * .5f, blue[2], value);
+                            // SING: delay gold <- centre -> reverb magenta
+                            if (value < .5f) SingMix(sing_warm, sing_gold, (.5f - value) * 2.f, r, g, b);
+                            else             SingMix(sing_warm, sing_magenta, (value - .5f) * 2.f, r, g, b);
                         }
                         else {
                             fx_->SetReverb(value);
                             fx_->SetDelayFeedback(value);
 
-                            r = color_triple_xfade(teal[0], med_blue[0], blue[0], value);
-                            g = color_triple_xfade(teal[1], med_blue[1], blue[1], value);
-                            b = color_triple_xfade(teal[2], med_blue[2], blue[2], value);
+                            SingMix(sing_gold, sing_magenta, value, r, g, b); // SING
                         }
                     }
                     else if (page == 1) // lofi
                     {
                         fx_->SetSaturate(value);
-                        r = color_triple_xfade(yellow[0], orange[0], red[0], value);
-                        g = color_triple_xfade(yellow[1], orange[1], red[1], value);
-                        b = color_triple_xfade(yellow[2], orange[2], red[2], value);
+                        SingMix(sing_amber, red, value, r, g, b); // SING: lofi
                     }
                     else // filter
                     {
                         fx_->SetFilter(value);
-                        r = color_triple_xfade(purple[0], pink[0], 1.f, value);
-                        g = color_triple_xfade(purple[1], pink[1], 1.f, value);
-                        b = color_triple_xfade(purple[2], pink[2], 1.f, value);
+                        SingMix(sing_coral, sing_warm, value, r, g, b); // SING: filter
                     }
 
                     if(!switch_state)
@@ -820,7 +815,7 @@ namespace chompi
                     // real keypress
                     if(!isRetriggering)
                     {
-                        if(fx_->GetVoiceMode() == VoiceMode::CUBBI)
+                        if(false) // SING prototype: keys don't load samples
                         {
                             size_t slot = KeyToSlot(buttonID);
                             if(slot == kSlotNone)
@@ -930,7 +925,12 @@ namespace chompi
                 float inc = turns * kEncoderCoarseStep;
 
                 // fine steps for pitch, sample start, and sample end
-                if((encoderID == 0 && page == 0 && quantized_pitch_)
+                /* SING prototype: knobs 1-3 page 1 (volume, transpose,
+                   doubler), plain coarse steps */
+                if(page == 0 && encoderID <= 2)
+                {
+                }
+                else if((encoderID == 0 && page == 0 && quantized_pitch_)
                     || (encoderID == 4 && quantized_pitch_))
                 {
                     inc = 0.f;
@@ -949,12 +949,9 @@ namespace chompi
             // clip
             enc_values[page][encoderID] = fclamp(enc_values[page][encoderID], 0.f, 1.f);
 
-            if (encoderID == 0 && page == 0)
+            if (encoderID <= 2)
             {
-                if(quantized_pitch_)
-                    enc_values[0][0] = fx_->SetGlobalPitchQuantized(turns, enc_values[0][0]);
-                else
-                    fx_->SetGlobalPitchFree(enc_values[0][0]);
+                SingKnob(encoderID, page, enc_values[page][encoderID]); // SING prototype
             }
             else if (encoderID == 4)
             {
@@ -974,7 +971,8 @@ namespace chompi
 
             // don't allow end point too close to start point
             // TODO: set here, if they don't update, don't update
-            if(page == 0 && (encoderID == 1 || encoderID == 2))
+            /* SING prototype: no sample to clip */
+            if(false)
             {
                 if ((enc_values[0][1] + .01f) >= enc_values[0][2])
                 {

@@ -12,6 +12,10 @@
 #include "PresetManager.h"
 #include "EnvFollower.h"
 #include "MicFilter.h"
+#include "Harmonizer.h"
+
+/* SING prototype; defined in chompi_main.cpp, in DTCM */
+extern chompi::Harmonizer<7> harmonizer;
 #include "reverb.h"
 #include "RamBuffer.h"
 #include "limiter.h"
@@ -173,6 +177,7 @@ namespace daisy
             dly_time_ = dly_time_target_;
 
             mic_filter_.Init(samplerate);
+            harmonizer.Init(samplerate); // SING prototype
 
             filter_.Init(samplerate);
             filter_.SetControl(.5f);
@@ -362,7 +367,8 @@ namespace daisy
         {
             for (size_t i = 0; i < size; i++)
             {
-                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain);
+                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain
+                                                    * (duck_ ? duck_[i] : 1.f));
                 sig = mic_filter_.Process(sig);
 
                 monitor[i] += sig;
@@ -411,6 +417,12 @@ namespace daisy
             std::fill(out[0], out[0] + size, 0.f);
             std::fill(out[1], out[1] + size, 0.f);
 
+            /* SING prototype: key-click ducking for the built-in mic, used
+               by the harmonizer input and by the dry mic monitor below */
+            float duck[size];
+            harmonizer.Duck(duck, size);
+            duck_ = duck;
+
             /** TODO: debug why this is happening */
             if(record != true && record != false)
                 record = false;
@@ -436,6 +448,19 @@ namespace daisy
                         out[1][i] += aor;
                     }
                 }
+            }
+
+            /* SING prototype: harmony voices from the live input, in the
+               place of the sample voices, so FX and looper follow as usual */
+            if(harmonizer.Active()
+               && (in_source == InputSource::MIC || in_source == InputSource::LINE_IN))
+            {
+                float live[size];
+                const bool mic = in_source == InputSource::MIC;
+                for(size_t i = 0; i < size; i++)
+                    live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
+                                  : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
+                harmonizer.Process(live, mic, out[0], out[1], size);
             }
 
             for(size_t i = 0; i < size; i++)
@@ -565,6 +590,8 @@ namespace daisy
 
                 output_env_follower.Process((out[0][i] + out[1][i]));
             }
+
+            duck_ = nullptr; // it pointed into this block's stack
         }
 
         inline void SetInputMonitor(bool monitor) 
@@ -784,10 +811,13 @@ namespace daisy
             {
                 KeyRequest req = request_fifo.PopFront();
                 
+                /* SING prototype: keys play harmony voices of the live
+                   input instead of samples. transpose_nn_ is the key's
+                   distance from the middle C in semitones. */
                 if (req.type_ == KeyRequest::Type::START)
-                    StartPlayback(req.transpose_nn_, req.key_, req.vel_);
+                    harmonizer.NoteOn(req.key_, req.transpose_nn_);
                 else if (req.type_ == KeyRequest::Type::STOP)
-                    StopPlayback(req.key_);
+                    harmonizer.NoteOff(req.key_);
             }
         }
 
@@ -818,8 +848,17 @@ namespace daisy
             return false;
         }
 
+        /* SING prototype: knobs 1-3 drive the harmonizer */
+        void SetTranspose(float val) { harmonizer.SetTranspose(val); }
+        float GetTranspose() { return harmonizer.Transpose(); }
+        void SetDoubler(float val) { harmonizer.SetDoubler(val); }
+        bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
+        void SetSpread(float val) { harmonizer.SetSpread(val); }
+
         void SetAttack(float val)
         {
+            harmonizer.SetAttack(val); // SING prototype
+            return;
             val = powf(val, 3.f) + .01f;
 
             if(voice_mode == VoiceMode::CUBBI)
@@ -835,6 +874,8 @@ namespace daisy
 
         void SetDecay(float val)
         {
+            harmonizer.SetRelease(val); // SING prototype
+            return;
             val = powf(val, 3.f) + .01f;
 
             if(voice_mode == VoiceMode::CUBBI)
@@ -1052,6 +1093,8 @@ namespace daisy
 
         void SetGain(float val)
         {
+            harmonizer.SetLevel(val); // SING prototype
+            return;
             if(voice_mode == VoiceMode::CUBBI)
             {
                 chompi_voice[latest_voice].SetGain(val);
@@ -1571,6 +1614,7 @@ namespace daisy
 
         /** FX */
         MicFilter mic_filter_;
+        const float *duck_ = nullptr; // SING prototype: this block's mic ducking
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;
