@@ -125,6 +125,12 @@ namespace chompi
         void NoteOn(int key, float semis)
         {
             Voice *v = Find(key);       // retrigger of a held key
+            if (latch_ && v && v->gate)
+            {
+                v->gate    = false;     // latched: a second press lets it go
+                duck_hold_ = duck_len_;
+                return;
+            }
             if (!v) v = FindFree();
             if (!v) v = FindQuietest(); // steal
             if (v->key != key || v->env <= 0.f)
@@ -140,7 +146,7 @@ namespace chompi
         {
             duck_hold_ = duck_len_;
             if (latch_)
-                return; // held by the chompi key
+                return; // latched: released by the next press of the key
             if (Voice *v = Find(key))
                 v->gate = false;
         }
