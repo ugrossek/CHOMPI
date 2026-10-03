@@ -3,12 +3,12 @@
 > ### This branch: SING — a live harmonizer for CHOMPI
 >
 > Sing into the mic and hold keys: each key adds your voice, pitch-shifted by its distance
-> from the middle C. Hold C and E and you sing a third. Built on TAPE and its
-> [pitch-shift experiment](https://github.com/ugrossek/CHOMPI/tree/true-pitch-shift); looper
-> and effects work as in TAPE. Controls, install and known limits are in
+> from the middle C. Hold C and E and you sing a third. Transpose, spread, doubler and latch
+> on the knobs and the toggle; looper and effects work as in TAPE. Built on TAPE and its
+> [pitch-shift experiment](https://github.com/ugrossek/CHOMPI/tree/true-pitch-shift). Controls, install and known limits are in
 > [`firmware/chompi-sing`](firmware/chompi-sing/).
 >
-> **[Download the firmware](../../releases/tag/sing-prototype-v1)** — a ready-to-flash `.bin`.
+> **[Download the firmware](../../releases/tag/sing-v1)** — a ready-to-flash `.bin`.
 >
 > **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
 > tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
