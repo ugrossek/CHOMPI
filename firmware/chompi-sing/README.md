@@ -20,7 +20,8 @@ same board as the keys and picks up their clicks.
 | 4–6 | as in TAPE: effects, looper, output volume / input gain | |
 
 - **Toggle switch: latch.** In the position that turns TAPE's mic monitor off, voices keep
-  sounding after you let go of the keys; switching back releases them.
+  sounding after you let go of the keys. Press a sounding key again to drop that note;
+  switching back releases them all.
 - **Chompi key: menu**, as in TAPE. Extra in SING:
   - knob 1 jumps transpose through fifths and octaves (−12, −7, 0, +7, +12); pressing it
     resets transpose to 0 (on page 2: the harmony volume to its default),
