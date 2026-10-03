@@ -800,10 +800,13 @@ namespace chompi
             return true;
         }
 
-        /** SING: the toggle switch is latch */
+        /** SING: the toggle switch is latch. Compared with the engine on
+         *  every call rather than on a change of the switch: the UI starts
+         *  before the engine, whose Init() would otherwise undo a latch the
+         *  switch was already in at power-on. */
         void SetSwitchState(bool state)
         {
-            if (state != switch_state)
+            if (fx_->IsLatched() != state)
                 fx_->SetLatch(state);
             switch_state = state; 
         }
