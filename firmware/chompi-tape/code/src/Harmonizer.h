@@ -140,6 +140,15 @@ namespace chompi
             duck_hold_ = duck_len_;
         }
 
+        /** a key that is held down right now (not just ringing out) */
+        bool Held(int key) const
+        {
+            for (size_t v = 0; v < kVoices; v++)
+                if (voices_[v].gate && voices_[v].key == key)
+                    return true;
+            return false;
+        }
+
         bool Active() const
         {
             for (size_t v = 0; v < kVoices; v++)

@@ -852,6 +852,7 @@ namespace daisy
         void SetTranspose(float val) { harmonizer.SetTranspose(val); }
         float GetTranspose() { return harmonizer.Transpose(); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }
+        bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 
         void SetAttack(float val)
