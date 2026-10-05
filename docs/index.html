@@ -331,7 +331,8 @@ const STOCK = [
 const STANDARD = Object.fromEntries(STOCK.map((s) => [s.slot, s]));
 
 const $ = (id) => document.getElementById(id);
-const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false };
+const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false,
+                connecting: false, autoTimer: 0 };
 
 /* ---- keybed ------------------------------------------------------------ */
 const keys = [];
@@ -381,9 +382,13 @@ function show(id, text, bad = false) {
 /** Pair each output with the input of the same device. Names usually match,
  *  but systems differ, so fall back to the manufacturer, then to "the only
  *  input there is". */
+/* Chrome keeps unplugged devices in the port lists, marked "disconnected",
+   so only connected ones count. */
+const live = (p) => p && p.state === "connected";
+
 function portsByName() {
-  const outs = [...state.access.outputs.values()];
-  const ins = [...state.access.inputs.values()];
+  const outs = [...state.access.outputs.values()].filter(live);
+  const ins = [...state.access.inputs.values()].filter(live);
   const base = (n) => (n || "").toLowerCase().replace(/\b(in|out|input|output|port)\b|\d+$/g, "").trim();
   return outs.map((o) => {
     const i = ins.find((i) => i.name === o.name)
@@ -406,25 +411,55 @@ function adapter(pair) {
   };
 }
 
-async function connectTo(pair) {
-  if (state.launcher && state.pair?.in) state.pair.in.onmidimessage = null;
+/** Ping the launcher on this pair. quiet: an automatic attempt, which
+ *  doesn't show its failure as an error. True if a launcher answered. */
+async function connectTo(pair, quiet = false) {
+  if (state.pair?.in) state.pair.in.onmidimessage = null;
   state.pair = pair;
-  state.launcher = new Launcher(adapter(pair), log);
+  state.connecting = true;
   screen(`Knocking on ${pair.name}…`, "busy");
+  let ok = false;
   try {
+    /* a fresh connection: after a power cycle the old one is dead */
+    await Promise.all([pair.in.open(), pair.out.open()]);
+    state.launcher = new Launcher(adapter(pair), log);
     state.info = await state.launcher.ping();
     buildKeys(state.info.slots);
     if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
     screen(`Connected to ${pair.name}. Pick a slot.`, "ok");
     show("connect-result", `Connected. The launcher has ${state.info.slots} slots.`);
     $("step-connect").classList.add("done");
+    ok = true;
   } catch (e) {
     state.info = null;
     $("step-connect").classList.remove("done");
-    screen(e.message, "bad");
-    show("connect-result", e.message, true);
+    if (!quiet) {
+      screen(e.message, "bad");
+      show("connect-result", e.message, true);
+    }
+  } finally {
+    state.connecting = false;
   }
   update();
+  return ok;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** CHOMPI (re)appeared: connect by itself. The launcher may need a moment
+ *  after the USB port shows up, so try a few times. A running firmware
+ *  (not the launcher) doesn't answer; then say how to get the launcher. */
+async function autoConnect() {
+  if (state.info || state.busy || state.connecting) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const pairs = portsByName();
+    if (!pairs.length || state.info || state.busy) return;
+    const pair = pairs[Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)))];
+    if (await connectTo(pair, true)) return;
+    await sleep(1000);
+  }
+  if (!state.info && !state.busy)
+    screen("CHOMPI is there, but the launcher isn't answering. Power-cycle it with the launcher showing; this page connects by itself.", "idle");
 }
 
 $("connect").addEventListener("click", async () => {
@@ -448,12 +483,15 @@ function refreshPorts(connectNow) {
   sel.replaceChildren(...pairs.map((p, i) => new Option(p.name, i)));
   sel.hidden = pairs.length < 2;
   if (!connectNow) {
-    if (state.pair && !pairs.some((p) => p.name === state.pair.name) && !state.busy) {
+    /* a device came or went (one event per port, so wait for them to settle) */
+    if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
       state.info = null;
       $("step-connect").classList.remove("done");
-      screen("CHOMPI went away. Plug it back in and connect again.", "idle");
+      screen("CHOMPI went away. Turn it on with the launcher showing; this page connects by itself.", "idle");
       update();
     }
+    clearTimeout(state.autoTimer);
+    if (!state.info && pairs.length) state.autoTimer = setTimeout(autoConnect, 500);
     return;
   }
   if (!pairs.length) {
@@ -564,7 +602,7 @@ $("send").addEventListener("click", async () => {
     paintKeys("white", 1);
     const file = `${String(state.slot).padStart(2, "0")}_${name}.bin`;
     screen(`Stored as ${file}. CHOMPI is starting it.`, "ok");
-    show("send-result", `Stored in slot ${state.slot} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI and connect.`);
+    show("send-result", `Stored in slot ${state.slot} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI with the launcher showing; this page connects by itself.`);
     $("step-send").classList.add("done");
     state.info = null; // the launcher is gone until the next power-on
     $("step-connect").classList.remove("done");
