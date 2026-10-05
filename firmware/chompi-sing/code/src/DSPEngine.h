@@ -353,6 +353,7 @@ namespace daisy
                 else if(gate_hold_ > 0)
                     gate_hold_--;
                 harmonizer.SetGateOpen(gate_hold_ > 0);
+                harmonizer.SetSung(pitch_.Voiced(), pitch_.Note());
 
                 if(harmonizer.Active())
                     harmonizer.Process(live, mic, out[0], out[1], size);
@@ -525,9 +526,14 @@ namespace daisy
             return pitch_.Voiced();
         }
 
-        /* SING: "your voice is the top note" or relative to middle C (menu) */
-        void ToggleTopMode() { harmonizer.SetTopMode(!harmonizer.TopMode()); }
-        bool TopMode() const { return harmonizer.TopMode(); }
+        /* SING: chord mode, keys -> top note -> relative (menu) */
+        void CycleChordMode()
+        {
+            using M = chompi::Harmonizer<7>::ChordMode;
+            const M m = harmonizer.Mode();
+            harmonizer.SetMode(m == M::Keys ? M::Top : m == M::Top ? M::Relative : M::Keys);
+        }
+        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 keys, 1 top, 2 relative
 
         /* SING: voice gate on/off (menu) */
         void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }

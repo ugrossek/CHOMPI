@@ -45,8 +45,10 @@ namespace chompi
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
             latch_    = false;
-            top_mode_ = true;
+            mode_     = ChordMode::Keys;
             top_      = 0.f;
+            sung_     = 60.f;
+            heard_any_ = false;
 
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
@@ -141,19 +143,39 @@ namespace chompi
         bool GateOn() const { return gate_on_; }
         void SetGateOpen(bool open) { gate_open_ = open; }
 
-        /** "Your voice is the top note" (on) or relative to middle C (off).
-         *  On: the highest held key stands for the sung note, and the other
+        /** Top mode, "your voice is the top note": the highest held key stands for the sung note, and the other
          *  keys sound at their distance below it, so a chord is played with
          *  the melody note on top, as a pianist voices it: G-C-E puts the
          *  voice on the third of C major. The top key itself is the voice and
-         *  adds nothing. Off: every key shifts the voice by its distance from
-         *  middle C. Neither needs to know what is sung. */
-        void SetTopMode(bool on)
+         *  adds nothing. Doesn't need to know what is sung. */
+        /** How keys turn into voices:
+         *  Keys:     each key sounds its own note, made from the voice,
+         *            whatever is sung (like a vocoder; needs the detector)
+         *  Top:      see above
+         *  Relative: each key shifts the voice by its distance from middle C */
+        enum class ChordMode { Keys, Top, Relative };
+        void SetMode(ChordMode m)
         {
-            top_mode_ = on;
+            mode_ = m;
             UpdateTop(true);
         }
-        bool TopMode() const { return top_mode_; }
+        ChordMode Mode() const { return mode_; }
+
+        /** keys mode: the detected sung pitch (MIDI note, fractional), once
+         *  per block. Smoothed a little; kept through unvoiced gaps. */
+        void SetSung(bool voiced, float note)
+        {
+            if (mode_ != ChordMode::Keys)
+                return;
+            if (voiced)
+            {
+                sung_ = heard_any_ ? sung_ + (note - sung_) * kSungSmooth : note;
+                heard_any_ = true;
+            }
+            for (size_t i = 0; i < kVoices; i++)
+                if (voices_[i].gate || voices_[i].env > 0.f)
+                    UpdateRatio(voices_[i], i);
+        }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
@@ -340,7 +362,9 @@ namespace chompi
          *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            v.shift = top_mode_ ? v.semis - top_ : v.semis;
+            v.shift = mode_ == ChordMode::Top  ? v.semis - top_
+                    : mode_ == ChordMode::Keys ? (60.f + v.semis) - sung_
+                                               : v.semis;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
         }
@@ -365,7 +389,7 @@ namespace chompi
 
         bool IsTop(const Voice &v) const
         {
-            return top_mode_ && v.gate && v.semis == top_;
+            return mode_ == ChordMode::Top && v.gate && v.semis == top_;
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -419,8 +443,12 @@ namespace chompi
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
-        bool             latch_, top_mode_;
-        float            top_; // semis of the top key, top mode
+        bool             latch_;
+        ChordMode        mode_;
+        float            top_;  // semis of the top key, top mode
+        float            sung_; // smoothed sung note, keys mode
+        bool             heard_any_;
+        static constexpr float kSungSmooth = .12f; // per 1 ms block: ~8 ms
         float            sr_, transpose_, level_, doubler_, spread_;
         float            lfo_[2];
         size_t           chorus_w_;

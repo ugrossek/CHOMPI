@@ -174,11 +174,13 @@ namespace chompi
 
             // SING: no preset keys (TAPE: save / copy / erase)
             SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            // KEY_24: "your voice is the top note" gold, relative to middle C dim
-            if(fx_->TopMode())
-                SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]);
-            else
-                SetSmtLedFloat(8, sing_gold[0] * .08f, sing_gold[1] * .08f, sing_gold[2] * .08f);
+            // KEY_24: chord mode, keys gold, top note coral, relative dim
+            switch(fx_->ChordModeIndex())
+            {
+                case 0: SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]); break;
+                case 1: SetSmtLedFloat(8, sing_coral[0], sing_coral[1], sing_coral[2]); break;
+                default: SetSmtLedFloat(8, sing_gold[0] * .08f, sing_gold[1] * .08f, sing_gold[2] * .08f); break;
+            }
             // KEY_25: voice gate, rose when on
             if(fx_->VoiceGate())
                 SetSmtLedFloat(9, sing_rose[0], sing_rose[1], sing_rose[2]);
@@ -454,9 +456,9 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase
                 break;
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // SING: top-note / relative chords
+            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // SING: chord mode
                 if(rising)
-                    fx_->ToggleTopMode();
+                    fx_->CycleChordMode();
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_25): // SING: voice gate
