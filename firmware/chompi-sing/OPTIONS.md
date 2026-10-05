@@ -26,7 +26,7 @@ None of them exists yet.
 | Chord octave | **nearest**: each chord note in the octave closest to the sung pitch · **pressed key**: voices in the octave of the key | nearest | Absolute chords. Nearest keeps shifts small (less warble, no chipmunks when singing low and playing high); pressed key is more predictable. |
 | Voice gate at power-on | on / off | off | Harmonies only while you sing; switched in the menu (top black key). |
 | Voice gate hold | ms | 150 | How long the gate waits in a pause before it closes. |
-| Voice gate level | input level | ~−34 dB | What counts as "sound" for opening the gate; depends on the mic and the room. |
+| Voice gate level | input level | ~−37 dB | What counts as "sound" for opening the gate; depends on the mic and the room. |
 | Dry voice "off" at power-on | add to Monitor Position | headphones | SING's own monitor choice, see above. |
 | Sung-note light | on / off | on | The key of the note you sing lights up. |
 | Value bar on the white keys | on / off | on | Shows a knob's position after turning it. Some people find it busy. |

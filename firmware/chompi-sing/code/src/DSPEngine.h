@@ -333,9 +333,18 @@ namespace daisy
             {
                 float live[size];
                 const bool mic = in_source == InputSource::MIC;
+                /* the built-in mic reaches the harmonies kMicPreDelay late,
+                   so the key-click duck, triggered on the first contact
+                   change about a block after the click starts, covers the
+                   click from its first sample */
                 for(size_t i = 0; i < size; i++)
-                    live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
+                {
+                    mic_delay_[mic_delay_w_] = in[0][i];
+                    const float m = mic_delay_[(mic_delay_w_ - kMicPreDelay) & (kMicDelayLen - 1)];
+                    mic_delay_w_ = (mic_delay_w_ + 1) & (kMicDelayLen - 1);
+                    live[i] = mic ? m * ingain_ * kMicGain * duck[i]
                                   : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
+                }
                 pitch_.Process(live, size);
 
                 /* voice gate: opens at once on input level (the detector
@@ -524,6 +533,9 @@ namespace daisy
             note = pitch_.Note();
             return pitch_.Voiced();
         }
+
+        /* SING: a key contact changed (raw, before debouncing) */
+        void KeyContact() { harmonizer.KeyContact(); }
 
         /* SING: voice gate on/off (menu) */
         void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }
@@ -768,10 +780,16 @@ namespace daisy
         const float *duck_ = nullptr; // SING: this block's mic ducking
         chompi::PitchDetector pitch_;
         static constexpr int   kGateHoldBlocks = 150;   // ~150 ms at 48-sample blocks
-        static constexpr float kGateLevel      = .02f;  // input peak that opens it, ~-34 dB
+        static constexpr float kGateLevel      = .014f; // input peak that opens it, ~-37 dB
         static constexpr float kGateEnvFall    = .93f;  // per block: ~14 ms to fall by 1/e
         int   gate_hold_ = 0;
         float gate_env_  = 0.f;
+
+        /* SING: built-in mic into the harmonies, kMicPreDelay samples late */
+        static constexpr int kMicDelayLen = 256;  // power of two
+        static constexpr int kMicPreDelay = 96;   // 2 ms
+        float mic_delay_[kMicDelayLen] = {};
+        int   mic_delay_w_ = 0;
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;

@@ -71,15 +71,19 @@ namespace chompi
             duck_      = 1.f;
             duck_hold_ = 0;
             duck_len_  = int(.035f * samplerate);
-            duck_down_ = 1.f / (.003f * samplerate);
+            duck_down_ = 1.f / (.0005f * samplerate);
             duck_up_   = 1.f / (.025f * samplerate);
         }
 
         /** Gain for the built-in mic, one value per sample of this block.
          *  The mic sits on the same board as the keys and hears every click,
          *  and a key press is exactly when a new voice starts. So for a moment
-         *  after every key change the mic is pulled down (3 ms), held, and
-         *  brought back (25 ms). */
+         *  after every key change (KeyContact(), on the raw contact) the mic
+         *  is pulled down (0.5 ms), held, and brought back (25 ms). */
+        /** A key contact changed, before debouncing (chompi_main.cpp):
+         *  duck now, ~8 ms before the debounced press or release arrives. */
+        void KeyContact() { duck_hold_ = duck_len_; }
+
         void Duck(float *gain, size_t size)
         {
             for (size_t i = 0; i < size; i++)
