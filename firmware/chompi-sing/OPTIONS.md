@@ -4,9 +4,7 @@ SING reads `options.json` from its folder on the card (`/SING`) once at power-on
 like TAPE. It never writes settings while running: an earlier try at saving the knobs
 during play stalled the unit for seconds, so knobs always start from their defaults.
 
-## Already in `options.json`
-
-Mostly inherited from TAPE; "Chord Octave" is SING's own.
+## Already in `options.json` (inherited from TAPE)
 
 | Name | Values | In SING |
 |---|---|---|
@@ -17,7 +15,6 @@ Mostly inherited from TAPE; "Chord Octave" is SING's own.
 | Pitch Quantize In Shift Menu | true/false | looper pitch steps in the menu or on the page (TAPE's looper) |
 | Split Delay | true/false | TAPE's split delay on the effects knob |
 | Record Latch | true/false | from TAPE; SING doesn't use it |
-| Chord Octave | "nearest" / "key" | absolute chords: each note in the octave nearest the sung note (default), or in the octave of the pressed key |
 
 ## Candidates
 
@@ -26,6 +23,7 @@ None of them exists yet.
 
 | Setting | Choices | Default | Why |
 |---|---|---|---|
+| Your note in the chord | **top**: the highest held key is your voice, harmonies below · **bottom**: the lowest held key is your voice, harmonies above | top | Top-note mode (menu, second black key from the right). Bottom suits harmonies above a low voice. |
 | Voice gate at power-on | on / off | off | Harmonies only while you sing; switched in the menu (top black key). |
 | Voice gate hold | ms | 150 | How long the gate waits in a pause before it closes. |
 | Voice gate level | input level | ~−37 dB | What counts as "sound" for opening the gate; depends on the mic and the room. |

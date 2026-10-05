@@ -3,7 +3,6 @@
 #include "daisysp.h"
 #include "MicFilter.h"
 #include "PitchShifter.h"
-#include "ChordTarget.h"
 
 namespace chompi
 {
@@ -39,15 +38,15 @@ namespace chompi
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
                 voices_[v].shift = 0.f;
+                voices_[v].heard = 1.f;
                 voices_[v].pan   = 0.f;
             }
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
             latch_    = false;
-            absolute_ = true;
-            nearest_  = true;
-            sung_     = SungReference();
+            top_mode_ = true;
+            top_      = 0.f;
 
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
@@ -142,31 +141,19 @@ namespace chompi
         bool GateOn() const { return gate_on_; }
         void SetGateOpen(bool open) { gate_open_ = open; }
 
-        /** Absolute chords (on) or relative (off). Absolute: a key asks for
-         *  its own note, and the voice shifts the sung note there, so C major
-         *  sounds C major whatever is sung. Relative: a key shifts the voice
-         *  by its distance from middle C. */
-        void SetAbsolute(bool on)
+        /** "Your voice is the top note" (on) or relative to middle C (off).
+         *  On: the highest held key stands for the sung note, and the other
+         *  keys sound at their distance below it, so a chord is played with
+         *  the melody note on top, as a pianist voices it: G-C-E puts the
+         *  voice on the third of C major. The top key itself is the voice and
+         *  adds nothing. Off: every key shifts the voice by its distance from
+         *  middle C. Neither needs to know what is sung. */
+        void SetTopMode(bool on)
         {
-            absolute_ = on;
-            UpdateAllRatios();
+            top_mode_ = on;
+            UpdateTop(true);
         }
-        bool Absolute() const { return absolute_; }
-
-        /** absolute chords: each note in the octave nearest the sung note
-         *  (on), or in the octave of the pressed key (off) */
-        void SetNearest(bool on)
-        {
-            nearest_ = on;
-            UpdateAllRatios();
-        }
-
-        /** the pitch detector's latest, once per block */
-        void SetSung(bool voiced, float note)
-        {
-            if (sung_.Update(voiced, note) && absolute_)
-                UpdateAllRatios();
-        }
+        bool TopMode() const { return top_mode_; }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
@@ -176,6 +163,7 @@ namespace chompi
             {
                 v->gate    = false;     // latched: a second press lets it go
                 duck_hold_ = duck_len_;
+                UpdateTop(false);
                 return;
             }
             if (!v) v = FindFree();
@@ -184,8 +172,9 @@ namespace chompi
                 v->shifter.Reset();     // fresh history: fades in from silence
             v->key   = key;
             v->semis = semis;
-            UpdateRatio(*v, size_t(v - voices_));
             v->gate  = true;
+            UpdateTop(false);
+            UpdateRatio(*v, size_t(v - voices_));
             duck_hold_ = duck_len_;
         }
 
@@ -195,7 +184,10 @@ namespace chompi
             if (latch_)
                 return; // latched: released by the next press of the key
             if (Voice *v = Find(key))
+            {
                 v->gate = false;
+                UpdateTop(false);
+            }
         }
 
         /** toggle switch: keep the voices of the held keys sounding after
@@ -213,6 +205,7 @@ namespace chompi
         {
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].gate = false;
+            UpdateTop(false);
         }
 
         /** a key that is held down right now (not just ringing out) */
@@ -266,8 +259,14 @@ namespace chompi
                 const float gl = cosf(a) * 1.4142136f * level_;
                 const float gr = sinf(a) * 1.4142136f * level_;
 
+                /* in top mode the top key is the singer: silent, fading so a
+                   voice that stops or starts being the top doesn't click */
+                const float heard_target = IsTop(vo) ? 0.f : 1.f;
+                const float heard_step   = (heard_target - vo.heard) / float(size);
+
                 for (size_t i = 0; i < size; i++)
                 {
+                    vo.heard += heard_step;
                     if (vo.gate)
                         vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
                     else
@@ -275,8 +274,8 @@ namespace chompi
 
                     float l = in_[i], r = in_[i];
                     vo.shifter.Process(vo.ratio, &l, &r);
-                    hl[i] += l * vo.env * gl;
-                    hr[i] += r * vo.env * gr;
+                    hl[i] += l * vo.env * vo.heard * gl;
+                    hr[i] += r * vo.env * vo.heard * gr;
                 }
                 if (!vo.gate && vo.env <= 0.f)
                     vo.key = -1;
@@ -331,31 +330,42 @@ namespace chompi
             float              ratio;
             float              semis; // the key, from middle C
             float              shift; // semitones this voice shifts by, before transpose
+            float              heard; // 0 while it is the top key in top mode
             float              pan;
             float              env;
             bool               gate;
         };
 
-        /** shift = the key's interval (relative) or its note minus the sung
-         *  note (absolute), plus transpose, plus a few cents of alternating
-         *  detune when the doubler is up, so stacked voices thicken */
+        /** pitch = key + transpose, plus a few cents of alternating detune
+         *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            if (absolute_)
-            {
-                const int key_note = 60 + int(lroundf(v.semis));
-                v.shift = float(ChordTarget(key_note, sung_.note, nearest_) - sung_.note);
-            }
-            else
-                v.shift = v.semis;
+            v.shift = top_mode_ ? v.semis - top_ : v.semis;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
         }
 
-        void UpdateAllRatios()
+        /** the highest held key, in top mode; held voices follow it when it
+         *  changes (ringing-out ones keep their pitch). all: update every
+         *  held voice anyway (the mode changed). */
+        void UpdateTop(bool all)
         {
+            float top = -1000.f;
             for (size_t i = 0; i < kVoices; i++)
-                UpdateRatio(voices_[i], i);
+                if (voices_[i].gate && voices_[i].semis > top)
+                    top = voices_[i].semis;
+            const bool moved = top > -1000.f && top != top_;
+            if (moved)
+                top_ = top;
+            if (moved || all)
+                for (size_t i = 0; i < kVoices; i++)
+                    if (voices_[i].gate)
+                        UpdateRatio(voices_[i], i);
+        }
+
+        bool IsTop(const Voice &v) const
+        {
+            return top_mode_ && v.gate && v.semis == top_;
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -409,8 +419,8 @@ namespace chompi
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
-        bool             latch_, absolute_, nearest_;
-        SungReference    sung_;
+        bool             latch_, top_mode_;
+        float            top_; // semis of the top key, top mode
         float            sr_, transpose_, level_, doubler_, spread_;
         float            lfo_[2];
         size_t           chorus_w_;

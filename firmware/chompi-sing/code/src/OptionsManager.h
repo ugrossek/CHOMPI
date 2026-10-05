@@ -38,7 +38,6 @@ class OptionsManager
         monitor_position = 0;
         pitch_shift_quantization = true;
         delay_split = false;
-        chord_nearest = true;
 
         /** TODO: make sure the open settings are correct */
         const char fname[32] = "options.json";
@@ -113,13 +112,6 @@ class OptionsManager
         sprintf(append, "%s", delay_split ? "true" : "false");
         StrAppend(opt_file, append);
 
-        // SING: chord octave for absolute chords, "nearest" or "key"
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Chord Octave\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "\"%s\"", chord_nearest ? "nearest" : "key");
-        StrAppend(opt_file, append);
-
         // footer
         sprintf(append, "\n\t\t}\n\t]\n}");
         StrAppend(opt_file, append);
@@ -156,7 +148,7 @@ class OptionsManager
                 json_res = JSON_Search(
                     opt_file, len, query, strlen(query), &value, &value_len);
                 if(json_res != JSONSuccess)
-                    continue; // an older file with fewer entries: keep the default
+                    continue; // fewer entries than expected: keep the defaults
                 char save = value[value_len];
                 value[value_len] = '\0';
 
@@ -176,8 +168,6 @@ class OptionsManager
                     field = 5;
                 if(strcmp(value, "Split Delay") == 0 && json_res == JSONSuccess)
                     field = 6;
-                if(strcmp(value, "Chord Octave") == 0 && json_res == JSONSuccess)
-                    field = 7;
 
                 value[value_len] = save;
 
@@ -201,20 +191,6 @@ class OptionsManager
                         delay_split = true;
 
                     value[value_len] = save;
-                }
-                else if(field == 7)
-                {
-                    sprintf(query, "chompi[%d].value", i);
-                    json_res = JSON_Search(
-                        opt_file, len, query, strlen(query), &value, &value_len);
-                    if(json_res == JSONSuccess)
-                    {
-                        save = value[value_len];
-                        value[value_len] = '\0';
-                        if(strcmp(value, "key") == 0)
-                            chord_nearest = false;
-                        value[value_len] = save;
-                    }
                 }
                 else if(field == 1 || field == 2 || field == 4)
                 {
@@ -253,7 +229,6 @@ class OptionsManager
     bool tape_slew_on;
     uint8_t monitor_position;
     bool delay_split;
-    bool chord_nearest; // SING: absolute chords in the octave nearest the voice
     
     /**
     * if true, the shift menu is quantized, and normal is not.
@@ -265,7 +240,7 @@ class OptionsManager
         FIL fptr_opt;
 
         static const size_t kOptFileSize = 4096;
-        static const size_t kNumOptions = 8;
+        static const size_t kNumOptions = 7;
         char opt_file[kOptFileSize];
 };
 } // namespace chompi
