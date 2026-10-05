@@ -7,32 +7,44 @@
 <meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper: #E6ECF1;
-    --ink: #1D1B3A;
-    --ink-soft: #55536F;
-    --body: #2B2766;
-    --body-edge: #1C1948;
-    --key: #F6F5EF;
-    --key-shade: #C9C7BC;
+    --paper: #FAF6F0;
+    --card: #FFFFFF;
+    --ink: #1B1815;
+    --ink-soft: #6E655B;
+    --line: #EAE1D5;
+    --coral: #E5564A;
+    /* step tabs, like the pages on a CHOMPI cheat sheet */
+    --tab-1: #FF9431;
+    --tab-2: #FF5C7C;
+    --tab-3: #3FAEFF;
+    --tab-4: #39D27E;
+    /* the instrument */
+    --body: #2B2723;
+    --body-edge: #171411;
+    --screen: #171411;
+    --screen-ink: #F4EADC;
+    --key: #FFFDF8;
+    --key-shade: #D8CFC2;
+    /* key LEDs: the colours CHOMPI itself shows while it takes a firmware */
     --cyan: #18D2DF;
     --amber: #FFAE1F;
     --pink: #FF4F8B;
-    --line: #C3CDD6;
     --field: #FFFFFF;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #15142B;
-      --ink: #ECEBF7;
-      --ink-soft: #A3A1C2;
-      --body: #2B2766;
-      --body-edge: #0E0C26;
-      --line: #34325A;
-      --field: #1E1C3C;
+      --paper: #1A1714;
+      --card: #24201C;
+      --ink: #F4EDE3;
+      --ink-soft: #B3A898;
+      --line: #3A342D;
+      --body: #120F0D;
+      --body-edge: #000000;
+      --field: #1A1714;
       color-scheme: dark;
     }
   }
@@ -43,29 +55,35 @@
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-family: "Schibsted Grotesk", system-ui, sans-serif;
     font-size: 17px;
-    line-height: 1.5;
-    font-variation-settings: "wdth" 100;
+    line-height: 1.55;
   }
-  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 96px; }
+  main { max-width: 780px; margin: 0 auto; padding: 48px 16px 96px; }
 
+  .masthead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 18px; }
   h1 {
-    font-size: clamp(3rem, 11vw, 5.6rem);
-    line-height: .88;
-    font-weight: 800;
-    font-variation-settings: "wdth" 75, "opsz" 96;
-    letter-spacing: -.02em;
-    margin: 0 0 18px;
+    font-size: clamp(2.6rem, 9vw, 4.4rem);
+    line-height: .95;
+    font-weight: 900;
+    letter-spacing: -.035em;
+    margin: 0;
   }
-  .lede { max-width: 34em; margin: 0 0 14px; color: var(--ink-soft); font-size: 1.12rem; }
+  .badge {
+    display: inline-flex; align-items: center;
+    background: var(--coral); color: #FFFFFF;
+    border-radius: 10px; padding: 7px 14px;
+    font-weight: 700; font-size: 1.02rem;
+    box-shadow: 0 3px 0 color-mix(in srgb, var(--coral) 70%, #000);
+  }
+  .lede { max-width: 34em; margin: 0 0 14px; font-size: 1.14rem; }
   .credit { max-width: 40em; margin: 0 0 28px; color: var(--ink-soft); font-size: .98rem; }
   .credit a { color: inherit; }
 
   /* ---- the instrument -------------------------------------------------- */
   .chompi {
     background: var(--body);
-    border-radius: 22px 22px 34px 34px;
+    border-radius: 20px 20px 30px 30px;
     padding: 18px 18px 22px;
     box-shadow: 0 6px 0 var(--body-edge);
     margin: 4px 0 18px;
@@ -76,11 +94,11 @@
     padding: 8px 14px;
     margin-bottom: 16px;
     border-radius: 10px;
-    background: #12102E;
-    color: #DCDAF5;
+    background: var(--screen);
+    color: var(--screen-ink);
     font-size: .98rem;
   }
-  .screen .dot { width: 10px; height: 10px; border-radius: 50%; background: #4A4775; flex: none; }
+  .screen .dot { width: 10px; height: 10px; border-radius: 50%; background: #4D463F; flex: none; }
   .screen[data-mood="ok"]   .dot { background: var(--cyan);  box-shadow: 0 0 10px var(--cyan); }
   .screen[data-mood="busy"] .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
   .screen[data-mood="bad"]  .dot { background: var(--pink);  box-shadow: 0 0 10px var(--pink); }
@@ -96,112 +114,138 @@
     box-shadow: inset 0 -4px 0 var(--key-shade), inset 0 0 0 1px var(--key-shade);
     cursor: pointer;
     font: inherit;
-    color: #6E6C85;
+    color: #857B6F;
     transition: transform .08s;
   }
   .key:disabled { cursor: default; }
   .key:not(:disabled):active { transform: translateY(2px); }
   .key .n {
     position: absolute; left: 0; right: 0; bottom: 14%;
-    font-size: clamp(.55rem, 1.9vw, .8rem); font-weight: 600; line-height: 1;
+    font-size: clamp(.55rem, 1.9vw, .8rem); font-weight: 700; line-height: 1;
   }
   /* the LED under the key */
   .key::before {
     content: ""; position: absolute; left: 50%; top: 16%;
     width: 30%; aspect-ratio: 1; translate: -50% 0;
     border-radius: 50%;
-    background: var(--led, #DEDCD2);
+    background: var(--led, #E6DDD0);
     box-shadow: 0 0 var(--glow, 0) var(--led, transparent);
   }
   .key[data-led="cyan"]  { --led: var(--cyan);  --glow: 12px; }
   .key[data-led="amber"] { --led: var(--amber); --glow: 12px; }
   .key[data-led="white"] { --led: #FFFFFF;      --glow: 14px; }
   .key[data-led="pink"]  { --led: var(--pink);  --glow: 12px; }
-  .key[aria-pressed="true"] { background: #FFFDF2; box-shadow: inset 0 -4px 0 var(--amber), 0 0 0 3px var(--amber); color: #1D1B3A; }
-  .key:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+  .key[aria-pressed="true"] { background: #FFF6E5; box-shadow: inset 0 -4px 0 var(--amber), 0 0 0 3px var(--amber); color: #1B1815; }
+  .key:focus-visible { outline: 3px solid var(--tab-3); outline-offset: 3px; }
   @media (prefers-reduced-motion: no-preference) {
     .key[data-led="amber"] { animation: write 0.9s ease-in-out infinite alternate; }
     @keyframes write { to { --glow: 2px; filter: brightness(.9); } }
   }
 
-  /* ---- the steps -------------------------------------------------------- */
-  ol.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+  /* ---- the steps: one card each, a coloured tab on top ------------------ */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
   .steps > li {
-    counter-increment: step;
-    display: grid; grid-template-columns: 52px 1fr; gap: 0 14px;
-    padding: 22px 0;
-    border-top: 2px solid var(--line);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
   }
-  .steps > li::before {
-    content: counter(step);
-    font-size: 2.6rem; line-height: 1; font-weight: 800;
-    font-variation-settings: "wdth" 75, "opsz" 96;
-    color: var(--ink-soft);
+  .steps > li:nth-child(1) { --tab: var(--tab-1); }
+  .steps > li:nth-child(2) { --tab: var(--tab-2); }
+  .steps > li:nth-child(3) { --tab: var(--tab-3); }
+  .steps > li:nth-child(4) { --tab: var(--tab-4); }
+  .steps h2 {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0; padding: 10px 16px;
+    background: var(--tab); color: #1B1815;
+    font-size: 1.2rem; font-weight: 800; letter-spacing: -.01em;
   }
-  .steps > li.done::before { color: var(--cyan); }
-  .steps h2 { margin: 4px 0 6px; font-size: 1.35rem; font-weight: 700; }
+  .steps h2 .num {
+    display: inline-grid; place-items: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: #1B1815; color: #FFFFFF;
+    font-size: 1rem; font-weight: 800;
+  }
+  /* done: the number turns into a tick, drawn (the font has no ✓) */
+  .steps > li.done h2 .num { font-size: 0; }
+  .steps > li.done h2 .num::after {
+    content: ""; width: 7px; height: 13px; margin-top: -3px;
+    border: solid #FFFFFF; border-width: 0 3px 3px 0; rotate: 45deg;
+  }
+  .steps .inner { padding: 18px 18px 20px; }
   .steps p { margin: 0 0 12px; max-width: 36em; }
   .hint { color: var(--ink-soft); font-size: .95rem; }
   .hint a, .lede a, .credit a { color: inherit; }
-  .warn { color: var(--pink); font-weight: 600; }
+  .warn { color: var(--coral); font-weight: 700; }
 
   button.act, label.act {
     display: inline-flex; align-items: center; gap: 8px;
-    border: 0; border-radius: 999px;
-    padding: 11px 22px;
+    border: 0; border-radius: 12px;
+    padding: 11px 20px;
     background: var(--ink); color: var(--paper);
     font: inherit; font-weight: 700;
     cursor: pointer;
   }
-  button.act.big { background: var(--amber); color: #1D1B3A; font-size: 1.15rem; padding: 14px 28px; }
+  button.act.big {
+    background: var(--coral); color: #FFFFFF; font-size: 1.15rem; padding: 14px 28px;
+    box-shadow: 0 4px 0 color-mix(in srgb, var(--coral) 70%, #000);
+  }
+  button.act.big:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 color-mix(in srgb, var(--coral) 70%, #000); }
   button.act:disabled { opacity: .35; cursor: not-allowed; }
   button.act:focus-visible, label.act:focus-within, button.stock:focus-visible, input:focus-visible, select:focus-visible {
-    outline: 3px solid var(--cyan); outline-offset: 2px;
+    outline: 3px solid var(--tab-3); outline-offset: 2px;
   }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
   .drop {
     border: 2px dashed var(--line); border-radius: 14px;
     padding: 18px; margin-bottom: 12px;
+    background: var(--paper);
   }
-  .drop.over { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+  .drop.over { border-color: var(--tab-2); background: color-mix(in srgb, var(--tab-2) 10%, var(--paper)); }
   .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
   button.stock {
-    border: 2px solid var(--ink); border-radius: 999px;
-    background: transparent; color: var(--ink);
-    padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--ink);
+    padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer;
   }
-  button.stock[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  button.stock[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
   .chosen, code { font-family: inherit; font-weight: 700; }
 
   input[type="text"], select {
     font: inherit; color: var(--ink);
     background: var(--field);
-    border: 2px solid var(--line); border-radius: 10px;
+    border: 1px solid var(--line); border-radius: 10px;
     padding: 8px 12px;
   }
   input[type="text"] { width: 12em; text-transform: uppercase; letter-spacing: .03em; }
-  .field { display: grid; gap: 4px; }
+  .field { display: grid; gap: 4px; font-weight: 600; }
 
   .result { margin-top: 14px; font-weight: 600; }
-  .result.bad { color: var(--pink); }
+  .result.bad { color: var(--coral); }
 
   .notice {
-    border: 2px solid var(--pink); border-radius: 14px;
-    padding: 14px 18px; margin: 0 0 18px; max-width: 40em;
+    background: color-mix(in srgb, var(--coral) 8%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--coral) 40%, var(--line));
+    border-radius: 14px;
+    padding: 14px 18px; margin: 0 0 18px;
   }
-  .notice strong { color: var(--pink); }
+  .notice strong { color: var(--coral); }
   .notice p { margin: 0; }
-  details.setup { margin: 0 0 40px; max-width: 40em; }
+  details.setup {
+    margin: 0 0 28px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 18px;
+  }
   details.setup summary { cursor: pointer; font-weight: 700; }
-  details.setup ol { margin: 12px 0 0; padding-left: 1.4em; display: grid; gap: 8px; }
+  details.setup ol { margin: 12px 0 4px; padding-left: 1.4em; display: grid; gap: 8px; }
   details.setup a, .notice a { color: inherit; }
   details.log { margin-top: 40px; }
   details.log summary { cursor: pointer; color: var(--ink-soft); }
   details.log pre {
     max-height: 280px; overflow: auto;
     font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .78rem;
-    background: var(--field); border: 2px solid var(--line); border-radius: 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
     padding: 12px; white-space: pre-wrap; word-break: break-all;
   }
   footer { margin-top: 56px; color: var(--ink-soft); font-size: .92rem; max-width: 40em; }
@@ -216,16 +260,16 @@
     /* too small for a dot above the number: the LED becomes a strip along the top */
     .key::before { top: 3px; width: 56%; height: 3px; aspect-ratio: auto; border-radius: 2px; }
     .key .n { bottom: 22%; }
-    .steps > li { grid-template-columns: 34px 1fr; gap: 0 10px; }
-    .steps > li::before { font-size: 2rem; }
-    /* the keybed takes the full width, under the step number too */
-    .steps .chompi { margin-left: -44px; }
+    .steps .inner { padding: 14px 12px 16px; }
   }
 </style>
 </head>
 <body>
 <main>
-  <h1>Feed the CHOMPI</h1>
+  <div class="masthead">
+    <h1>Feed the CHOMPI</h1>
+    <span class="badge">Firmware over USB</span>
+  </div>
   <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
   <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. Firmware upload over USB is part of it since <a href="https://github.com/sfaber02/CHOMPI/releases/latest">launcher v1.1</a>.</p>
 
@@ -247,8 +291,8 @@
 
   <ol class="steps">
     <li id="step-connect">
-      <div>
-        <h2>Connect</h2>
+      <h2><span class="num">1</span>Connect</h2>
+      <div class="inner">
         <p>Turn CHOMPI on with the launcher showing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes.</p>
         <div class="row">
           <button class="act" id="connect">Connect CHOMPI</button>
@@ -259,8 +303,8 @@
     </li>
 
     <li id="step-firmware">
-      <div>
-        <h2>Choose a firmware</h2>
+      <h2><span class="num">2</span>Choose a firmware</h2>
+      <div class="inner">
         <div class="drop" id="drop">
           <p>Drop a <code>.bin</code> here, or</p>
           <div class="row">
@@ -274,8 +318,8 @@
     </li>
 
     <li id="step-slot">
-      <div>
-        <h2>Pick a slot and a name</h2>
+      <h2><span class="num">3</span>Pick a slot and a name</h2>
+      <div class="inner">
         <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
         <section class="chompi" aria-label="CHOMPI keybed: the slots">
           <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
@@ -294,8 +338,8 @@
     </li>
 
     <li id="step-send">
-      <div>
-        <h2>Send it</h2>
+      <h2><span class="num">4</span>Send it</h2>
+      <div class="inner">
         <p>CHOMPI's keys fill cyan as the firmware arrives and amber while it's written to the card. Then it starts.</p>
         <button class="act big" id="send" disabled>Send</button>
         <p class="result" id="send-result" hidden></p>
