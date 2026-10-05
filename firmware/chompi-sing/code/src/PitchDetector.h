@@ -6,11 +6,13 @@ namespace chompi
 {
     /** Pitch of the live voice, YIN (de Cheveigné & Kawahara 2002).
      *
-     *  Feed it the mono input at 48 kHz, block by block. It lowpasses and
-     *  decimates to 12 kHz, and every kHop samples there (4 ms) estimates the
-     *  pitch over the last kWin + kMaxLag samples (29 ms). The work of one
-     *  estimate is spread over the audio blocks of a hop, so no single block
-     *  carries all of it.
+     *  Two halves. Process(), in the audio callback, lowpasses the mono
+     *  input, decimates it to 12 kHz into a ring and every kHop samples
+     *  there (4 ms) marks a new frame: cheap. Update(), from the main loop,
+     *  estimates the pitch over the latest kWin + kMaxLag samples (29 ms):
+     *  the expensive part, kept out of the audio callback, where it took
+     *  the time the harmony voices need. If the main loop falls behind it
+     *  just takes the latest frame.
      *
      *  Range 80 Hz .. 1 kHz. The lowest pitch sets the frame length and so
      *  the latency: lowering it to 60 Hz would add about 8 ms.
@@ -28,7 +30,7 @@ namespace chompi
         static constexpr int   kWin    = 200;     // ~17 ms
         static constexpr int   kFrame  = kWin + kMaxLag;
         static constexpr int   kHop    = 48;      // 4 ms
-        static constexpr int   kRing   = 512;     // > kFrame + kHop, power of 2
+        static constexpr int   kRing   = 1024;    // kFrame + ~50 ms of slack, power of 2
 
         /** YIN's threshold on the normalised difference: lower is stricter */
         static constexpr float kThreshold = .15f;
@@ -48,8 +50,9 @@ namespace chompi
                 ring_[i] = 0.f;
             w_ = 0;
             hop_count_ = 0;
-            next_lag_  = kMaxLag + 1; // nothing pending
-            pending_   = false;
+            frame_end_ = 0;
+            frames_    = 0;
+            done_      = 0;
             silence_   = .003f;       // about -50 dBFS rms
             freq_ = 0.f;
             conf_ = 0.f;
@@ -80,16 +83,25 @@ namespace chompi
                 if (++hop_count_ >= kHop)
                 {
                     hop_count_ = 0;
-                    if (pending_)
-                        Work(kMaxLag); // blocks shorter than expected: catch up
-                    Snapshot();
+                    frame_end_ = w_; // a new frame ends here
+                    frames_    = frames_ + 1;
                 }
             }
+        }
 
-            /* a share of the lags per block: a hop is kHop * kDecim input
-               samples, i.e. (kHop * kDecim / size) blocks */
-            const int blocks = size ? int(kHop * kDecim / size) : 1;
-            Work(kMaxLag / (blocks > 0 ? blocks : 1) + 1);
+        /** From the main loop: estimate the pitch of the latest frame, if
+         *  there is one Update() hasn't seen. */
+        void Update()
+        {
+            const unsigned f = frames_;
+            if (f == done_)
+                return;
+            done_ = f;
+            Snapshot(frame_end_);
+            if (frames_ - f > (kRing - kFrame) / kHop - 1)
+                return; // the callback overwrote the frame while we copied it
+            Work();
+            Estimate();
         }
 
         /** Hz of the latest voiced estimate (0 before the first) */
@@ -131,10 +143,10 @@ namespace chompi
             return y;
         }
 
-        /** copy the latest frame, oldest first, and queue the lags */
-        void Snapshot()
+        /** copy the frame ending at end, oldest first */
+        void Snapshot(int end)
         {
-            int r = (w_ - kFrame) & (kRing - 1);
+            int r = (end - kFrame) & (kRing - 1);
             float e = 0.f;
             for (int i = 0; i < kFrame; i++)
             {
@@ -144,17 +156,12 @@ namespace chompi
             for (int j = 0; j < kWin; j++)
                 e += frame_[j] * frame_[j];
             rms_ = sqrtf(e / kWin);
-            next_lag_ = 1;
-            pending_  = true;
         }
 
-        /** difference function for up to n more lags; the estimate when done */
-        void Work(int n)
+        /** the difference function over all lags */
+        void Work()
         {
-            if (!pending_)
-                return;
-            const int end = next_lag_ + n - 1 < kMaxLag ? next_lag_ + n - 1 : kMaxLag;
-            for (int tau = next_lag_; tau <= end; tau++)
+            for (int tau = 1; tau <= kMaxLag; tau++)
             {
                 float d = 0.f;
                 const float *a = frame_;
@@ -165,12 +172,6 @@ namespace chompi
                     d += t * t;
                 }
                 diff_[tau] = d;
-            }
-            next_lag_ = end + 1;
-            if (next_lag_ > kMaxLag)
-            {
-                Estimate();
-                pending_ = false;
             }
         }
 
@@ -260,14 +261,17 @@ namespace chompi
         int      decim_;
         float    ring_[kRing];
         int      w_, hop_count_;
+        /* written by the callback, read by Update() in the main loop */
+        volatile int      frame_end_;
+        volatile unsigned frames_;
+        unsigned          done_;
         float    frame_[kFrame];
         float    diff_[kMaxLag + 1];
         float    cmnd_[kMaxLag + 1];
-        int      next_lag_;
-        bool     pending_;
         float    rms_, silence_;
-        float    freq_, conf_;
-        bool     voiced_;
+        /* written by Update(), read by the callback (voice gate) and the UI */
+        volatile float freq_, conf_;
+        volatile bool  voiced_;
         unsigned estimates_;
     };
 

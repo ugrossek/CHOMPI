@@ -1,4 +1,5 @@
 /* Host test for PitchDetector.h with synthetic signals.
+ * (On CHOMPI, Update() runs in the main loop; here once per block.)
  *
  *   g++ -std=c++14 -O2 -I../src pitch_test.cpp -o pitch_test && ./pitch_test
  *
@@ -53,6 +54,7 @@ static Run Analyse(std::function<float(float)> gen, std::function<float(float)> 
         for (int i = 0; i < kBlock; i++)
             blk[i] = gen((s + i) / kSr);
         pd.Process(blk.data(), kBlock);
+        pd.Update(); // the main loop's half, once per block here
         if (pd.Estimates() == last)
             continue;
         last = pd.Estimates();

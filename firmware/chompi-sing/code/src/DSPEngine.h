@@ -506,6 +506,9 @@ namespace daisy
             ProcessKeyReqs();
         }
 
+        /* SING: the pitch detector's expensive half, from the main loop */
+        void UpdatePitch() { pitch_.Update(); }
+
         /* SING: the sung pitch, for the key lights; note is a fractional
            MIDI note number, valid while it returns true */
         bool SungNote(float &note) const

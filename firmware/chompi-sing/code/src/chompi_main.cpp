@@ -212,6 +212,9 @@ void MainLoop(void* data)
         rainbow_done = true;
     }
 
+    // SING: pitch estimate, outside the audio callback
+    engine.UpdatePitch();
+
     // volatile float avg_load = meter.GetAvgCpuLoad();
     // volatile float max_load = meter.GetMaxCpuLoad();
     now = daisy::System::GetNow();
