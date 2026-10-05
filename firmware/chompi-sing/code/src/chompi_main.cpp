@@ -112,27 +112,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     }
 
     hw.ProcessAllControls();
-
-    /* SING: duck the built-in mic on the first change of any key contact,
-       before the debounce (~8 ms) lets the press or release through */
-    {
-        static bool last_raw[int(Hardware::SwId::SR_LAST)];
-        bool changed = false;
-        for(int k = 0; k < int(Hardware::SwId::SR_LAST); k++)
-        {
-            using S = Hardware::SwId; // not the toggle, not unconnected inputs
-            if(k == int(S::SW_TOG) || k == int(S::NC_1) || k == int(S::NC_2)
-               || k == int(S::NC_3) || k == int(S::NC_4) || k == int(S::NC_5)
-               || k == int(S::NC_6))
-                continue;
-            const bool raw = hw.button_sr.RawState(k);
-            changed |= raw != last_raw[k];
-            last_raw[k] = raw;
-        }
-        if(changed)
-            engine.KeyContact();
-    }
-
     ui.GenerateEvents();
     engine.Prepare();
 

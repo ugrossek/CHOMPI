@@ -38,7 +38,6 @@ namespace chompi
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
                 voices_[v].pan   = 0.f;
-                voices_[v].wait  = false;
             }
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
@@ -71,22 +70,16 @@ namespace chompi
             /* key-click ducking, see Duck() */
             duck_      = 1.f;
             duck_hold_ = 0;
-            duck_len_  = int(.020f * samplerate);
-            duck_down_ = 1.f / (.0005f * samplerate);
-            duck_up_   = 1.f / (.010f * samplerate);
+            duck_len_  = int(.035f * samplerate);
+            duck_down_ = 1.f / (.003f * samplerate);
+            duck_up_   = 1.f / (.025f * samplerate);
         }
 
         /** Gain for the built-in mic, one value per sample of this block.
          *  The mic sits on the same board as the keys and hears every click,
          *  and a key press is exactly when a new voice starts. So for a moment
-         *  after every key change (KeyContact(), on the raw contact) the mic
-         *  is pulled down (0.5 ms), held (20 ms), and brought back (10 ms).
-         *  A voice that starts during it waits for it to end (Voice::wait),
-         *  so it comes in once, after the click, not twice. */
-        /** A key contact changed, before debouncing (chompi_main.cpp):
-         *  duck now, ~8 ms before the debounced press or release arrives. */
-        void KeyContact() { duck_hold_ = duck_len_; }
-
+         *  after every key change the mic is pulled down (3 ms), held, and
+         *  brought back (25 ms). */
         void Duck(float *gain, size_t size)
         {
             for (size_t i = 0; i < size; i++)
@@ -151,24 +144,23 @@ namespace chompi
             if (latch_ && v && v->gate)
             {
                 v->gate    = false;     // latched: a second press lets it go
+                duck_hold_ = duck_len_;
                 return;
             }
             if (!v) v = FindFree();
             if (!v) v = FindQuietest(); // steal
-            v->wait = false;
             if (v->key != key || v->env <= 0.f)
-            {
                 v->shifter.Reset();     // fresh history: fades in from silence
-                v->wait = true;         // ...once the key click's duck is over
-            }
             v->key   = key;
             v->semis = semis;
             UpdateRatio(*v, size_t(v - voices_));
             v->gate  = true;
+            duck_hold_ = duck_len_;
         }
 
         void NoteOff(int key)
         {
+            duck_hold_ = duck_len_;
             if (latch_)
                 return; // latched: released by the next press of the key
             if (Voice *v = Find(key))
@@ -214,9 +206,6 @@ namespace chompi
          *  @param mic   true: apply the mic filter as TAPE's monitor does */
         void Process(const float *in, bool mic, float *outl, float *outr, size_t size)
         {
-            /* a key click's duck is on (Duck() ran before this block) */
-            const bool ducking = duck_hold_ > 0 || duck_ < .98f;
-
             /* the shifters share a per-block budget for their splice search */
             StereoPitchShifter::NewBlock(size);
 
@@ -246,14 +235,10 @@ namespace chompi
                 const float gl = cosf(a) * 1.4142136f * level_;
                 const float gr = sinf(a) * 1.4142136f * level_;
 
-                if (vo.wait && !ducking)
-                    vo.wait = false;
                 for (size_t i = 0; i < size; i++)
                 {
-                    if (vo.gate && !vo.wait)
+                    if (vo.gate)
                         vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
-                    else if (vo.gate)
-                        ; // waiting for the key click's duck to end, see Duck()
                     else
                         vo.env = vo.env - release_ > 0.f ? vo.env - release_ : 0.f;
 
@@ -315,7 +300,6 @@ namespace chompi
             float              ratio;
             float              semis;
             float              pan;
-            bool               wait;
             float              env;
             bool               gate;
         };
