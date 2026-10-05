@@ -270,8 +270,10 @@ namespace daisy
         {
             for (size_t i = 0; i < size; i++)
             {
-                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain
-                                                    * (duck_ ? duck_[i] : 1.f));
+                /* the dry voice gets a shallower key-click duck (about
+                   -12 dB) than the harmonies, so it has no audible gap */
+                const float d = duck_ ? 1.f - (1.f - duck_[i]) * .75f : 1.f;
+                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain * d);
                 sig = mic_filter_.Process(sig);
 
                 monitor[i] += sig;
