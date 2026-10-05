@@ -94,7 +94,7 @@ bool rainbow_done = false;
 bool line_in_state;
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
-    // meter.OnBlockStart();
+    engine.cpu_meter.OnBlockStart();
 
     if(booting && !ui.InTestMode())
     {
@@ -107,6 +107,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
             out[0][i] = out[1][i] = out[2][i] = out[3][i] = 0.f;
         }
 
+        engine.cpu_meter.OnBlockEnd();
         return;
     }
 
@@ -134,7 +135,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     else
         engine.Process(in, out, size);
 
-    // meter.OnBlockEnd();
+    engine.cpu_meter.OnBlockEnd();
 }
 
 void ZeroSDRAM()
@@ -346,11 +347,11 @@ int main(void)
         options.midi_ch_in, options.midi_ch_out, options.pitch_shift_quantization, options.delay_split);
 
     hw.StartLowPriorityCallback(SDCallback, 1000);
+    engine.cpu_meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
     hw.StartAudio(AudioCallback);
 
     ZeroSDRAM();
 
-    // meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
 
     loop_buff.Init(&loop_mem[0]);
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 

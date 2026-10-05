@@ -60,6 +60,13 @@ namespace chompi
             lfo_[0]    = 0.f;
             lfo_[1]    = .37f;
 
+            /* voice gate, see SetGate() */
+            gate_on_   = false;
+            gate_open_ = true;
+            gate_      = 1.f;
+            gate_up_   = 1.f / (.003f * samplerate);
+            gate_down_ = 1.f / (.060f * samplerate);
+
             /* key-click ducking, see Duck() */
             duck_      = 1.f;
             duck_hold_ = 0;
@@ -120,6 +127,16 @@ namespace chompi
         /** knob 2, page 1: held voices, ordered by pitch, go alternately left
          *  and right (lowest left), so highs and lows end up on both sides */
         void SetSpread(float v) { spread_ = v; }
+
+        /** Voice gate: when on, the harmonies only sound while the pitch
+         *  detector hears a voice (open), fading in over 3 ms and out over
+         *  60 ms; clicks, breath and room noise then make no harmonies.
+         *  Applied to the output: the detector needs ~30 ms to recognise a
+         *  voice, about what the shifter delays the voices anyway, so gating
+         *  the input would cut off the start of every syllable. */
+        void SetGateOn(bool on) { gate_on_ = on; }
+        bool GateOn() const { return gate_on_; }
+        void SetGateOpen(bool open) { gate_open_ = open; }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
@@ -235,6 +252,17 @@ namespace chompi
                     vo.key = -1;
             }
 
+            const float gate_target = !gate_on_ || gate_open_ ? 1.f : 0.f;
+            for (size_t i = 0; i < size; i++)
+            {
+                if (gate_ < gate_target)
+                    gate_ = gate_ + gate_up_ < gate_target ? gate_ + gate_up_ : gate_target;
+                else if (gate_ > gate_target)
+                    gate_ = gate_ - gate_down_ > gate_target ? gate_ - gate_down_ : gate_target;
+                hl[i] *= gate_;
+                hr[i] *= gate_;
+            }
+
             /* doubler: two slowly wandering taps (12 and 17 ms, +-3 ms),
                one per side, mixed in by the knob */
             const float lfo_inc = .35f / sr_;
@@ -341,6 +369,8 @@ namespace chompi
         float            lfo_[2];
         size_t           chorus_w_;
         float            duck_, duck_down_, duck_up_;
+        bool             gate_on_, gate_open_;
+        float            gate_, gate_up_, gate_down_;
         int              duck_hold_, duck_len_;
     };
 

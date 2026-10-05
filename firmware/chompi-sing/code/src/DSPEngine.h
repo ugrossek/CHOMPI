@@ -10,6 +10,7 @@
 #include "EnvFollower.h"
 #include "MicFilter.h"
 #include "Harmonizer.h"
+#include "PitchDetector.h"
 
 /* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
@@ -135,6 +136,7 @@ namespace daisy
 
             mic_filter_.Init(samplerate);
             harmonizer.Init(samplerate);
+            pitch_.Init();
 
             filter_.Init(samplerate);
             filter_.SetControl(.5f);
@@ -324,17 +326,28 @@ namespace daisy
             harmonizer.Duck(duck, size);
             duck_ = duck;
 
-            /* SING: harmony voices from the live input; FX and looper follow
-               as they did for TAPE's sample voices */
-            if(harmonizer.Active()
-               && (in_source == InputSource::MIC || in_source == InputSource::LINE_IN))
+            /* SING: the live input: its pitch is tracked all the time, and
+               held keys add harmony voices from it; FX and looper follow as
+               they did for TAPE's sample voices */
+            if(in_source == InputSource::MIC || in_source == InputSource::LINE_IN)
             {
                 float live[size];
                 const bool mic = in_source == InputSource::MIC;
                 for(size_t i = 0; i < size; i++)
                     live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
                                   : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
-                harmonizer.Process(live, mic, out[0], out[1], size);
+                pitch_.Process(live, size);
+
+                /* the voice gate stays open a little past the last voiced
+                   estimate, over short gaps between estimates */
+                if(pitch_.Voiced())
+                    gate_hold_ = kGateHoldBlocks;
+                else if(gate_hold_ > 0)
+                    gate_hold_--;
+                harmonizer.SetGateOpen(gate_hold_ > 0);
+
+                if(harmonizer.Active())
+                    harmonizer.Process(live, mic, out[0], out[1], size);
             }
 
             for(size_t i = 0; i < size; i++)
@@ -492,6 +505,21 @@ namespace daisy
         {
             ProcessKeyReqs();
         }
+
+        /* SING: the sung pitch, for the key lights; note is a fractional
+           MIDI note number, valid while it returns true */
+        bool SungNote(float &note) const
+        {
+            note = pitch_.Note();
+            return pitch_.Voiced();
+        }
+
+        /* SING: voice gate on/off (menu) */
+        void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }
+        bool VoiceGate() const { return harmonizer.GateOn(); }
+
+        /* SING: audio callback load, measured in chompi_main.cpp */
+        daisy::CpuLoadMeter cpu_meter;
 
         /* SING: knobs 1-3 drive the harmonizer */
         void SetTranspose(float val) { harmonizer.SetTranspose(val); }
@@ -727,6 +755,9 @@ namespace daisy
         /** FX */
         MicFilter mic_filter_;
         const float *duck_ = nullptr; // SING: this block's mic ducking
+        chompi::PitchDetector pitch_;
+        static constexpr int kGateHoldBlocks = 40; // ~40 ms at 48-sample blocks
+        int gate_hold_ = 0;
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;

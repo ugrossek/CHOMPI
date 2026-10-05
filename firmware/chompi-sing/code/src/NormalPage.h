@@ -335,12 +335,44 @@ namespace chompi
                 bar_lvl = .45f * fade;
             }
 
+            /* SING: the key of the note being sung, folded into the
+               keyboard's two octaves: warm white when in tune (within 15
+               cents), coral when flat, gold when sharp. Held over short
+               unvoiced gaps so it doesn't flicker. */
+            float sung;
+            const uint32_t now_ms = System::GetNow();
+            if (fx_->SungNote(sung))
+            {
+                sung_note_ = sung;
+                sung_t_    = now_ms;
+            }
+            int   sung_key = -1;
+            float sr = 0.f, sg = 0.f, sb = 0.f;
+            if (sung_t_ != 0 && now_ms - sung_t_ < kSungHoldMs)
+            {
+                int m = int(lroundf(sung_note_));
+                const float cents = (sung_note_ - m) * 100.f;
+                while (m < 48)
+                    m += 12;
+                while (m > 72)
+                    m -= 12;
+                sung_key = m;
+                const float *c = fabsf(cents) < 15.f ? sing_warm
+                                 : cents < 0.f      ? sing_coral
+                                                    : sing_gold;
+                sr = c[0] * .8f;
+                sg = c[1] * .8f;
+                sb = c[2] * .8f;
+            }
+
             for(size_t i = 7; i < (25 + 7); i++)
             {
                 const bool c_key = key_map[i] % 12 == 0;
                 const int  w     = WhiteKeyIndex(key_map[i]); // 0..14, -1 black
                 if (fx_->IsHarmonyKeyHeld(i))
                     SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
+                else if (key_map[i] == sung_key)
+                    SetSmtLedFloat(led_map[i], sr, sg, sb);
                 else if (show_value)
                 {
                     /* key w covers [w/15, (w+1)/15); lit if the bar reaches into it */
@@ -858,6 +890,11 @@ namespace chompi
 
         /* SING: the knob last turned, shown on the white keys for a while */
         static constexpr uint32_t kShowMs = 1500;
+
+        /* SING: the sung note last seen, and when */
+        static constexpr uint32_t kSungHoldMs = 80;
+        float    sung_note_ = 0.f;
+        uint32_t sung_t_    = 0;
         int      shown_knob_ = 0, shown_page_ = 0;
         uint32_t shown_t_    = 0;
         bool chompi_key_pressed = false;

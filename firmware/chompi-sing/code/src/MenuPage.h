@@ -175,7 +175,11 @@ namespace chompi
             // SING: no preset keys (TAPE: save / copy / erase)
             SetSmtLedFloat(7, 0.f, 0.f, 0.f);
             SetSmtLedFloat(8, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(9, 0.f, 0.f, 0.f);
+            // KEY_25: voice gate, rose when on
+            if(fx_->VoiceGate())
+                SetSmtLedFloat(9, sing_rose[0], sing_rose[1], sing_rose[2]);
+            else
+                SetSmtLedFloat(9, sing_rose[0] * .08f, sing_rose[1] * .08f, sing_rose[2] * .08f);
 
             // FX pre / post looper
             int led_sel = fx_->GetFxPreLooper() ? 5 : 6;
@@ -191,9 +195,30 @@ namespace chompi
             SetSmtLedFloat(4, 0.f, 0.f, 0.f);
             SetSmtLedFloat(led_sel, pink[0], .7f * pink[1], .7f * pink[2]);
 
-            // SING: no slots or banks on the keys
-            for (uint8_t i = 1; i < 16; i++)
-                SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
+            /* SING: audio CPU load on the white keys, low C = 0, high C =
+               100%: a dim bar for the average, one bright key for the peak
+               of the last 2 s. White key w (0 = low C) is LED 24 - w. */
+            {
+                const uint32_t now = System::GetNow();
+                const float avg = fx_->cpu_meter.GetAvgCpuLoad();
+                if (now - cpu_peak_t_ > 2000)
+                {
+                    cpu_peak_    = fx_->cpu_meter.GetMaxCpuLoad();
+                    cpu_peak_t_  = now;
+                    fx_->cpu_meter.Reset();
+                }
+                const float peak = fmaxf(cpu_peak_, fx_->cpu_meter.GetMaxCpuLoad());
+                const int   peak_key = int(fminf(peak, .9999f) * 15.f);
+                for (int w = 0; w < 15; w++)
+                {
+                    if (w == peak_key)
+                        SetSmtLedFloat(24 - w, sing_gold[0], sing_gold[1], sing_gold[2]);
+                    else if (w / 15.f < avg)
+                        SetSmtLedFloat(24 - w, sing_coral[0] * .25f, sing_coral[1] * .25f, sing_coral[2] * .25f);
+                    else
+                        SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
+                }
+            }
             SetSmtLedFloat(0, 0.f, 0.f, 0.f);
             SetSmtLedFloat(1, 0.f, 0.f, 0.f);
 
@@ -423,8 +448,12 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase,
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy,
-            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // save presets
+            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy
+                break;
+
+            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // SING: voice gate
+                if(rising)
+                    fx_->ToggleVoiceGate();
                 break;
 
             // white keys and play/pause
@@ -476,6 +505,10 @@ namespace chompi
         }
 
         bool switch_state = false;
+
+        /* SING: CPU peak of the last 2 s window, see Draw() */
+        float    cpu_peak_   = 0.f;
+        uint32_t cpu_peak_t_ = 0;
         bool no_sd_card_ = false;
         inline void NoSDCard() { no_sd_card_ = true; }
 
