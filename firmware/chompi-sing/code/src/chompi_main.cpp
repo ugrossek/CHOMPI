@@ -360,6 +360,7 @@ int main(void)
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 
                 &loop_buff, options.tape_slew_on,
                 MonitorMode(options.monitor_position));
+    engine.SetChordNearest(options.chord_nearest); // after Init, which resets it
 
     osc.Init(hw.seed.AudioSampleRate());
     osc.SetAmp(.2f);

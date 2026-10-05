@@ -353,6 +353,7 @@ namespace daisy
                 else if(gate_hold_ > 0)
                     gate_hold_--;
                 harmonizer.SetGateOpen(gate_hold_ > 0);
+                harmonizer.SetSung(pitch_.Voiced(), pitch_.Note());
 
                 if(harmonizer.Active())
                     harmonizer.Process(live, mic, out[0], out[1], size);
@@ -524,6 +525,11 @@ namespace daisy
             note = pitch_.Note();
             return pitch_.Voiced();
         }
+
+        /* SING: absolute or relative chords (menu), chord octave (options) */
+        void ToggleAbsoluteChords() { harmonizer.SetAbsolute(!harmonizer.Absolute()); }
+        bool AbsoluteChords() const { return harmonizer.Absolute(); }
+        void SetChordNearest(bool on) { harmonizer.SetNearest(on); }
 
         /* SING: voice gate on/off (menu) */
         void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }

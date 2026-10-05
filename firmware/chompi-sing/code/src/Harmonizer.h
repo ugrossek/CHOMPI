@@ -3,6 +3,7 @@
 #include "daisysp.h"
 #include "MicFilter.h"
 #include "PitchShifter.h"
+#include "ChordTarget.h"
 
 namespace chompi
 {
@@ -37,12 +38,16 @@ namespace chompi
                 voices_[v].env  = 0.f;
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
+                voices_[v].shift = 0.f;
                 voices_[v].pan   = 0.f;
             }
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
-            latch_ = false;
+            latch_    = false;
+            absolute_ = true;
+            nearest_  = true;
+            sung_     = SungReference();
 
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
@@ -136,6 +141,32 @@ namespace chompi
         void SetGateOn(bool on) { gate_on_ = on; }
         bool GateOn() const { return gate_on_; }
         void SetGateOpen(bool open) { gate_open_ = open; }
+
+        /** Absolute chords (on) or relative (off). Absolute: a key asks for
+         *  its own note, and the voice shifts the sung note there, so C major
+         *  sounds C major whatever is sung. Relative: a key shifts the voice
+         *  by its distance from middle C. */
+        void SetAbsolute(bool on)
+        {
+            absolute_ = on;
+            UpdateAllRatios();
+        }
+        bool Absolute() const { return absolute_; }
+
+        /** absolute chords: each note in the octave nearest the sung note
+         *  (on), or in the octave of the pressed key (off) */
+        void SetNearest(bool on)
+        {
+            nearest_ = on;
+            UpdateAllRatios();
+        }
+
+        /** the pitch detector's latest, once per block */
+        void SetSung(bool voiced, float note)
+        {
+            if (sung_.Update(voiced, note) && absolute_)
+                UpdateAllRatios();
+        }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
@@ -298,18 +329,33 @@ namespace chompi
             StereoPitchShifter shifter;
             int                key;
             float              ratio;
-            float              semis;
+            float              semis; // the key, from middle C
+            float              shift; // semitones this voice shifts by, before transpose
             float              pan;
             float              env;
             bool               gate;
         };
 
-        /** pitch = key + transpose, plus a few cents of alternating detune
-         *  when the doubler is up, so stacked voices thicken */
+        /** shift = the key's interval (relative) or its note minus the sung
+         *  note (absolute), plus transpose, plus a few cents of alternating
+         *  detune when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
+            if (absolute_)
+            {
+                const int key_note = 60 + int(lroundf(v.semis));
+                v.shift = float(ChordTarget(key_note, sung_.note, nearest_) - sung_.note);
+            }
+            else
+                v.shift = v.semis;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
-            v.ratio = powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
+            v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
+        }
+
+        void UpdateAllRatios()
+        {
+            for (size_t i = 0; i < kVoices; i++)
+                UpdateRatio(voices_[i], i);
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -322,8 +368,8 @@ namespace chompi
                 if (!voices_[o].gate && voices_[o].env <= 0.f)
                     continue;
                 count++;
-                if (voices_[o].semis < voices_[v].semis
-                    || (voices_[o].semis == voices_[v].semis && o < v))
+                if (voices_[o].shift < voices_[v].shift
+                    || (voices_[o].shift == voices_[v].shift && o < v))
                     rank++;
             }
             if (count < 2)
@@ -363,7 +409,8 @@ namespace chompi
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;
-        bool             latch_;
+        bool             latch_, absolute_, nearest_;
+        SungReference    sung_;
         float            sr_, transpose_, level_, doubler_, spread_;
         float            lfo_[2];
         size_t           chorus_w_;

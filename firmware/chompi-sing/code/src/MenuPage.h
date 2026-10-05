@@ -174,7 +174,11 @@ namespace chompi
 
             // SING: no preset keys (TAPE: save / copy / erase)
             SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(8, 0.f, 0.f, 0.f);
+            // KEY_24: absolute chords gold, relative dim
+            if(fx_->AbsoluteChords())
+                SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]);
+            else
+                SetSmtLedFloat(8, sing_gold[0] * .08f, sing_gold[1] * .08f, sing_gold[2] * .08f);
             // KEY_25: voice gate, rose when on
             if(fx_->VoiceGate())
                 SetSmtLedFloat(9, sing_rose[0], sing_rose[1], sing_rose[2]);
@@ -447,8 +451,12 @@ namespace chompi
             }
 
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase,
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy
+            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase
+                break;
+
+            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // SING: absolute / relative chords
+                if(rising)
+                    fx_->ToggleAbsoluteChords();
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_25): // SING: voice gate
