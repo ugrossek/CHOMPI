@@ -338,9 +338,17 @@ namespace daisy
                                   : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
                 pitch_.Process(live, size);
 
-                /* the voice gate stays open a little past the last voiced
-                   estimate, over short gaps between estimates */
-                if(pitch_.Voiced())
+                /* voice gate: opens at once on input level (the detector
+                   needs ~30 ms, which cut off word starts), stays open while
+                   there is level or a voice, and closes only after
+                   kGateHoldBlocks of neither, so consonants and short gaps
+                   inside words don't chop them up. Key clicks don't open it:
+                   the mic is ducked while they happen. */
+                float peak = 0.f;
+                for(size_t i = 0; i < size; i++)
+                    peak = fmaxf(peak, fabsf(live[i]));
+                gate_env_ = peak > gate_env_ ? peak : gate_env_ * kGateEnvFall;
+                if(pitch_.Voiced() || gate_env_ > kGateLevel)
                     gate_hold_ = kGateHoldBlocks;
                 else if(gate_hold_ > 0)
                     gate_hold_--;
@@ -759,8 +767,11 @@ namespace daisy
         MicFilter mic_filter_;
         const float *duck_ = nullptr; // SING: this block's mic ducking
         chompi::PitchDetector pitch_;
-        static constexpr int kGateHoldBlocks = 40; // ~40 ms at 48-sample blocks
-        int gate_hold_ = 0;
+        static constexpr int   kGateHoldBlocks = 150;   // ~150 ms at 48-sample blocks
+        static constexpr float kGateLevel      = .02f;  // input peak that opens it, ~-34 dB
+        static constexpr float kGateEnvFall    = .93f;  // per block: ~14 ms to fall by 1/e
+        int   gate_hold_ = 0;
+        float gate_env_  = 0.f;
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;

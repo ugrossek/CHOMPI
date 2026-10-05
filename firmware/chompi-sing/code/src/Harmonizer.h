@@ -64,8 +64,8 @@ namespace chompi
             gate_on_   = false;
             gate_open_ = true;
             gate_      = 1.f;
-            gate_up_   = 1.f / (.003f * samplerate);
-            gate_down_ = 1.f / (.060f * samplerate);
+            gate_up_   = 1.f / (.010f * samplerate);
+            gate_down_ = 1.f / (.120f * samplerate);
 
             /* key-click ducking, see Duck() */
             duck_      = 1.f;
@@ -128,12 +128,11 @@ namespace chompi
          *  and right (lowest left), so highs and lows end up on both sides */
         void SetSpread(float v) { spread_ = v; }
 
-        /** Voice gate: when on, the harmonies only sound while the pitch
-         *  detector hears a voice (open), fading in over 3 ms and out over
-         *  60 ms; clicks, breath and room noise then make no harmonies.
-         *  Applied to the output: the detector needs ~30 ms to recognise a
-         *  voice, about what the shifter delays the voices anyway, so gating
-         *  the input would cut off the start of every syllable. */
+        /** Voice gate: when on, the harmonies only sound while the input
+         *  has a voice or level (open; decided in DSPEngine.h), fading in
+         *  over 10 ms and out over 120 ms, so room noise between phrases
+         *  makes no harmonies. Applied to the output, so the voices' own
+         *  history keeps running and they don't restart from silence. */
         void SetGateOn(bool on) { gate_on_ = on; }
         bool GateOn() const { return gate_on_; }
         void SetGateOpen(bool open) { gate_open_ = open; }
