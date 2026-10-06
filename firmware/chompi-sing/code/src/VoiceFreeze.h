@@ -134,9 +134,18 @@ namespace chompi
         /* the detector describes audio from about this many blocks before
            it reports (half its 29 ms frame) */
         static constexpr int kDetLag      = 15;
-        static constexpr int kSteadyWin   = 45;   // blocks a frozen grain pair covers
-        static constexpr int kSteadyLook  = 300;  // blocks searched back
-        static constexpr float kSteadyMax = .3f;  // semitones of movement allowed
+        /* Searched back over the whole recording, so a freeze pressed a
+           little after the note (on breath or a fading tail) still holds the
+           note. A held note may have vibrato, a glide may not get in: over
+           kLongWin (about one vibrato cycle) vibrato swings around its note,
+           so both halves average the same, while a glide drifts. Notes too
+           short for that get the strict short test. */
+        static constexpr int   kSteadyLook = 2000; // blocks searched back
+        static constexpr int   kLongWin    = 180;  // blocks
+        static constexpr float kLongRange  = 1.2f; // semitones, vibrato fits
+        static constexpr float kLongDrift  = .25f; // semitones between the halves
+        static constexpr int   kShortWin   = 45;   // blocks a frozen grain pair covers
+        static constexpr float kShortRange = .3f;  // semitones
 
         /** the sung note for the audio frames_back blocks before the newest */
         float PitchAt(int frames_back) const
@@ -152,24 +161,36 @@ namespace chompi
         int SteadyFramesBack() const
         {
             for (int k = 0; k <= kSteadyLook; k += 3)
-            {
-                float lo = 1e9f, hi = -1e9f;
-                bool  ok = true;
-                for (int j = k; j < k + kSteadyWin && ok; j++)
-                {
-                    const float n = PitchAt(j);
-                    if (n <= 0.f)
-                        ok = false;
-                    lo = n < lo ? n : lo;
-                    hi = n > hi ? n : hi;
-                }
-                if (ok && hi - lo < kSteadyMax)
+                if (Steady(k, kLongWin, kLongRange, kLongDrift))
+                    return k + kLongWin / 2 - kShortWin / 2; // the middle of it
+            for (int k = 0; k <= kSteadyLook; k += 3)
+                if (Steady(k, kShortWin, kShortRange, 1e9f))
                     return k;
-            }
             return 0;
         }
 
-        static constexpr int   kMaxGrain = 4096;  // samples
+        /** blocks k .. k + win back all pitched, within range, and the two
+         *  halves' averages no further apart than drift */
+        bool Steady(int k, int win, float range, float drift) const
+        {
+            float lo = 1e9f, hi = -1e9f, a = 0.f, b = 0.f;
+            for (int j = k; j < k + win; j++)
+            {
+                const float n = PitchAt(j);
+                if (n <= 0.f)
+                    return false;
+                lo = n < lo ? n : lo;
+                hi = n > hi ? n : hi;
+                (j < k + win / 2 ? a : b) += n;
+            }
+            return hi - lo < range && fabsf(a - b) / float(win / 2) < drift;
+        }
+
+        static constexpr int   kMaxGrain = 8192;  // samples
+        /* no pitch at the read point (noise, breath): long grains from
+           randomly spread places, so it doesn't loop audibly */
+        static constexpr int   kNoiseHop    = 2880; // 60 ms
+        static constexpr int   kNoiseSpread = 4800; // +- 100 ms
         static constexpr float kGlide    = .08f;  // per block, ~12 ms
         static constexpr int   kCorr     = 128;   // samples compared when lining up
         static constexpr int   kSearch   = 240;   // +- samples searched
@@ -190,6 +211,11 @@ namespace chompi
          *  time keeps the frozen sound from turning mechanical. */
         void StartGrain(float period)
         {
+            if (note_ <= 0.f)
+            {
+                StartNoiseGrain();
+                return;
+            }
             int m = int(.02f * sr_ / period + .5f);
             if (m < 1)
                 m = 1;
@@ -251,6 +277,20 @@ namespace chompi
             gr.t = 0;
             g_ ^= 1;
             next_ = hop;
+        }
+
+        void StartNoiseGrain()
+        {
+            rand_ = rand_ * 1664525u + 1013904223u;
+            const int spread = int((rand_ >> 8) % uint32_t(2 * kNoiseSpread)) - kNoiseSpread;
+            const int len = 2 * kNoiseHop;
+            Grain &gr = grain_[g_];
+            gr.start = (w_ - 1 - int(pos_) - len - kNoiseSpread + spread) & (kLen - 1);
+            gr.len = len;
+            gr.t = 0;
+            g_ ^= 1;
+            next_ = kNoiseHop;
+            r_ = 0.f;
         }
 
         float  sr_;

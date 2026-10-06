@@ -96,7 +96,7 @@ int main()
     vf.Scrub(1200.f);
     measure("turned back 1200 ms (196 Hz)", 196.f);
     printf("position %.2f\n", vf.Position());
-    Check(vf.Position() > .45f && vf.Position() < .55f, "position ~1.2 of ~2.4 s usable");
+    Check(vf.Position() > .5f && vf.Position() < .7f, "position ~1.2 of ~2 s usable");
 
     /* freezing in the middle of a glide holds the last steady note before
        it, not a repeating piece of the glide (which flutters) */
@@ -144,6 +144,59 @@ int main()
         }
         printf("frozen during a glide: pitch %+.0f .. %+.0f cents from the note before it\n", lo, hi);
         Check(hi - lo < 15.f && fabsf(lo) < 15.f, "a freeze during a glide holds the steady note before it");
+    }
+
+    /* freeze pressed after the note, on breath: still holds the note (it
+       used to loop the breath every 20 ms, a buzz "like a fly") */
+    {
+        static VoiceFreeze g;
+        static PitchDetector gd, gc;
+        g.Init(kSr, audio, pitch);
+        gd.Init();
+        float ph = 0.f;
+        unsigned seed = 1;
+        for (int b = 0; b < 1500; b++)
+        {
+            for (int i = 0; i < kBlock; i++)
+            {
+                const float t = (b * kBlock + i) / kSr;
+                seed = seed * 1664525u + 1013904223u;
+                const float noise = (seed >> 8) / float(1 << 24) * 2.f - 1.f;
+                if (t < 1.1f)
+                {
+                    ph += 196.f / kSr;
+                    if (ph > 1000.f) ph -= 1000.f;
+                    float x = 0.f;
+                    for (int h = 1; h * 196.f < 5000.f; h++) x += sinf(2.f * kPi * h * ph) / h;
+                    in[i] = .04f * x;
+                }
+                else
+                    in[i] = .01f * noise;
+            }
+            gd.Process(in, kBlock);
+            gd.Update();
+            g.Record(in, kBlock, gd.Voiced() ? gd.Note() : 0.f);
+        }
+        g.SetFreeze(true);
+        gc.Init();
+        unsigned last = 0;
+        int voiced = 0, est = 0;
+        float sum = 0.f;
+        for (int b = 0; b < 600; b++)
+        {
+            g.Play(out, kBlock);
+            gc.Process(out, kBlock);
+            gc.Update();
+            if (b > 100 && gc.Estimates() != last)
+            {
+                last = gc.Estimates();
+                est++;
+                if (gc.Voiced()) { voiced++; sum += 1200.f * log2f(gc.Frequency() / 196.f); }
+            }
+        }
+        printf("frozen after the note, on breath: %d%% pitched, %+.0f cents\n",
+               100 * voiced / (est ? est : 1), voiced ? sum / voiced : 0.f);
+        Check(voiced > .9f * est && voiced && fabsf(sum / voiced) < 15.f, "a late freeze still holds the note");
     }
 
     /* unfreeze: records again */
