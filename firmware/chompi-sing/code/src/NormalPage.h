@@ -142,6 +142,17 @@ namespace chompi
         bl = a[2] + (b[2] - a[2]) * t;
     }
 
+    /** a level meter in palette A: dim warm white when quiet, brighter as it
+     *  gets louder, red when it's hot */
+    static inline void SingMeter(float v, float &r, float &g, float &b)
+    {
+        const float lvl = .12f + .88f * fminf(v * 1.6f, 1.f);
+        const float hot = v < .6f ? 0.f : fminf((v - .6f) / .3f, 1.f);
+        r = (sing_warm[0] + (sing_red[0] - sing_warm[0]) * hot) * lvl;
+        g = (sing_warm[1] + (sing_red[1] - sing_warm[1]) * hot) * lvl;
+        b = (sing_warm[2] + (sing_red[2] - sing_warm[2]) * hot) * lvl;
+    }
+
     static inline void SingTransposeColour(float v, float &r, float &g, float &b)
     {
         const float semis = (v - .5f) * 24.f;
@@ -271,7 +282,7 @@ namespace chompi
 
             // 8mm leds
             SetPthLedFloat(0, 0.f, 0.f, 0.f);
-            SetPthLedFloat(1, green[0], green[1], green[2]);
+            SetPthLedFloat(1, sing_warm[0], sing_warm[1], sing_warm[2]);
             SetPthLedFloat(2, 0.f, 0.f, 0.f);
             SetPthLedFloat(3, 0.f, 0.f, 0.f);
             SetPthLedFloat(4, 0.f, 0.f, 0.f);
@@ -492,45 +503,45 @@ namespace chompi
                 {
                     if(batt_display && System::GetNow() - batt_hold > 2000)
                     {
-                        const float* color = &green[0];
-
+                        /* SING: full warm white, high dim white, medium
+                           dim red, low red */
+                        const float* color = sing_warm;
+                        float lvl = 1.f;
                         switch(hw_->GetBatteryLevel())
                         {
                             case Hardware::BatteryLevel::FULL:
-                                color = &white[0];
-                            break;
+                                break;
                             case Hardware::BatteryLevel::HIGH:
-                                color = &green[0];
-                            break;
+                                lvl = .35f;
+                                break;
                             case Hardware::BatteryLevel::MEDIUM:
-                                color = &yellow[0];
-                            break;
+                                color = sing_red;
+                                lvl = .3f;
+                                break;
                             case Hardware::BatteryLevel::LOW:
-                                color = &red[0];
-                            break;
+                                color = sing_red;
+                                break;
                             default:
-                            break;
+                                break;
                         }
-
-                        r = color[0];
-                        g = color[1];
-                        b = color[2];
+                        r = color[0] * lvl;
+                        g = color[1] * lvl;
+                        b = color[2] * lvl;
                     }
                     else if (page == 0)
                     {
                         float vu_sample = fx_->GetVUSample(VUTarget::VU_OUTPUT);
 
-                        r = value * color_quad_xfade(.1f, green[0], yellow[0], pink[0], vu_sample);
-                        g = value * color_quad_xfade(.1f, green[1], yellow[1], pink[1], vu_sample);
-                        b = value * color_quad_xfade(.1f, green[2], yellow[2], pink[2], vu_sample);
+                        SingMeter(vu_sample, r, g, b); // SING: output level
+                        r *= value;
+                        g *= value;
+                        b *= value;
 
                         fx_->SetMainGain(value);
                     }
                     else
                     {
-                        r = color_xfade(blue[0], red[0], value);
-                        g = color_xfade(blue[1], red[1], value);
-                        b = color_xfade(blue[2], red[2], value);
+                        SingMix(sing_warm, sing_red, value, r, g, b); // SING: input gain
 
                         fx_->SetInputGain(value);
                     }
@@ -567,9 +578,7 @@ namespace chompi
             else // input level, as TAPE shows while monitoring
             {
                 float vu_sample = fx_->GetVUSample(VUTarget::VU_INPUT);
-                r = color_quad_xfade(.1f, green[0], yellow[0], pink[0], vu_sample);
-                g = color_quad_xfade(.1f, green[1], yellow[1], pink[1], vu_sample);
-                b = color_quad_xfade(.1f, green[2], yellow[2], pink[2], vu_sample);
+                SingMeter(vu_sample, r, g, b); // SING: input level
             }
 
             SetPthLedFloat(led_map[5], r, g, b);

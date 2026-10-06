@@ -103,19 +103,22 @@ namespace chompi
                 {
                     switch(fx_->GetMonitorMode())
                     {
+                        /* SING: headphones warm white, all outputs red,
+                           off very dim */
                         case MonitorMode::BOTH:
-                            r = blue[0];
-                            g = blue[1];
-                            b = blue[2];
+                            r = sing_red[0];
+                            g = sing_red[1];
+                            b = sing_red[2];
                             break;
                         case MonitorMode::HP:
-                            r = orange[0];
-                            g = orange[1];
-                            b = orange[2];
+                            r = sing_warm[0];
+                            g = sing_warm[1];
+                            b = sing_warm[2];
                             break;
-                        case MonitorMode::OFF: // SING: dry voice off
-                            r = .15f;
-                            g = b = 0.f;
+                        case MonitorMode::OFF:
+                            r = sing_warm[0] * .06f;
+                            g = sing_warm[1] * .06f;
+                            b = sing_warm[2] * .06f;
                             break;
                         case MonitorMode::SEND_RET:
                         default:
@@ -130,13 +133,12 @@ namespace chompi
                     // headphone os gain
                     // float idx = final_comp;
 
-                    r = med_blue[0] * (final_comp * .9f + .1f);
-                    g = med_blue[1] * (final_comp * .9f + .1f);
-                    b = med_blue[2] * (final_comp * .9f + .1f);
-
-                    // r = color_xfade(yellow[0], purple[0], final_comp);
-                    // g = color_xfade(yellow[1], purple[1], final_comp);
-                    // b = color_xfade(yellow[2], purple[2], final_comp);
+                    // SING: compression, warm white -> red, brighter as it goes up
+                    SingMix(sing_warm, sing_red, final_comp, r, g, b);
+                    const float lvl = final_comp * .9f + .1f;
+                    r *= lvl;
+                    g *= lvl;
+                    b *= lvl;
                 }
 
                 SetPthLedFloat(9, r, g, b);

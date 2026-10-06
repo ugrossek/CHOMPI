@@ -62,7 +62,7 @@ right; doubler thickens them with a chorus. Hold knob 6 for two seconds to see t
 | Knob 4, turn | the effect's detail: delay time, wobble (on Speak & Spell), filter resonance |
 | Knob 4, press | reset all effects |
 | Knob 6, turn | output compression |
-| Knob 6, press | where your own voice goes: headphones (orange), all outputs (blue), off (dim red) |
+| Knob 6, press | where your own voice goes: headphones (warm white), all outputs (red), off (very dim) |
 
 The keys keep playing while the menu is open.
 
@@ -77,7 +77,9 @@ play, warm white the human and what's in tune.
 - **Knob rings** go from warm white to red, and brighter, as each control turns up. Knob 1 on
   transpose: warm white at 0, red either way.
 - **Big wheel's LEDs** while frozen: red for how far back, warm white for "now".
-- **Chompi key:** red while latched, otherwise your input level.
+- **Chompi key:** red while latched, otherwise your input level; knob 6 shows the output level.
+  Both meters are dim white when quiet, brighter as it gets louder, red when it's hot.
+- **Battery** (hold knob 6): warm white full, dim white high, dim red medium, red low.
 
 ## Options
 
