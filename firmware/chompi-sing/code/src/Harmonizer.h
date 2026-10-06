@@ -55,6 +55,8 @@ namespace chompi
             mode_     = ChordMode::Robot;
             vocoder_.Init(samplerate, vocoder_hist);
             vfreeze_.Init(samplerate, voice_audio, voice_pitch);
+            human_frozen_ = false;
+            human_mix_ = 0.f;
             rec_note_ = 0.f;
             SetSize(.5f);
             SetCharacter(.5f);
@@ -171,6 +173,8 @@ namespace chompi
             /* a new character starts live */
             vocoder_.SetFreeze(false);
             vfreeze_.SetFreeze(false);
+            human_frozen_ = false;
+            human_mix_ = 0.f;
             mode_ = m;
             for (size_t i = 0; i < kVoices; i++)
                 UpdateRatio(voices_[i], i);
@@ -194,12 +198,18 @@ namespace chompi
             if (mode_ == ChordMode::Robot)
                 vocoder_.SetFreeze(on);
             else if (mode_ == ChordMode::Keys)
-                vfreeze_.SetFreeze(on);
+            {
+                /* the recording stays frozen until the fade back to the live
+                   voice is over (Process), so the held sound doesn't slip */
+                human_frozen_ = on;
+                if (on)
+                    vfreeze_.SetFreeze(true);
+            }
         }
         bool Frozen() const
         {
             return mode_ == ChordMode::Robot ? vocoder_.Frozen()
-                 : mode_ == ChordMode::Keys  ? vfreeze_.Frozen() : false;
+                 : mode_ == ChordMode::Keys  ? human_frozen_ : false;
         }
 
         /** time wheel: ms, positive = further back */
@@ -208,7 +218,11 @@ namespace chompi
             if (mode_ == ChordMode::Robot)
                 vocoder_.Scrub(ms); // one frame per 1 ms block
             else if (mode_ == ChordMode::Keys)
+            {
+                if (!human_frozen_)
+                    SetFreeze(true);
                 vfreeze_.Scrub(ms);
+            }
         }
         float ScrubPosition() const
         {
@@ -335,7 +349,21 @@ namespace chompi
                the live voice is recorded, in every character, so a freeze
                right after switching has something to hold */
             if (mode_ == ChordMode::Keys && vfreeze_.Frozen())
-                vfreeze_.Play(in_, size);
+            {
+                /* cross-fade live <-> frozen over kHumanFade */
+                float g[size];
+                vfreeze_.Play(g, size);
+                const float target = human_frozen_ ? 1.f : 0.f;
+                const float step   = 1.f / (kHumanFade * sr_);
+                for (size_t i = 0; i < size; i++)
+                {
+                    human_mix_ += human_mix_ < target ? step : -step;
+                    human_mix_ = human_mix_ < 0.f ? 0.f : (human_mix_ > 1.f ? 1.f : human_mix_);
+                    in_[i] = in_[i] * (1.f - human_mix_) + g[i] * human_mix_;
+                }
+                if (!human_frozen_ && human_mix_ <= 0.f)
+                    vfreeze_.SetFreeze(false); // faded out: record again
+            }
             else
                 vfreeze_.Record(in_, size, rec_note_);
 
@@ -553,6 +581,9 @@ namespace chompi
 
         Vocoder          vocoder_;
         VoiceFreeze      vfreeze_;
+        bool             human_frozen_;
+        float            human_mix_;                   // 0 live .. 1 frozen
+        static constexpr float kHumanFade = .06f;      // s
         float            rec_note_;
         float            character_;
         float            ring_mix_, ring_inc_, ring_phase_;

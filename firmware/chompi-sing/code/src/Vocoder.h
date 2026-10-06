@@ -84,6 +84,7 @@ namespace chompi
             }
             shift_ = 0.f;
             freeze_ = false;
+            thaw_ = 0.f;
             att_ = 1.f - expf(-1.f / (.002f * sr_));
             rel_ = 1.f - expf(-1.f / (.020f * sr_));
         }
@@ -102,9 +103,13 @@ namespace chompi
             if (on && !freeze_)
             {
                 pos_ = target_ = 0.f; // at "now"
-                for (int b = 0; b < kBands; b++)
-                    held_[b] = env_[b];
+                if (thaw_ <= 0.f)     // not still fading out of the last one
+                    for (int b = 0; b < kBands; b++)
+                        held_[b] = env_[b];
+                thaw_ = 0.f;
             }
+            else if (!on && freeze_)
+                thaw_ = 1.f; // fade from the frozen sound back to the voice
             freeze_ = on;
         }
         bool Frozen() const { return freeze_; }
@@ -172,6 +177,23 @@ namespace chompi
             }
             if (!freeze_)
                 hist_w_ = (hist_w_ + 1) & (kHistFrames - 1);
+
+            /* just unfrozen: blend from the held levels to the live ones */
+            if (!freeze_ && thaw_ > 0.f)
+            {
+                const float step = float(size) / (kThawTime * sr_);
+                for (int b = 0; b < kBands; b++)
+                {
+                    float t = thaw_;
+                    for (size_t i = 0; i < size; i++)
+                    {
+                        t -= step / float(size);
+                        const float w = t > 0.f ? t : 0.f;
+                        lev_[b][i] = lev_[b][i] * (1.f - w) + held_[b] * w;
+                    }
+                }
+                thaw_ -= step;
+            }
 
             /* each synth band at the level of voice band b + shift; shifted,
                part of the voice falls off the ends, so make up a little */
@@ -249,6 +271,8 @@ namespace chompi
         float pos_, target_;      // frames back from the newest
         float held_[kBands];      // frozen levels at the end of the last block
         static constexpr float kScrubGlide = .08f; // per block, ~12 ms
+        static constexpr float kThawTime   = .08f; // s, frozen -> live
+        float thaw_;              // 1 -> 0 while fading back to the voice
     };
 
 } // namespace chompi

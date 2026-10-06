@@ -209,6 +209,45 @@ int main()
         Check(v.ScrubPosition() > .4f && v.ScrubPosition() < .5f, "position ~900 of ~2000 ms");
     }
 
+    /* leaving a freeze fades: frozen on "a", live voice now "i"; right after
+       unfreezing it still sounds like the "a", ~150 ms later like the "i" */
+    {
+        Vocoder v;
+        v.Init(kSr, hist);
+        SawOsc osc;
+        osc.SetFreq(220.f, kSr);
+        float mod[kBlock], car[kBlock], ol[kBlock], orr[kBlock], prev = 0.f;
+        auto block = [&](int s, bool i_vowel) {
+            double e = 0, d = 0;
+            for (int i = 0; i < kBlock; i++)
+            {
+                mod[i] = Vowel((s + i) / kSr, 196.f, .05f, i_vowel);
+                car[i] = osc.Process();
+                ol[i] = orr[i] = 0.f;
+            }
+            v.Process(mod, car, car, ol, orr, kBlock);
+            for (int i = 0; i < kBlock; i++) { e += ol[i] * ol[i]; d += (ol[i] - prev) * (ol[i] - prev); prev = ol[i]; }
+            return e > 0 ? sqrt(d / e) * kSr / (2 * kPi) : 0.;
+        };
+        int s = 0;
+        double br_a = 0, br_i = 0, br_10 = 0, br_150 = 0;
+        for (int b = 0; b < 400; b++, s += kBlock) { double r = block(s, false); if (b >= 300) br_a += r / 100; }
+        v.SetFreeze(true);
+        for (int b = 0; b < 300; b++, s += kBlock) block(s, true);   // frozen "a", singing "i"
+        v.SetFreeze(false);
+        for (int b = 0; b < 300; b++, s += kBlock)
+        {
+            double r = block(s, true);
+            if (b >= 8 && b < 12) br_10 += r / 4;
+            if (b >= 148 && b < 152) br_150 += r / 4;
+            if (b >= 200) br_i += r / 100;
+        }
+        printf("unfreeze: \"a\" %.0f Hz, \"i\" %.0f Hz; 10 ms after %.0f Hz, 150 ms after %.0f Hz\n",
+               br_a, br_i, br_10, br_150);
+        Check(fabs(br_10 - br_a) < fabs(br_10 - br_i), "10 ms after unfreezing it is still closer to the frozen sound");
+        Check(fabs(br_150 - br_i) < .15 * br_i, "150 ms after, it is the live voice");
+    }
+
     /* silence in, silence out */
     {
         Result r = Run([](float) { return 0.f; }, 220.f, .5f);
