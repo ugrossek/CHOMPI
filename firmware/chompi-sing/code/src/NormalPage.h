@@ -126,6 +126,22 @@ namespace chompi
     static const float sing_rose[3]    = {1.f, .45f, .60f};
     static const float sing_warm[3]    = {1.f, .85f, .65f};
 
+    static const float sing_sky[3] = {.30f, .65f, 1.f};
+
+    /** the play key's colour for a character: robot magenta, monster red,
+     *  angel sky blue, human gold */
+    static inline const float *SingCharacterColour(int index)
+    {
+        static const float monster[3] = {1.f, .05f, 0.f};
+        switch (index)
+        {
+            case 0: return sing_magenta;
+            case 1: return monster;
+            case 2: return sing_sky;
+            default: return sing_gold;
+        }
+    }
+
     /** knob 1 transpose ring: warm white at 0, coral below, gold above,
      *  brighter the further out */
     static inline void SingTransposeColour(float v, float &r, float &g, float &b);
@@ -545,18 +561,10 @@ namespace chompi
 
             /** PTH leds */
             float r, g, b;
-            // SING: play key = the mode: robot magenta, keys gold, top note coral, relative dim
+            // SING: play key = the character's colour
             {
-                const float *c = sing_gold;
-                float lvl = 1.f;
-                switch (fx_->ChordModeIndex())
-                {
-                    case 0: c = sing_magenta; break;
-                    case 1: c = sing_gold; break;
-                    case 2: c = sing_coral; break;
-                    default: c = sing_warm; lvl = .1f; break;
-                }
-                SetPthLedFloat(led_map[33], c[0] * lvl, c[1] * lvl, c[2] * lvl);
+                const float *c = SingCharacterColour(fx_->ChordModeIndex());
+                SetPthLedFloat(led_map[33], c[0], c[1], c[2]);
             }
 
             // SING: loop key = freeze: white while frozen, dim in robot mode, off otherwise

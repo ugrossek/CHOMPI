@@ -517,10 +517,12 @@ namespace daisy
         {
             using M = chompi::Harmonizer<7>::ChordMode;
             const M m = harmonizer.Mode();
-            harmonizer.SetMode(m == M::Robot ? M::Keys : M::Robot);
+            harmonizer.SetMode(m == M::Robot ? M::Monster : m == M::Monster ? M::Angel
+                               : m == M::Angel ? M::Keys : M::Robot);
         }
-        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 keys (Human)
-        bool RobotMode() const { return ChordModeIndex() == 0; }
+        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 monster, 2 angel, 3 human
+        /* the vocoded characters, which have size and character on knobs 2, 3 */
+        bool RobotMode() const { return ChordModeIndex() != 3; }
         void SetSize(float v) { harmonizer.SetSize(v); }
         void SetCharacter(float v) { harmonizer.SetCharacter(v); }
 

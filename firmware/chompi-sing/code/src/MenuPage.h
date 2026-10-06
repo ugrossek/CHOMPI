@@ -69,16 +69,8 @@ namespace chompi
             /* SING: play = mode, loop = freeze, big wheel = time wheel, as on
                the normal page */
             {
-                const float *c = sing_gold;
-                float lvl = 1.f;
-                switch (fx_->ChordModeIndex())
-                {
-                    case 0: c = sing_magenta; break;
-                    case 1: c = sing_gold; break;
-                    case 2: c = sing_coral; break;
-                    default: c = sing_warm; lvl = .1f; break;
-                }
-                SetPthLedFloat(7, c[0] * lvl, c[1] * lvl, c[2] * lvl);
+                const float *c = SingCharacterColour(fx_->ChordModeIndex());
+                SetPthLedFloat(7, c[0], c[1], c[2]);
                 const float fz = !fx_->CanFreeze() ? 0.f : fx_->Frozen() ? 1.f : .08f;
                 SetPthLedFloat(8, sing_warm[0] * fz, sing_warm[1] * fz, sing_warm[2] * fz);
                 const float back = fx_->CanFreeze() && fx_->Frozen() ? fx_->ScrubPosition() : 0.f;
@@ -159,22 +151,9 @@ namespace chompi
             }
 
             // SING: no preset keys (TAPE: save / copy / erase)
-            // KEY_23: robot freeze, bright white while frozen; dark outside robot mode
-            if(fx_->CanFreeze())
-            {
-                const float f = fx_->Frozen() ? 1.f : .08f;
-                SetSmtLedFloat(7, sing_warm[0] * f, sing_warm[1] * f, sing_warm[2] * f);
-            }
-            else
-                SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            // KEY_24: chord mode, robot magenta, keys gold, top note coral, relative dim
-            switch(fx_->ChordModeIndex())
-            {
-                case 0: SetSmtLedFloat(8, sing_magenta[0], sing_magenta[1], sing_magenta[2]); break;
-                case 1: SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]); break;
-                case 2: SetSmtLedFloat(8, sing_coral[0], sing_coral[1], sing_coral[2]); break;
-                default: SetSmtLedFloat(8, sing_gold[0] * .08f, sing_gold[1] * .08f, sing_gold[2] * .08f); break;
-            }
+            // KEY_23, KEY_24: dark, they play (freeze and the character are on loop and play)
+            SetSmtLedFloat(7, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(8, 0.f, 0.f, 0.f);
             // KEY_25: voice gate, rose when on
             if(fx_->VoiceGate())
                 SetSmtLedFloat(9, sing_rose[0], sing_rose[1], sing_rose[2]);
@@ -430,15 +409,7 @@ namespace chompi
             }
 
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // SING: robot freeze
-                if(rising && fx_->CanFreeze())
-                    fx_->ToggleFreeze();
-                break;
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // SING: chord mode
-                if(rising)
-                    fx_->CycleChordMode();
-                break;
+            // KEY_23, KEY_24: play (freeze and the character are on loop and play)
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_25): // SING: voice gate
                 if(rising)

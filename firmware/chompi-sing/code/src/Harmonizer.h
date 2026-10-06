@@ -53,6 +53,9 @@ namespace chompi
             sr_ = samplerate;
             latch_    = false;
             mode_     = ChordMode::Robot;
+            pending_  = ChordMode::Robot;
+            switch_gain_ = 1.f;
+            size_     = .5f;
             vocoder_.Init(samplerate, vocoder_hist);
             vfreeze_.Init(samplerate, voice_audio, voice_pitch);
             human_frozen_ = false;
@@ -162,13 +165,37 @@ namespace chompi
         void SetGateOpen(bool open) { gate_open_ = open; }
 
         /** How keys turn into voices (the play button switches):
-         *  Robot: a vocoder: each key plays a buzzy synth note that the
-         *         voice's words are imprinted on (Kraftwerk). The voice's
-         *         pitch doesn't matter; talking works. No shifters run.
+         *  Robot, Monster, Angel: a vocoder: each key plays a synth note
+         *         that the voice's words are imprinted on (Kraftwerk). The
+         *         voice's pitch doesn't matter; talking works. No shifters
+         *         run. The three differ in octave, mouth size and sound.
          *  Keys:  "Human": each key sounds its own note, made from the real
-         *         voice, whatever is sung (needs the pitch detector). */
-        enum class ChordMode { Robot, Keys };
-        void SetMode(ChordMode m)
+         *         voice, whatever is sung (needs the pitch detector).
+         *  Key 8 is C3 in all of them, a comfortable singing note. */
+        enum class ChordMode { Robot, Monster, Angel, Keys };
+
+        /** the robot characters: a vocoder each, with its own starting point
+         *  that size and character (knobs 2, 3) then move from */
+        struct Character
+        {
+            float octave; // the synth notes, semitones
+            float shift;  // vocoder bands: + bigger mouth
+            float colour; // added to the character knob: - softer, + rougher
+            bool  choir;  // two slightly detuned synth notes per key
+        };
+        static const Character &CharacterOf(ChordMode m)
+        {
+            static const Character kRobot   = {0.f, 0.f, 0.f, false};
+            static const Character kMonster = {-12.f, 2.5f, .15f, false};
+            static const Character kAngel   = {0.f, -1.f, -.3f, true};
+            return m == ChordMode::Monster ? kMonster : m == ChordMode::Angel ? kAngel : kRobot;
+        }
+        bool Vocoded() const { return mode_ != ChordMode::Keys; }
+        /** switch character: the harmonies fade out, the switch happens in
+         *  the silence, and they fade back in (Process) */
+        void SetMode(ChordMode m) { pending_ = m; }
+
+        void ApplyMode(ChordMode m)
         {
             /* a new character starts live */
             vocoder_.SetFreeze(false);
@@ -176,14 +203,20 @@ namespace chompi
             human_frozen_ = false;
             human_mix_ = 0.f;
             mode_ = m;
+            ApplySize();
             for (size_t i = 0; i < kVoices; i++)
                 UpdateRatio(voices_[i], i);
         }
-        ChordMode Mode() const { return mode_; }
+        ChordMode Mode() const { return pending_; }
 
         /** robot: "size", 0 monster .. .5 as sung .. 1 mouse (formants
          *  moved by up to 3 bands, about an octave, either way) */
-        void SetSize(float v) { vocoder_.SetShift((.5f - v) * 6.f); }
+        void SetSize(float v)
+        {
+            size_ = v;
+            ApplySize();
+        }
+        void ApplySize() { vocoder_.SetShift((.5f - size_) * 6.f + CharacterOf(mode_).shift); }
 
         /** robot: "character" of the synth note, 0 soft (sine) .. .5
          *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
@@ -192,10 +225,10 @@ namespace chompi
         /** Freeze and the time wheel, the same controls for every character
          *  that has them: robot holds the voice's band levels (Vocoder),
          *  keys (Human) the real voice (VoiceFreeze). */
-        bool CanFreeze() const { return mode_ == ChordMode::Robot || mode_ == ChordMode::Keys; }
+        bool CanFreeze() const { return true; } // every character
         void SetFreeze(bool on)
         {
-            if (mode_ == ChordMode::Robot)
+            if (Vocoded())
                 vocoder_.SetFreeze(on);
             else if (mode_ == ChordMode::Keys)
             {
@@ -208,14 +241,13 @@ namespace chompi
         }
         bool Frozen() const
         {
-            return mode_ == ChordMode::Robot ? vocoder_.Frozen()
-                 : mode_ == ChordMode::Keys  ? human_frozen_ : false;
+            return Vocoded() ? vocoder_.Frozen() : human_frozen_;
         }
 
         /** time wheel: ms, positive = further back */
         void Scrub(float ms)
         {
-            if (mode_ == ChordMode::Robot)
+            if (Vocoded())
                 vocoder_.Scrub(ms); // one frame per 1 ms block
             else if (mode_ == ChordMode::Keys)
             {
@@ -226,8 +258,7 @@ namespace chompi
         }
         float ScrubPosition() const
         {
-            return mode_ == ChordMode::Robot ? vocoder_.ScrubPosition()
-                 : mode_ == ChordMode::Keys  ? vfreeze_.Position() : 0.f;
+            return Vocoded() ? vocoder_.ScrubPosition() : vfreeze_.Position();
         }
 
         /** "metal": a ring modulator on the harmonies (Dalek). 0 off; up,
@@ -372,7 +403,7 @@ namespace chompi
                 hl[i] = hr[i] = 0.f;
 
             /* robot: the voices build the vocoder's carriers instead */
-            const bool robot = mode_ == ChordMode::Robot;
+            const bool robot = Vocoded();
             float car_l[size], car_r[size];
             if (robot)
                 for (size_t i = 0; i < size; i++)
@@ -396,13 +427,18 @@ namespace chompi
                 {
                     /* the voice's synth note, with a little noise so the
                        vocoder keeps "s" and "sh" (classic vocoders do too) */
-                    vo.osc.SetFreq(vo.hz, sr_);
+                    const Character &ch = CharacterOf(mode_);
+                    /* choir (Angel): two notes, 10 cents either side */
+                    vo.osc.SetFreq(vo.hz * (ch.choir ? .99424f : 1.f), sr_);
+                    vo.osc2.SetFreq(vo.hz * 1.00579f, sr_);
                     /* character: sine -> saw over the first half, saw ->
-                       noise over the second */
-                    const float m    = character_ < .5f ? character_ * 2.f : (character_ - .5f) * 2.f;
-                    const float wsin = character_ < .5f ? 1.f - m : 0.f;
-                    const float wsaw = character_ < .5f ? m : 1.f - m;
-                    const float wnoi = character_ < .5f ? kRobotNoise : kRobotNoise + m;
+                       noise over the second; the character shifts it */
+                    float chr = character_ + ch.colour;
+                    chr = chr < 0.f ? 0.f : (chr > 1.f ? 1.f : chr);
+                    const float m    = chr < .5f ? chr * 2.f : (chr - .5f) * 2.f;
+                    const float wsin = chr < .5f ? 1.f - m : 0.f;
+                    const float wsaw = chr < .5f ? m : 1.f - m;
+                    const float wnoi = chr < .5f ? kRobotNoise : kRobotNoise + m;
                     for (size_t i = 0; i < size; i++)
                     {
                         if (vo.gate)
@@ -412,8 +448,10 @@ namespace chompi
                         /* sine from the phase: sin(2 pi p) ~ -4u(1 - |u|), u = 2p - 1 */
                         const float u   = 2.f * vo.osc.phase - 1.f;
                         const float sn  = -4.f * u * (1.f - fabsf(u)) * 1.4f; // ~ the saw's level in the vocoder
-                        const float saw = vo.osc.Process();
-                        const float c   = (wsin * sn + wsaw * saw + wnoi * Noise()) * vo.env;
+                        float saw = vo.osc.Process();
+                        if (ch.choir)
+                            saw = (saw + vo.osc2.Process()) * .7f;
+                        const float c   = (wsin * sn + wsaw * saw + wnoi * Noise()) * vo.env * kVocodedLevel;
                         car_l[i] += c * gl;
                         car_r[i] += c * gr;
                     }
@@ -452,6 +490,22 @@ namespace chompi
                     if (ring_phase_ >= 1.f)
                         ring_phase_ -= 1.f;
                 }
+
+            /* switching character: fade out, switch in the silence, fade in */
+            {
+                const float step = 1.f / (kSwitchFade * sr_);
+                for (size_t i = 0; i < size; i++)
+                {
+                    if (pending_ != mode_)
+                        switch_gain_ = switch_gain_ - step > 0.f ? switch_gain_ - step : 0.f;
+                    else
+                        switch_gain_ = switch_gain_ + step < 1.f ? switch_gain_ + step : 1.f;
+                    hl[i] *= switch_gain_;
+                    hr[i] *= switch_gain_;
+                }
+                if (pending_ != mode_ && switch_gain_ <= 0.f)
+                    ApplyMode(pending_);
+            }
 
             /* a freeze keeps sounding when the voice stops: the gate stays open */
             const float gate_target = !gate_on_ || gate_open_ || Frozen() ? 1.f : 0.f;
@@ -500,6 +554,7 @@ namespace chompi
         {
             StereoPitchShifter shifter;
             SawOsc             osc;   // robot mode
+            SawOsc             osc2;  // Angel's second, detuned note
             float              hz;    // robot mode: the note, with transpose
             int                key;
             float              ratio;
@@ -514,10 +569,11 @@ namespace chompi
          *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            v.shift = (60.f + v.semis) - sung_; // keys: from the sung note to the key's
+            v.shift = (48.f + v.semis) - sung_; // keys: from the sung note to the key's (key 8 = C3)
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
-            v.hz    = 261.62557f * powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
+            v.hz    = 130.81278f * powf(2.f, (v.semis + transpose_ + cents / 100.f
+                                              + CharacterOf(mode_).octave) / 12.f);
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -577,7 +633,9 @@ namespace chompi
             return float(int32_t(noise_)) * (1.f / 2147483648.f);
         }
 
-        static constexpr float kRobotNoise = .05f;
+        static constexpr float kRobotNoise   = .05f;
+        /* the vocoded characters came out quieter than Human on CHOMPI */
+        static constexpr float kVocodedLevel = 1.4f; // ~ +3 dB
 
         Vocoder          vocoder_;
         VoiceFreeze      vfreeze_;
@@ -585,7 +643,10 @@ namespace chompi
         float            human_mix_;                   // 0 live .. 1 frozen
         static constexpr float kHumanFade = .06f;      // s
         float            rec_note_;
-        float            character_;
+        float            character_, size_;
+        ChordMode        pending_;
+        float            switch_gain_;
+        static constexpr float kSwitchFade = .025f; // s, each way
         float            ring_mix_, ring_inc_, ring_phase_;
         uint32_t         noise_;
         daisysp::DcBlock dcblock_;

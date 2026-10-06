@@ -150,8 +150,10 @@ namespace chompi
                             break;
 
                         if(!test_page_.IsActive()) {
+                            /* SING: semitones from C3 (key 8), so a MIDI note
+                               sounds at its own pitch */
                             fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::START, 
-                                key - 36, midi2key[key], event.data[1] + 1));
+                                key - 24, midi2key[key], event.data[1] + 1));
                         }
                         else {
                             event_queue.AddButtonPressed(midi2key[key], 1, true);
@@ -166,7 +168,7 @@ namespace chompi
                             break;
 
                         fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::STOP, 
-                            key - 36, midi2key[key], event.data[1] + 1));
+                            key - 24, midi2key[key], event.data[1] + 1));
 
                         if (test_page_.IsActive()) {
                             event_queue.AddButtonReleased(midi2key[key]);
