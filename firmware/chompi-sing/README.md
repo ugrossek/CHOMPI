@@ -53,10 +53,11 @@ press them to switch. Every knob has a second control: **hold the chompi key and
 | **4**, page 1 (red) | **space**: reverb to the left, echo to the right, off in the middle | **echo time** | reset the effects |
 | **4**, page 2 (blue) | **filter**: low-pass to the left, high-pass to the right, off in the middle | **resonance** | reset the effects |
 | **5** | the big wheel: **time wheel** (above) | **envelope**: short and plucky ← → slow and swelling | |
-| **6**, page 1 (red) | **output volume** | **mix**: your voice ← → the harmonies | where your own voice goes: headphones / all outputs / off |
+| **6**, page 1 (red) | **output volume** | | |
 | **6**, page 2 (blue) | **input gain** | **compression** | |
 
-Size, character, pitch and mix start in the middle. **Character** means:
+Size, character and pitch start in the middle; all effects start off. You hear only the
+harmonies, not your own voice. **Character** means:
 
 - **Robot:** a soft sine to the left, the Kraftwerk buzz in the middle, noise (a whisper) to the
   right.

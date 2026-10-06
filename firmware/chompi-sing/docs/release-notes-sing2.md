@@ -8,12 +8,13 @@ SING turns CHOMPI into an instrument led by your voice. Press keys and sing, tal
 
 - **Three characters on the play button.** **Robot** (red): a vocoder, the Kraftwerk kind; the pitch you sing doesn't matter, and talking, whispering and noises all work. **Human** (warm white): your real voice, moved onto the keys' notes, whatever you sing. **Toy** (yellow): an 80s talking toy, Speak & Spell and Dalek metal.
 - **The keys play their own notes.** Press C-E-G, hear C-E-G. Key 8 is middle C.
-- **Simple controls:** one page per knob (two on the effects and volume knobs, as in TAPE), and every knob has a second control on chompi + turn. Pitch, size, character, space, time wheel, volume; width, doubler, echo time, filter, envelope, mix.
+- **Simple controls:** one page per knob (two on the effects and volume knobs, as in TAPE), and every knob has a second control on chompi + turn. Pitch, size, character, space, filter, time wheel, volume; width, doubler, echo time, resonance, envelope. Effects start off.
+- **Only the harmonies:** your own voice isn't mixed in.
 - **Freeze on the loop button:** hold the sound you're making and keep playing chords with it.
 - **Time wheel on the big wheel:** go back through the last 2 seconds, slowly or scratching.
 - **Latch follows your voice:** latch a chord and sing a melody, the chord moves with you.
 - **A tuner on the keys:** the note you sing lights up.
-- **Lights in red and warm white**, after Kraftwerk's *Die Mensch-Maschine*.
+- **Lights in red and warm white**, after Kraftwerk's *Die Mensch-Maschine*; the play button shows the character: red, white or yellow.
 - **Options** in `/SING/options.json`: Latch Follows Voice, Voice Gate, Show CPU.
 - The looper is gone (its buttons and wheel went to freeze, the characters and the time wheel).
 

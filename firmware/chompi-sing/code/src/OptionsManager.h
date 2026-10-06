@@ -17,8 +17,6 @@ class OptionsManager
   public:
     uint8_t midi_ch_in;     // 0..15
     uint8_t midi_ch_out;    // 0..15
-    uint8_t monitor_position; // a MonitorMode: 0 headphones, 1 all outputs, 3 off
-    bool    delay_split;    // knob 4: delay left, reverb right
     bool    latch_follows;  // latched chords follow the voice
     bool    voice_gate;     // harmonies only while there is sound
     bool    show_cpu;       // audio load on the white keys in the menu
@@ -28,8 +26,6 @@ class OptionsManager
     {
         midi_ch_in       = 0;
         midi_ch_out      = 0;
-        monitor_position = 0;
-        delay_split      = true;  // SING: space is reverb left, echo right
         latch_follows    = true;
         voice_gate       = false;
         show_cpu         = false;
@@ -74,10 +70,6 @@ class OptionsManager
         Entry(p, "Midi In Channel", num, true);
         sprintf(num, "%d", midi_ch_out + 1);
         Entry(p, "Midi Out Channel", num);
-        /* in the file: 1 headphones, 2 all outputs, 3 off */
-        sprintf(num, "%d", monitor_position == 3 ? 3 : monitor_position + 1);
-        Entry(p, "Monitor Position", num);
-        Entry(p, "Split Delay", delay_split ? "true" : "false");
         Entry(p, "Latch Follows Voice", latch_follows ? "true" : "false");
         Entry(p, "Voice Gate", voice_gate ? "true" : "false");
         Entry(p, "Show CPU", show_cpu ? "true" : "false");
@@ -128,12 +120,8 @@ class OptionsManager
                 midi_ch_in = n - 1;
             else if(strcmp(name, "Midi Out Channel") == 0 && n >= 1 && n <= 16)
                 midi_ch_out = n - 1;
-            else if(strcmp(name, "Monitor Position") == 0 && n >= 1 && n <= 3)
-                monitor_position = n == 3 ? 3 : n - 1;
             else if(!t && !f)
                 continue; // the rest are true / false
-            else if(strcmp(name, "Split Delay") == 0)
-                delay_split = t;
             else if(strcmp(name, "Latch Follows Voice") == 0)
                 latch_follows = t;
             else if(strcmp(name, "Voice Gate") == 0)
@@ -142,7 +130,8 @@ class OptionsManager
                 show_cpu = t;
             else if(strcmp(name, "Freeze Dump") == 0)
                 freeze_dump = t;
-            // anything else (TAPE's looper options in an old file): ignored
+            // anything else (TAPE's looper options, Monitor Position, Split
+            // Delay in an old file): ignored
         }
     }
 };

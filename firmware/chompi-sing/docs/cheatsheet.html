@@ -79,14 +79,14 @@
 
   /* middle row */
   .mid { display: grid; grid-template-columns: 1fr 1fr 1fr 1.55fr; gap: 10px; margin-bottom: 18px; }
-  .char.toy .head { background: var(--yellow); color: var(--ink); }
-  .char.toy .head .dot { background: var(--ink); opacity: .8; }
   .char { overflow: hidden; }
   .char .head { padding: 9px 13px; font-weight: 900; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; }
-  .char .head .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: .9; }
-  .char.robot .head { background: var(--magenta); }
-  .char.human .head { background: var(--ink); color: var(--paper); }
-  .char.human .head .dot { background: var(--paper); opacity: .95; }
+  /* all three alike, black; only the dot has the play button's colour */
+  .char .head { background: var(--ink); color: var(--paper); }
+  .char .head .dot { width: 14px; height: 14px; border-radius: 50%; }
+  .char.robot .head .dot { background: var(--coral); }
+  .char.human .head .dot { background: #fff4e6; }
+  .char.toy .head .dot { background: var(--yellow); }
   .char .body { padding: 11px 13px 12px; }
   .char p { margin: 0 0 6px; }
   .char .try { color: var(--soft); }
@@ -158,11 +158,9 @@
       <div class="top"><span class="num">6</span><span class="name">Volume</span></div>
       <ul class="rows">
         <li><span class="k">turn</span><span><span class="pg" style="background:var(--coral)">1</span><b>volume</b></span></li>
-        <li><span class="k c">chompi</span><span><b>mix</b>: voice / harmonies</span></li>
         <li><span class="k">turn</span><span><span class="pg" style="background:var(--blue)">2</span><b>input gain</b></span></li>
         <li><span class="k c">chompi</span><span>compression</span></li>
       </ul>
-      <div class="menu-line"><span class="m">chompi + press</span> your voice: phones / all / off</div>
     </div>
   </section>
 
@@ -216,7 +214,6 @@
         <li><code>Latch Follows Voice</code> true: latched chords follow you</li>
         <li><code>Voice Gate</code> false: every noise plays along</li>
         <li><code>Show CPU</code> false: true shows the load in the menu</li>
-        <li><code>Monitor Position</code> 1 headphones, 2 all, 3 off</li>
       </ul>
     </div>
     <div class="card panel">

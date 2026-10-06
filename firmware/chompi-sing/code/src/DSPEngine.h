@@ -276,7 +276,7 @@ namespace daisy
                 monitor[i] += sig;
                 monitor[size + i] += sig;
 
-                // SING: the mix knob turns the dry voice down (the meter keeps it)
+                // SING: the dry voice is off (the meter keeps it)
                 out[0][i] += sig * dry_gain_;
                 out[1][i] += sig * dry_gain_;
             }
@@ -525,22 +525,6 @@ namespace daisy
         /* SING: envelope, short and plucky .. slow and swelling (chompi + knob 5) */
         void SetEnvelope(float val) { harmonizer.SetEnvelope(val); }
 
-        /* SING: mix (chompi + knob 6, page 1): .5 your voice at full and the
-           harmonies at their usual 75%; left the harmonies fade out, right
-           your voice does, and the harmonies come up to full */
-        void SetMix(float m)
-        {
-            if (m < .5f)
-            {
-                dry_gain_ = 1.f;
-                harmonizer.SetLevel(.75f * m * 2.f);
-            }
-            else
-            {
-                dry_gain_ = 1.f - (m - .5f) * 2.f;
-                harmonizer.SetLevel(.75f + .25f * (m - .5f) * 2.f);
-            }
-        }
 
         void SetInputGain(float gain) 
         {
@@ -689,7 +673,9 @@ namespace daisy
         float reverb_time_, reverb_time_target_;
         float dly_amt_, dly_amt_target_;
         float saturate_amt_, saturate_amt_target_;
-        float dry_gain_ = 1.f; // SING: the mix knob's share of the dry voice
+        /* SING: no dry voice, only the harmonies. The monitor path still runs
+           (in headphones mode), so it feeds the input meter */
+        float dry_gain_ = 0.f;
         float cutoff_, cutoff_target_;
         float res_, res_target_;
         

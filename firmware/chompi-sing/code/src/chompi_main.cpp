@@ -384,8 +384,10 @@ int main(void)
     options.Init();
 
     LedSetup();
+    /* SING: space is always split, reverb left, off in the middle, echo
+       right (an old card's "Split Delay": false had it start at 50% of both) */
     ui.Init(&hw, &engine,
-        options.midi_ch_in, options.midi_ch_out, options.delay_split);
+        options.midi_ch_in, options.midi_ch_out, true);
 
     hw.StartLowPriorityCallback(SDCallback, 1000);
     engine.cpu_meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
@@ -395,7 +397,7 @@ int main(void)
 
 
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0],
-                MonitorMode(options.monitor_position));
+                MonitorMode::HP); // SING: dry_gain_ 0, so this only feeds the input meter
     /* SING's switches from options.json, after Init, which resets them */
     engine.SetLatchFollows(options.latch_follows);
     engine.SetVoiceGate(options.voice_gate);

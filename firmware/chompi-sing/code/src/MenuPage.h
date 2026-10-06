@@ -126,8 +126,7 @@ namespace chompi
                 }
                 else if(knob_page[5] == 0)
                 {
-                    // SING: mix, warm white in the middle, red towards voice or harmonies
-                    SingTransposeColour(enc_values[2][5], r, g, b);
+                    r = g = b = 0.f; // SING: no second control on volume
                 }
                 else
                 {
@@ -293,9 +292,7 @@ namespace chompi
                     break;
                 case 4: fx_->SetEnvelope(layer(4)); break; // envelope
                 case 5:
-                    if(page == 0) // mix: your voice <-> the harmonies
-                        fx_->SetMix(layer(5));
-                    else // compression
+                    if(page == 1) // compression
                     {
                         final_comp = fclamp(final_comp + inc, 0.f, 1.f);
                         fx_->SetFinalComp(final_comp);
@@ -363,12 +360,7 @@ namespace chompi
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_6_SW): // volume
-                if(rising)
-                {
-                    fx_->IncrementMonitorMode();
-                    input_toggled = true;
-                }
-            break;
+                break; // SING: no dry voice, so no monitor mode to choose
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_3_SW): // magic wand
             {
