@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SING cheat sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* Rendered at 1200 x 750 CSS px, device scale 2 -> 2400 x 1500 PNG
+     (render.sh). Colours follow SING's lights. */
+  :root {
+    --paper: #FAF6F0;
+    --card: #FFFFFF;
+    --ink: #1B1815;
+    --soft: #6E655B;
+    --line: #EAE1D5;
+    --coral: #E5564A;
+    --magenta: #E8247A;
+    --gold: #F2B51D;
+    --amber: #FF9431;
+    --rose: #FF7393;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    width: 1200px; height: 750px; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    font-family: "Schibsted Grotesk", system-ui, sans-serif;
+    font-size: 12.8px; line-height: 1.38;
+    padding: 28px 30px 18px;
+  }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  h1 { font-size: 44px; font-weight: 900; letter-spacing: -.04em; margin: 0; line-height: 1; }
+  .badge {
+    background: var(--coral); color: #fff; border-radius: 7px; padding: 5px 11px;
+    font-weight: 800; font-size: 14px; box-shadow: 0 2px 0 #B8392F;
+  }
+  header .tag { margin-left: auto; color: var(--soft); font-size: 12.5px; text-align: right; max-width: 480px; }
+  h2 { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: var(--soft); margin: 0 0 7px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+
+  /* knobs */
+  .knobs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px; }
+  .knob { padding: 12px 12px 13px; }
+  .knob .top { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .num {
+    flex: none; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--ink); color: #fff; font-weight: 800; font-size: 13px;
+    display: grid; place-items: center;
+  }
+  .num.big { background: var(--magenta); width: 30px; height: 30px; font-size: 15px; }
+  .knob .name { font-weight: 800; font-size: 15px; line-height: 1.15; }
+  .pages { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .pages li { display: grid; grid-template-columns: 15px 1fr; gap: 4px; }
+  .pages .p { color: var(--soft); font-weight: 700; }
+  .pages b { font-weight: 800; }
+  .r { color: var(--magenta); font-weight: 700; }
+  .h { color: #B98100; font-weight: 700; }
+  .menu-line { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--soft); }
+  .menu-line .m { color: var(--coral); font-weight: 800; }
+
+  /* middle row */
+  .mid { display: grid; grid-template-columns: 1fr 1fr 1.45fr; gap: 10px; margin-bottom: 18px; }
+  .char { overflow: hidden; }
+  .char .head { padding: 9px 13px; font-weight: 900; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .char .head .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: .9; }
+  .char.robot .head { background: var(--magenta); }
+  .char.human .head { background: var(--gold); color: var(--ink); }
+  .char.human .head .dot { background: var(--ink); opacity: .8; }
+  .char .body { padding: 11px 13px 12px; }
+  .char p { margin: 0 0 6px; }
+  .char .try { color: var(--soft); }
+
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 5px 0; vertical-align: top; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 800; white-space: nowrap; padding-right: 12px; width: 1%; }
+  .buttons { padding: 9px 13px 6px; }
+
+  /* bottom row */
+  .bottom { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 10px; }
+  .panel { padding: 12px 14px 11px; }
+  .chip { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; margin-right: 3px; }
+  ul.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+  ul.plain li b { font-weight: 800; }
+  code { font-family: inherit; font-weight: 800; }
+  footer { position: absolute; left: 30px; right: 30px; bottom: 12px; display: flex; color: var(--soft); font-size: 10.5px; }
+  footer span:last-child { margin-left: auto; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>SING</h1>
+    <span class="badge">Hold CHOMPI = menu</span>
+    <p class="tag">Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice. Use headphones. Key 8 (the middle C) is C3.</p>
+  </header>
+
+  <h2>KNOBS, LEFT TO RIGHT · PRESS TO SWITCH PAGE</h2>
+  <section class="knobs">
+    <div class="card knob">
+      <div class="top"><span class="num">1</span><span class="name">Pitch &amp; level</span></div>
+      <ul class="pages">
+        <li><span class="p">1</span><span><b>transpose</b> ±12</span></li>
+        <li><span class="p">2</span><span><b>harmony volume</b></span></li>
+        <li><span class="p">3</span><span><b>metal</b> (Dalek), left = off</span></li>
+      </ul>
+      <div class="menu-line"><span class="m">menu</span> turn: fifths &amp; octaves · press: reset</div>
+    </div>
+    <div class="card knob">
+      <div class="top"><span class="num">2</span><span class="name">Size &amp; attack</span></div>
+      <ul class="pages">
+        <li><span class="p">1</span><span><span class="r">Robot</span> <b>size</b>: left monster, right mouse · <span class="h">Human</span> <b>spread</b></span></li>
+        <li><span class="p">2</span><span><b>attack</b></span></li>
+        <li><span class="p">3</span><span><span class="r">Robot</span> <b>spread</b></span></li>
+      </ul>
+    </div>
+    <div class="card knob">
+      <div class="top"><span class="num">3</span><span class="name">Sound &amp; release</span></div>
+      <ul class="pages">
+        <li><span class="p">1</span><span><span class="r">Robot</span> <b>character</b>: left soft, middle buzz, right whisper · <span class="h">Human</span> <b>doubler</b></span></li>
+        <li><span class="p">2</span><span><b>release</b></span></li>
+        <li><span class="p">3</span><span><span class="r">Robot</span> <b>doubler</b></span></li>
+      </ul>
+    </div>
+    <div class="card knob">
+      <div class="top"><span class="num">4</span><span class="name">Effects</span></div>
+      <ul class="pages">
+        <li><span class="p">1</span><span><b>space</b>: reverb &amp; delay</span></li>
+        <li><span class="p">2</span><span><b>Speak &amp; Spell</b></span></li>
+        <li><span class="p">3</span><span><b>filter</b></span></li>
+      </ul>
+      <div class="menu-line"><span class="m">menu</span> turn: delay time / wobble / resonance · press: reset</div>
+    </div>
+    <div class="card knob">
+      <div class="top"><span class="num big">5</span><span class="name">Time wheel</span></div>
+      <ul class="pages">
+        <li><span class="p"></span><span><b>turn left</b>: back through the last 2 s (freezes); slow = slowly, back &amp; forth = scratch</span></li>
+        <li><span class="p"></span><span><b>press</b>: back to live</span></li>
+      </ul>
+    </div>
+    <div class="card knob">
+      <div class="top"><span class="num">6</span><span class="name">Volume</span></div>
+      <ul class="pages">
+        <li><span class="p">1</span><span><b>output volume</b></span></li>
+        <li><span class="p">2</span><span><b>input gain</b></span></li>
+        <li><span class="p"></span><span>hold 2 s: battery</span></li>
+      </ul>
+      <div class="menu-line"><span class="m">menu</span> turn: compression · press: your voice to headphones / all / off</div>
+    </div>
+  </section>
+
+  <section class="mid">
+    <div class="card char robot">
+      <div class="head"><span class="dot"></span>Robot</div>
+      <div class="body">
+        <p>A vocoder, the Kraftwerk kind: every key plays a synth note that says what you say. Your pitch doesn't matter.</p>
+        <p class="try">Try: talk, whisper, clap, a squeaky door. Size fully left = monster, right = mouse.</p>
+      </div>
+    </div>
+    <div class="card char human">
+      <div class="head"><span class="dot"></span>Human</div>
+      <div class="body">
+        <p>Your real voice, moved onto the keys' notes, whatever you sing.</p>
+        <p class="try">Try: sing near the keys' range. Key 8 is your own note, unchanged.</p>
+      </div>
+    </div>
+    <div class="card buttons">
+      <h2>BUTTONS &amp; SWITCH</h2>
+      <table>
+        <tr><td>Play</td><td>next character: <span class="chip" style="background:var(--magenta)"></span>Robot · <span class="chip" style="background:var(--gold)"></span>Human</td></tr>
+        <tr><td>Loop</td><td><b>freeze</b> the sound you're making (white); again: live</td></tr>
+        <tr><td>Toggle</td><td><b>latch</b>: notes keep sounding; the chord <b>follows your voice</b> (key 8 = your note). Press a key again to drop it</td></tr>
+        <tr><td>CHOMPI</td><td>hold for the menu: <span style="color:var(--coral);font-weight:800">menu</span> lines above</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="bottom">
+    <div class="card panel">
+      <h2>LIGHTS</h2>
+      <ul class="plain">
+        <li><span class="chip" style="background:var(--magenta)"></span><b>held keys</b> magenta · middle C dim amber</li>
+        <li><span class="chip" style="background:#F4EADC;box-shadow:inset 0 0 0 1px #d8cfc2"></span><b>the note you sing</b>: warm white in tune, coral flat, gold sharp</li>
+        <li><span class="chip" style="background:var(--gold)"></span><b>white keys</b> show a knob's position for a moment</li>
+        <li><span class="chip" style="background:var(--magenta)"></span><b>chompi key</b> magenta while latched, else your input level</li>
+        <li><span class="chip" style="background:var(--rose)"></span><b>wheel LEDs</b> while frozen: how far back vs. now</li>
+      </ul>
+    </div>
+    <div class="card panel">
+      <h2>OPTIONS.JSON (IN /SING)</h2>
+      <ul class="plain">
+        <li><code>Latch Follows Voice</code> true: latched chords follow you</li>
+        <li><code>Voice Gate</code> false: every noise plays along; true: only a voice</li>
+        <li><code>Show CPU</code> false: true shows the load on the keys in the menu</li>
+        <li><code>Monitor Position</code> 1 headphones, 2 all, 3 off</li>
+      </ul>
+    </div>
+    <div class="card panel">
+      <h2>TRY</h2>
+      <ul class="plain">
+        <li>Hold C-E-G, say <b>"hello"</b>, then turn size fully left</li>
+        <li>Sing <b>"aaa"</b>, press loop, stop singing, play chords</li>
+        <li>Say a word, then <b>turn the wheel back</b> slowly</li>
+        <li>Latch a chord, sing a <b>melody</b> over it</li>
+        <li>An <b>external mic</b> avoids key clicks</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>SING by ugrossek · github.com/ugrossek/CHOMPI · made with Claude</span>
+    <span>Community firmware, not an official CHOMPI Club release</span>
+  </footer>
+</body>
+</html>
