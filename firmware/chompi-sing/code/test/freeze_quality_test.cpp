@@ -11,6 +11,7 @@
 #include "Vocoder.h"
 #include "VoiceFreeze.h"
 #include "PitchDetector.h"
+#include <vector>
 
 using namespace chompi;
 static const float kSr = 48000.f, kPi = 3.14159265f;
@@ -40,6 +41,31 @@ struct Voice
                  * sinf(2.f * kPi * h * ph + h * 1.3f);
         }
         return amp * (s * .9f + .03f * Noise());
+    }
+};
+
+/* flutter: the level above ~2 kHz in 4 ms windows, its spread relative to
+   its mean (a steady sound stays low; a pulsing one goes up) */
+struct Flutter
+{
+    float lp = 0.f; double win = 0; int n = 0; std::vector<double> w;
+    void Add(const float *x, int k)
+    {
+        for (int i = 0; i < k; i++)
+        {
+            lp += .23f * (x[i] - lp);
+            const float h = x[i] - lp;
+            win += h * h;
+            if (++n == 192) { w.push_back(sqrt(win / 192)); win = 0; n = 0; }
+        }
+    }
+    double Depth() const
+    {
+        double m = 0, v = 0;
+        for (double a : w) m += a;
+        m /= w.size();
+        for (double a : w) v += (a - m) * (a - m);
+        return sqrt(v / w.size()) / m;
     }
 };
 
@@ -85,12 +111,14 @@ int main()
             Voice voice{f0};
             float in[kBlock], out[kBlock];
             Meter live, frozen;
+            Flutter flive, ffrozen;
             int n = 0;
             for (int b = 0; b < 1500; b++)
             {
                 if (b < 1000)
                 {
                     for (int i = 0; i < kBlock; i++) in[i] = voice.Sample(.05f);
+                    if (b >= 500) flive.Add(in, kBlock);
                     pd.Process(in, kBlock); pd.Update();
                     vf.Record(in, kBlock, pd.Voiced() ? pd.Note() : 0.f);
                     if (b >= 500) live.Add(in, kBlock);
@@ -99,12 +127,14 @@ int main()
                 {
                     if (b == 1000) vf.SetFreeze(true);
                     vf.Play(out, kBlock);
-                    if (b >= 1100) { frozen.Add(out, kBlock); n += kBlock; }
+                    if (b >= 1100) { frozen.Add(out, kBlock); ffrozen.Add(out, kBlock); n += kBlock; }
                 }
             }
             const double db = 20 * log10(frozen.Rms(n) / live.Rms(500 * kBlock));
             printf("human, voice %3.0f Hz: live %4.0f Hz bright, frozen %4.0f Hz (%+5.1f%%), level %+5.1f dB\n",
                    f0, live.Bright(), frozen.Bright(), 100 * (frozen.Bright() / live.Bright() - 1), db);
+            printf("      flutter of the highs: live %.2f, frozen %.2f\n", flive.Depth(), ffrozen.Depth());
+            Check(ffrozen.Depth() < flive.Depth() * 1.3 + .02, "human freeze doesn't flutter more than the voice");
             Check(fabs(frozen.Bright() / live.Bright() - 1) < .08, "human freeze keeps the brightness (8%)");
             Check(fabs(db) < 1.5, "human freeze keeps the level (1.5 dB)");
         }

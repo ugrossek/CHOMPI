@@ -45,7 +45,7 @@ Press a knob to switch its page.
 |---|---|---|---|
 | **1** | **transpose**, ±12 semitones, continuous | **harmony volume** | **metal**: ring modulator (Dalek), off fully left |
 | **2** | **size**: left big, right small | **spread** | **attack** |
-| **3** | **character**: left soft, right whisper | **doubler** | **release** |
+| **3** | **character**: left soft, right airy | **doubler** | **release** |
 | **4** | **space**: reverb and delay | **Speak & Spell**: fewer samples and bits | **filter** |
 | **5** | the big wheel: time wheel, above | | |
 | **6** | **output volume** | **input gain** | |
@@ -56,8 +56,9 @@ the middle:
 
 - **Size:** Robot moves its mouth (formants), from monster to mouse. Human tilts the tone,
   darker and fuller to the left, brighter and thinner to the right.
-- **Character:** Robot's synth goes from a soft sine through the Kraftwerk buzz to noise. Human
-  gets softer to the left and turns into a whisper to the right (the vocoder on noise).
+- **Character:** Robot's synth goes from a soft sine through the Kraftwerk buzz to noise (a
+  whisper). Human gets softer to the left and breathier to the right: air that follows your
+  voice, so singing turns breathy and whispering stays a whisper.
 
 Spread places the voices left and right; doubler thickens them with a chorus. Hold knob 6 for
 two seconds to see the battery.
@@ -120,7 +121,8 @@ Every start begins from the defaults; SING doesn't save knob settings.
   reads them from a 2-second history.
 - **Human** ([`Harmonizer.h`](code/src/Harmonizer.h)): each key runs the voice through its own
   WSOLA pitch shifter ([`PitchShifter.h`](code/src/PitchShifter.h)), by the distance from the
-  sung note to the key's note.
+  sung note to the key's note. Freeze holds the latest steady moment of the voice, not one in the
+  middle of a glide or a consonant.
 - **Pitch** ([`PitchDetector.h`](code/src/PitchDetector.h)): YIN on the input, every 4 ms, 80 Hz
   to 1 kHz, computed in the main loop so it doesn't take time from the voices.
 - **Human's freeze** ([`VoiceFreeze.h`](code/src/VoiceFreeze.h)): a 2.7-second recording of the

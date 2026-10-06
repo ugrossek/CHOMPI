@@ -637,8 +637,8 @@ namespace chompi
         Voice            voices_[kVoices];
         /** Human's size and character (the robot's are in the vocoder):
          *  character left of centre softens (a lowpass, 12 kHz down to
-         *  800 Hz); right of centre blends in a whisper, the vocoder on
-         *  noise for the held keys; size tilts the tone, left darker and
+         *  800 Hz); right of centre adds breath (noise that follows the
+         *  voice) for the held keys; size tilts the tone, left darker and
          *  fuller (bigger), right brighter and thinner (smaller). */
         void HumanCharacter(float *hl, float *hr, float *car_l, float *car_r,
                             const float *wsum_l, const float *wsum_r, float whisper, size_t size)
@@ -657,19 +657,22 @@ namespace chompi
             }
             else if (whisper > 0.f)
             {
-                float wl[size], wr[size];
+                /* breath: noise above ~2.5 kHz that follows the voice's
+                   level, for the held keys, with a little less voice. Sung
+                   it turns breathy; whispered it stays a whisper. (Was the
+                   vocoder on noise: too much CPU with 7 voices, and sung it
+                   replaced the voice with noise.) */
+                (void)car_l;
+                (void)car_r;
                 for (size_t i = 0; i < size; i++)
                 {
-                    const float n = Noise() * kVocodedLevel;
-                    car_l[i] = n * wsum_l[i];
-                    car_r[i] = n * wsum_r[i];
-                    wl[i] = wr[i] = 0.f;
-                }
-                vocoder_.Process(in_now_, car_l, car_r, wl, wr, size, spread_ > 0.f, true);
-                for (size_t i = 0; i < size; i++)
-                {
-                    hl[i] = hl[i] * (1.f - whisper) + wl[i] * whisper;
-                    hr[i] = hr[i] * (1.f - whisper) + wr[i] * whisper;
+                    const float x = fabsf(in_now_[i]);
+                    breath_env_ += (x - breath_env_) * (x > breath_env_ ? kBreathAtt : kBreathRel);
+                    const float n = Noise();
+                    breath_lp_ += kBreathHp * (n - breath_lp_);
+                    const float air = (n - breath_lp_) * breath_env_ * kBreathGain * whisper;
+                    hl[i] = hl[i] * (1.f - .35f * whisper) + air * wsum_l[i];
+                    hr[i] = hr[i] * (1.f - .35f * whisper) + air * wsum_r[i];
                 }
             }
 
@@ -689,6 +692,11 @@ namespace chompi
         }
 
         static constexpr float kTiltCoef = .123f; // one pole, ~1 kHz at 48 kHz
+        static constexpr float kBreathHp   = .28f;   // one pole, ~2.5 kHz: below is taken out
+        static constexpr float kBreathAtt  = .02f;   // the voice's level, ~1 ms up
+        static constexpr float kBreathRel  = .0007f; // ~30 ms down
+        static constexpr float kBreathGain = .5f; // full right ~ as loud as the voice alone
+        float breath_env_ = 0.f, breath_lp_ = 0.f;
         float soft_l_ = 0.f, soft_r_ = 0.f, tilt_l_ = 0.f, tilt_r_ = 0.f;
         const float *in_now_ = nullptr; // this block's voice, for the whisper
 

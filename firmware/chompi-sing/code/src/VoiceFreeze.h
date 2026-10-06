@@ -67,7 +67,9 @@ namespace chompi
         {
             if (on && !frozen_)
             {
-                pos_ = target_ = 0.f;
+                /* freeze the latest steady moment, not one in the middle of
+                   a glide or a consonant: repeated, those flutter */
+                pos_ = target_ = float(SteadyFramesBack() * block_);
                 next_ = 0;
                 grain_[0].len = grain_[1].len = 0;
             }
@@ -96,8 +98,7 @@ namespace chompi
             pos_ += (target_ - pos_) * kGlide;
 
             /* the pitch at the read point gives the period */
-            const int frames_back = int(pos_ / float(block_ > 0 ? block_ : 48));
-            note_ = pitch_[(fw_ - 1 - frames_back) & (kFrames - 1)];
+            note_ = PitchAt(int(pos_ / float(block_ > 0 ? block_ : 48)));
             const float period = note_ > 0.f ? sr_ / (440.f * exp2f((note_ - 69.f) / 12.f))
                                              : sr_ * .01f;
 
@@ -130,6 +131,44 @@ namespace chompi
         }
 
       private:
+        /* the detector describes audio from about this many blocks before
+           it reports (half its 29 ms frame) */
+        static constexpr int kDetLag      = 15;
+        static constexpr int kSteadyWin   = 45;   // blocks a frozen grain pair covers
+        static constexpr int kSteadyLook  = 300;  // blocks searched back
+        static constexpr float kSteadyMax = .3f;  // semitones of movement allowed
+
+        /** the sung note for the audio frames_back blocks before the newest */
+        float PitchAt(int frames_back) const
+        {
+            int f = frames_back - kDetLag;
+            if (f < 0)
+                f = 0;
+            return pitch_[(fw_ - 1 - f) & (kFrames - 1)];
+        }
+
+        /** how far back the latest steady, pitched stretch is (blocks);
+         *  0 if there is none in the last kSteadyLook */
+        int SteadyFramesBack() const
+        {
+            for (int k = 0; k <= kSteadyLook; k += 3)
+            {
+                float lo = 1e9f, hi = -1e9f;
+                bool  ok = true;
+                for (int j = k; j < k + kSteadyWin && ok; j++)
+                {
+                    const float n = PitchAt(j);
+                    if (n <= 0.f)
+                        ok = false;
+                    lo = n < lo ? n : lo;
+                    hi = n > hi ? n : hi;
+                }
+                if (ok && hi - lo < kSteadyMax)
+                    return k;
+            }
+            return 0;
+        }
+
         static constexpr int   kMaxGrain = 4096;  // samples
         static constexpr float kGlide    = .08f;  // per block, ~12 ms
         static constexpr int   kCorr     = 128;   // samples compared when lining up
