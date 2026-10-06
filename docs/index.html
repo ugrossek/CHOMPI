@@ -167,6 +167,12 @@
     font-size: 1rem; font-weight: 800;
   }
   /* done: the number turns into a tick, drawn (the font has no ✓) */
+  /* the Connect tab says how things stand: red not connected, amber
+     connecting, green connected */
+  #step-connect[data-conn="off"]  { --tab: #F2685A; }
+  #step-connect[data-conn="busy"] { --tab: #FFB43A; }
+  #step-connect[data-conn="on"]   { --tab: var(--tab-4); }
+  .steps h2 .conn { margin-left: auto; font-size: .92rem; font-weight: 700; opacity: .85; }
   .steps > li.done h2 .num { font-size: 0; }
   .steps > li.done h2 .num::after {
     content: ""; width: 7px; height: 13px; margin-top: -3px;
@@ -290,10 +296,10 @@
   </details>
 
   <ol class="steps">
-    <li id="step-connect">
-      <h2><span class="num">1</span>Connect</h2>
+    <li id="step-connect" data-conn="off">
+      <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
       <div class="inner">
-        <p>Turn CHOMPI on with the launcher showing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes.</p>
+        <p>Turn CHOMPI on with the launcher showing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself whenever it opens.</p>
         <div class="row">
           <button class="act" id="connect">Connect CHOMPI</button>
           <select id="port" hidden aria-label="MIDI device"></select>
@@ -461,6 +467,7 @@ async function connectTo(pair, quiet = false) {
   if (state.pair?.in) state.pair.in.onmidimessage = null;
   state.pair = pair;
   state.connecting = true;
+  paintConnection();
   screen(`Knocking on ${pair.name}…`, "busy");
   let ok = false;
   try {
@@ -506,22 +513,37 @@ async function autoConnect() {
     screen("CHOMPI is there, but the launcher isn't answering. Power-cycle it with the launcher showing; this page connects by itself.", "idle");
 }
 
-$("connect").addEventListener("click", async () => {
+/** user: from the Connect button; otherwise by itself on opening the page,
+ *  which only happens once MIDI is allowed and stays quiet about failures */
+async function startMidi(user) {
   if (!navigator.requestMIDIAccess) {
-    show("connect-result", "This browser can't talk MIDI. Open this page in Chrome or Edge.", true);
+    if (user) show("connect-result", "This browser can't talk MIDI. Open this page in Chrome or Edge.", true);
     return;
   }
-  try {
-    state.access = await navigator.requestMIDIAccess({ sysex: true });
-  } catch {
-    show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
-    return;
+  if (!state.access) {
+    try {
+      state.access = await navigator.requestMIDIAccess({ sysex: true });
+    } catch {
+      if (user) show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
+      return;
+    }
+    state.access.onstatechange = () => refreshPorts(false);
   }
-  state.access.onstatechange = () => refreshPorts(false);
-  refreshPorts(true);
-});
+  refreshPorts(true, !user);
+}
+$("connect").addEventListener("click", () => startMidi(true));
 
-function refreshPorts(connectNow) {
+/* MIDI allowed on an earlier visit: connect right away, no click needed
+   (the first time the browser has to ask, and that needs a click) */
+(async () => {
+  try {
+    if (!navigator.permissions || !navigator.requestMIDIAccess) return;
+    const p = await navigator.permissions.query({ name: "midi", sysex: true });
+    if (p.state === "granted") startMidi(false);
+  } catch { /* no permissions API for MIDI here: the button it is */ }
+})();
+
+function refreshPorts(connectNow, quiet = false) {
   const pairs = portsByName();
   const sel = $("port");
   sel.replaceChildren(...pairs.map((p, i) => new Option(p.name, i)));
@@ -531,6 +553,7 @@ function refreshPorts(connectNow) {
     if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
       state.info = null;
       $("step-connect").classList.remove("done");
+      show("connect-result", "");
       screen("CHOMPI went away. Turn it on with the launcher showing; this page connects by itself.", "idle");
       update();
     }
@@ -539,6 +562,10 @@ function refreshPorts(connectNow) {
     return;
   }
   if (!pairs.length) {
+    if (quiet) {
+      screen("Waiting for CHOMPI. Turn it on with the launcher showing and plug it in.", "idle");
+      return; // it connects when it shows up
+    }
     show("connect-result", `No MIDI device found that can both send and receive. Is CHOMPI on, showing the launcher, and plugged in? (The browser sees ${seenPorts()}.)`, true);
     logLines.push(`ports seen: ${seenPorts()}`);
     return;
@@ -546,7 +573,7 @@ function refreshPorts(connectNow) {
   logLines.push(`ports seen: ${seenPorts()}`);
   const guess = Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)));
   sel.value = guess;
-  connectTo(pairs[guess]);
+  connectTo(pairs[guess], quiet);
 }
 $("port").addEventListener("change", (e) => connectTo(portsByName()[e.target.value]));
 
@@ -610,7 +637,15 @@ $("name").addEventListener("input", (e) => {
   update();
 });
 
+/** the Connect tab's colour and words */
+function paintConnection() {
+  const conn = state.connecting ? "busy" : state.info ? "on" : "off";
+  $("step-connect").dataset.conn = conn;
+  $("conn-state").textContent = conn === "on" ? "connected" : conn === "busy" ? "connecting…" : "not connected";
+}
+
 function update() {
+  paintConnection();
   const name = $("name").value;
   const nn = state.slot ? String(state.slot).padStart(2, "0") : "NN";
   $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
