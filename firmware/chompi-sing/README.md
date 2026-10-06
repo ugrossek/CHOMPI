@@ -68,7 +68,7 @@ two seconds to see the battery.
 | | |
 |---|---|
 | Knob 1, turn | transpose in **fifths and octaves** (−12, −7, 0, +7, +12) |
-| Knob 1, press | back to the default: transpose 0 / harmony volume / metal off |
+| Knob 1, 2 or 3, press | reset all three pages of that knob to the start (white while held) |
 | Knob 4, turn | the effect's detail: delay time, wobble (on Speak & Spell), filter resonance |
 | Knob 4, press | reset all effects |
 | Knob 6, turn | output compression |

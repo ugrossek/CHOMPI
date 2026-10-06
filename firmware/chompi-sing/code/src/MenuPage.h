@@ -148,7 +148,14 @@ namespace chompi
                     SingTransposeColour(enc_values[0][0], r, g, b);
                 else
                     r = g = b = 0.f;
+                if(knob_reset_[0])
+                    r = g = b = 1.f;
                 SetPthLedFloat(1, r, g, b);
+                // knobs 2, 3: white while being reset
+                if(knob_reset_[1])
+                    SetPthLedFloat(2, 1.f, 1.f, 1.f);
+                if(knob_reset_[2])
+                    SetPthLedFloat(3, 1.f, 1.f, 1.f);
             }
 
             // SING: no preset keys (TAPE: save / copy / erase)
@@ -303,24 +310,16 @@ namespace chompi
                 break;
 
 
+            /* SING: knobs 1-3 pressed here reset all three of their pages,
+               like knob 4 does the effects; the ring is white while held */
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
-                if(rising) // SING: back to no transpose / default volume
+                knob_reset_[0] = rising;
+                if(rising) // transpose 0, harmony volume, metal off
                 {
-                    if(knob_page[0] == 0)
-                    {
-                        enc_values[0][0] = .5f;
-                        fx_->SetTranspose(.5f);
-                    }
-                    else if(knob_page[0] == 1)
-                    {
-                        enc_values[1][0] = enc_defaults[1][0];
-                        fx_->SetGain(enc_values[1][0]);
-                    }
-                    else // metal off
-                    {
-                        enc_values[2][0] = 0.f;
-                        fx_->SetRing(0.f);
-                    }
+                    ResetKnob(0);
+                    fx_->SetTranspose(enc_values[0][0]);
+                    fx_->SetGain(enc_values[1][0]);
+                    fx_->SetRing(enc_values[2][0]);
                 }
                 break;
 
@@ -329,8 +328,26 @@ namespace chompi
                 return false;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
+                knob_reset_[1] = rising;
+                if(rising) // spread, attack, size
+                {
+                    ResetKnob(1);
+                    fx_->SetSpread(enc_values[0][1]);
+                    fx_->SetAttack(enc_values[1][1]);
+                    fx_->SetSize(enc_values[2][1]);
+                }
+                break;
+
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // knob 3
-                break; // SING: no autoloop / sustain toggles
+                knob_reset_[2] = rising;
+                if(rising) // doubler, release, character
+                {
+                    ResetKnob(2);
+                    fx_->SetDoubler(enc_values[0][2]);
+                    fx_->SetDecay(enc_values[1][2]);
+                    fx_->SetCharacter(enc_values[2][2]);
+                }
+                break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_6_SW): // volume
                 if(rising)
@@ -408,6 +425,7 @@ namespace chompi
         void OnFocusGained() override
         {
             fx_reset = false;
+            knob_reset_[0] = knob_reset_[1] = knob_reset_[2] = false;
             pitch_reset = false;
             chompi_key_pressed = true;
 
@@ -461,6 +479,14 @@ namespace chompi
         float final_comp;
 
         bool fx_reset = false;
+        bool knob_reset_[3] = {false, false, false}; // SING: knobs 1-3 pressed in the menu
+
+        /** all three pages of knob k (0..2) back to their defaults */
+        void ResetKnob(int k)
+        {
+            for(int row = 0; row < 3; row++)
+                enc_values[row][k] = enc_defaults[row][k];
+        }
         bool pitch_reset = false;
 
     };
