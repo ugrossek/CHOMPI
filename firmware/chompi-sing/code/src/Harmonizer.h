@@ -68,8 +68,9 @@ namespace chompi
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
-            sung_     = 60.f;
+            sung_     = 48.f; // C3, key 8, until anything is sung
             heard_any_ = false;
+            follow_on_ = true;
 
             /* the knob defaults in ui.h, so start-up matches the knobs even
                before a page is shown */
@@ -274,9 +275,7 @@ namespace chompi
         void SetSung(bool voiced, float note)
         {
             rec_note_ = voiced ? note : 0.f; // recorded with the voice
-            if (mode_ != ChordMode::Keys)
-                return;
-            if (vfreeze_.Frozen())
+            if (mode_ == ChordMode::Keys && vfreeze_.Frozen())
             {
                 /* frozen: the note that was sung where the wheel points */
                 const float n = vfreeze_.Note();
@@ -288,10 +287,25 @@ namespace chompi
                 sung_ = heard_any_ ? sung_ + (note - sung_) * kSungSmooth : note;
                 heard_any_ = true;
             }
-            for (size_t i = 0; i < kVoices; i++)
-                if (voices_[i].gate || voices_[i].env > 0.f)
-                    UpdateRatio(voices_[i], i);
+            /* the voices move with the sung note in Human (fixed notes), and
+               in every character while latched chords follow the voice */
+            if (mode_ == ChordMode::Keys || Following())
+                for (size_t i = 0; i < kVoices; i++)
+                    if (voices_[i].gate || voices_[i].env > 0.f)
+                        UpdateRatio(voices_[i], i);
         }
+
+        /** Latched chords follow the voice (options.json, on by default):
+         *  while latched, key 8 stands for the sung note and the other keys
+         *  keep their distance from it, so the chord moves with the melody.
+         *  Not latched, the keys play their own notes. */
+        void SetFollow(bool on)
+        {
+            follow_on_ = on;
+            for (size_t i = 0; i < kVoices; i++)
+                UpdateRatio(voices_[i], i);
+        }
+        bool Following() const { return latch_ && follow_on_; }
 
         /** key: hardware key id (to match the note-off), semis: from middle C */
         void NoteOn(int key, float semis)
@@ -330,6 +344,8 @@ namespace chompi
         void SetLatch(bool on)
         {
             latch_ = on;
+            for (size_t i = 0; i < kVoices; i++) // following starts or stops
+                UpdateRatio(voices_[i], i);
             if (!on)
                 AllOff();
         }
@@ -569,11 +585,17 @@ namespace chompi
          *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            v.shift = (48.f + v.semis) - sung_; // keys: from the sung note to the key's (key 8 = C3)
+            /* Human: from the sung note to the key's (key 8 = C3), or, while
+               following, the key's distance from key 8 */
+            const bool follow = Following();
+            v.shift = follow ? v.semis : (48.f + v.semis) - sung_;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
-            v.hz    = 130.81278f * powf(2.f, (v.semis + transpose_ + cents / 100.f
-                                              + CharacterOf(mode_).octave) / 12.f);
+            /* vocoded: the key's note, or, while following, the sung note
+               plus the key's distance from key 8 */
+            const float note = (follow ? sung_ : 48.f) + v.semis;
+            v.hz    = 440.f * powf(2.f, (note - 69.f + transpose_ + cents / 100.f
+                                         + CharacterOf(mode_).octave) / 12.f);
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -655,7 +677,7 @@ namespace chompi
         bool             latch_;
         ChordMode        mode_;
         float            sung_; // smoothed sung note, keys mode
-        bool             heard_any_;
+        bool             heard_any_, follow_on_;
         static constexpr float kSungSmooth = .12f; // per 1 ms block: ~8 ms
         float            sr_, transpose_, level_, doubler_, spread_;
         float            lfo_[2];

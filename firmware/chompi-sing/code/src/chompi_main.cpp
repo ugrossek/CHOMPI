@@ -358,6 +358,10 @@ int main(void)
 
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0],
                 MonitorMode(options.monitor_position));
+    /* SING's switches from options.json, after Init, which resets them */
+    engine.SetLatchFollows(options.latch_follows);
+    engine.SetVoiceGate(options.voice_gate);
+    ui.SetShowCpu(options.show_cpu);
 
     osc.Init(hw.seed.AudioSampleRate());
     osc.SetAmp(.2f);

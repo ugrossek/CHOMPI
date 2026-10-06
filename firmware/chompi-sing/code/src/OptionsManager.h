@@ -38,6 +38,9 @@ class OptionsManager
         monitor_position = 0;
         pitch_shift_quantization = true;
         delay_split = false;
+        latch_follows = true;  // SING
+        voice_gate = false;    // SING
+        show_cpu = false;      // SING
 
         /** TODO: make sure the open settings are correct */
         const char fname[32] = "options.json";
@@ -112,6 +115,24 @@ class OptionsManager
         sprintf(append, "%s", delay_split ? "true" : "false");
         StrAppend(opt_file, append);
 
+        // SING: latched chords follow the voice
+        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Latch Follows Voice\",\n\t\t\t\"value\": ");
+        StrAppend(opt_file, append);
+        sprintf(append, "%s", latch_follows ? "true" : "false");
+        StrAppend(opt_file, append);
+
+        // SING: harmonies only while there is a voice or a sound
+        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Voice Gate\",\n\t\t\t\"value\": ");
+        StrAppend(opt_file, append);
+        sprintf(append, "%s", voice_gate ? "true" : "false");
+        StrAppend(opt_file, append);
+
+        // SING: audio load on the white keys in the menu
+        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Show CPU\",\n\t\t\t\"value\": ");
+        StrAppend(opt_file, append);
+        sprintf(append, "%s", show_cpu ? "true" : "false");
+        StrAppend(opt_file, append);
+
         // footer
         sprintf(append, "\n\t\t}\n\t]\n}");
         StrAppend(opt_file, append);
@@ -168,6 +189,12 @@ class OptionsManager
                     field = 5;
                 if(strcmp(value, "Split Delay") == 0 && json_res == JSONSuccess)
                     field = 6;
+                if(strcmp(value, "Latch Follows Voice") == 0)
+                    field = 7;
+                if(strcmp(value, "Voice Gate") == 0)
+                    field = 8;
+                if(strcmp(value, "Show CPU") == 0)
+                    field = 9;
 
                 value[value_len] = save;
 
@@ -190,6 +217,25 @@ class OptionsManager
                     else if(strcmp(value, "true") == 0 && json_res == JSONSuccess && field == 6)
                         delay_split = true;
 
+                    value[value_len] = save;
+                }
+                else if(field >= 7 && field <= 9) // SING's switches, true / false
+                {
+                    sprintf(query, "chompi[%d].value", i);
+                    json_res = JSON_Search(
+                        opt_file, len, query, strlen(query), &value, &value_len);
+                    if(json_res != JSONSuccess)
+                        continue;
+                    save = value[value_len];
+                    value[value_len] = '\0';
+                    const bool t = strcmp(value, "true") == 0;
+                    const bool f = strcmp(value, "false") == 0;
+                    if(t || f)
+                    {
+                        if(field == 7) latch_follows = t;
+                        if(field == 8) voice_gate = t;
+                        if(field == 9) show_cpu = t;
+                    }
                     value[value_len] = save;
                 }
                 else if(field == 1 || field == 2 || field == 4)
@@ -229,6 +275,9 @@ class OptionsManager
     bool tape_slew_on;
     uint8_t monitor_position;
     bool delay_split;
+    bool latch_follows; // SING: latched chords follow the voice
+    bool voice_gate;    // SING: harmonies only while there is sound
+    bool show_cpu;      // SING: audio load on the white keys in the menu
     
     /**
     * if true, the shift menu is quantized, and normal is not.
@@ -240,7 +289,7 @@ class OptionsManager
         FIL fptr_opt;
 
         static const size_t kOptFileSize = 4096;
-        static const size_t kNumOptions = 7;
+        static const size_t kNumOptions = 10;
         char opt_file[kOptFileSize];
 };
 } // namespace chompi

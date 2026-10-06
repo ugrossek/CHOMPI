@@ -154,24 +154,21 @@ namespace chompi
             // KEY_23, KEY_24: dark, they play (freeze and the character are on loop and play)
             SetSmtLedFloat(7, 0.f, 0.f, 0.f);
             SetSmtLedFloat(8, 0.f, 0.f, 0.f);
-            // KEY_25: voice gate, rose when on
-            if(fx_->VoiceGate())
-                SetSmtLedFloat(9, sing_rose[0], sing_rose[1], sing_rose[2]);
-            else
-                SetSmtLedFloat(9, sing_rose[0] * .08f, sing_rose[1] * .08f, sing_rose[2] * .08f);
+            SetSmtLedFloat(9, 0.f, 0.f, 0.f); // KEY_25 plays
 
             // SING: no looper, so no FX pre / post choice
             SetSmtLedFloat(5, 0.f, 0.f, 0.f);
             SetSmtLedFloat(6, 0.f, 0.f, 0.f);
         
-            // Input select
-            int led_sel = 2;
-            led_sel += static_cast<int>(fx_->GetInputSource());
+            // KEY_18-20 play: no input choice here
             SetSmtLedFloat(2, 0.f, 0.f, 0.f);
             SetSmtLedFloat(3, 0.f, 0.f, 0.f);
             SetSmtLedFloat(4, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(led_sel, pink[0], .7f * pink[1], .7f * pink[2]);
 
+            if(!show_cpu_)
+                for (int w = 0; w < 15; w++)
+                    SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
+            else
             /* SING: audio CPU load on the white keys, low C = 0, high C =
                100%: a dim bar for the average, one bright key for the peak
                of the last 2 s. White key w (0 = low C) is LED 24 - w. */
@@ -381,23 +378,7 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_17):
                 break;
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_20): // TAPE: resample, from the looper
-                return false; // SING: no looper; the key plays
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // mic in, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_19): // aux in
-            {
-                if(rising)
-                {
-                    const InputSource source = buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_18)
-                                               ? InputSource::MIC : InputSource::LINE_IN;
-                    fx_->SetInputSource(source);
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
-                break;
-            }
+            // KEY_18-20 play: the input follows the jack (TAPE chose it here)
 
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_21): // TAPE: fx pre looper
@@ -411,10 +392,7 @@ namespace chompi
 
             // KEY_23, KEY_24: play (freeze and the character are on loop and play)
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // SING: voice gate
-                if(rising)
-                    fx_->ToggleVoiceGate();
-                break;
+            // KEY_25 plays (the voice gate is in options.json)
 
             // white keys, play and loop
             default:
@@ -450,6 +428,10 @@ namespace chompi
         }
 
         bool switch_state = false;
+
+        /** SING: show the audio load on the white keys (options.json) */
+        void SetShowCpu(bool on) { show_cpu_ = on; }
+        bool show_cpu_ = false;
 
         /* SING: CPU peak of the last 2 s window, see Draw() */
         float    cpu_peak_   = 0.f;

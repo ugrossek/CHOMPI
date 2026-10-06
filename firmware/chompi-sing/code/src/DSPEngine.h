@@ -526,9 +526,9 @@ namespace daisy
         void SetSize(float v) { harmonizer.SetSize(v); }
         void SetCharacter(float v) { harmonizer.SetCharacter(v); }
 
-        /* SING: voice gate on/off (menu) */
-        void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }
-        bool VoiceGate() const { return harmonizer.GateOn(); }
+        /* SING: from options.json */
+        void SetVoiceGate(bool on) { harmonizer.SetGateOn(on); }
+        void SetLatchFollows(bool on) { harmonizer.SetFollow(on); }
 
         /* SING: audio callback load, measured in chompi_main.cpp */
         daisy::CpuLoadMeter cpu_meter;

@@ -94,6 +94,9 @@ namespace chompi
                 event_queue.AddButtonPressed(static_cast<int>(Hardware::SwId::SW_TOG), 1);
         }
 
+        /** SING: options.json "Show CPU" */
+        void SetShowCpu(bool on) { menu_page_.SetShowCpu(on); }
+
         inline bool InTestMode() { return test_page_.IsActive(); }
         void TestMode()
         {

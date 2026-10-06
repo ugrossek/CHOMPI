@@ -15,6 +15,9 @@ during play stalled the unit for seconds, so knobs always start from their defau
 | Pitch Quantize In Shift Menu | true/false | looper pitch steps in the menu or on the page (TAPE's looper) |
 | Split Delay | true/false | TAPE's split delay on the effects knob |
 | Record Latch | true/false | from TAPE; SING doesn't use it |
+| Latch Follows Voice | true/false | true: while latched, the chord follows your voice (key 8 = your note). false: latched notes stay put |
+| Voice Gate | true/false | true: harmonies only while there is a voice or a sound loud enough. false (default): every sound goes through, noises are part of the fun |
+| Show CPU | true/false | true: in the menu (chompi key held), the white keys show the audio load, for debugging |
 
 ## Candidates
 
@@ -23,8 +26,6 @@ None of them exists yet.
 
 | Setting | Choices | Default | Why |
 |---|---|---|---|
-| Your note in the chord | **top**: the highest held key is your voice, harmonies below · **bottom**: the lowest held key is your voice, harmonies above | top | Top-note mode (menu, second black key from the right). Bottom suits harmonies above a low voice. |
-| Voice gate at power-on | on / off | off | Harmonies only while you sing; switched in the menu (top black key). |
 | Voice gate hold | ms | 150 | How long the gate waits in a pause before it closes. |
 | Voice gate level | input level | ~−37 dB | What counts as "sound" for opening the gate; depends on the mic and the room. |
 | Dry voice "off" at power-on | add to Monitor Position | headphones | SING's own monitor choice, see above. |
