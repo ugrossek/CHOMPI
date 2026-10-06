@@ -194,6 +194,40 @@ bool usb_handoff = false;
 
 
 
+/* SING, diagnosis: the Human freeze's voice recording to the card, oldest
+ * first: freeze-audio.f32 (float32 mono, 48 kHz), freeze-pitch.f32 (the sung
+ * note per audio block, 0 = not voiced, the detector's ~15 block lag
+ * included), freeze-info.txt. Blocks the main loop for a moment; only with
+ * "Freeze Dump": true in options.json. */
+static void DumpVoiceRecording()
+{
+    const VoiceFreeze &v = engine.VoiceRecording();
+    FIL f;
+    UINT bw;
+    if (f_open(&f, "freeze-audio.f32", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+    {
+        const int head = v.WriteHead(); // the oldest sample: the ring wraps there
+        f_write(&f, v.Audio() + head, (VoiceFreeze::kLen - head) * sizeof(float), &bw);
+        f_write(&f, v.Audio(), head * sizeof(float), &bw);
+        f_close(&f);
+    }
+    if (f_open(&f, "freeze-pitch.f32", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+    {
+        const int head = v.PitchHead();
+        f_write(&f, v.Pitches() + head, (VoiceFreeze::kFrames - head) * sizeof(float), &bw);
+        f_write(&f, v.Pitches(), head * sizeof(float), &bw);
+        f_close(&f);
+    }
+    if (f_open(&f, "freeze-info.txt", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK)
+    {
+        char txt[160];
+        const int n = sprintf(txt, "samplerate 48000\nblock 48\naudio_samples %d\npitch_frames %d\nread_back_samples %d\n",
+                              VoiceFreeze::kLen, VoiceFreeze::kFrames, int(v.ReadBack()));
+        f_write(&f, txt, n, &bw);
+        f_close(&f);
+    }
+}
+
 void MainLoop(void* data)
 {
     if(booting)
@@ -214,6 +248,10 @@ void MainLoop(void* data)
 
     // SING: pitch estimate, outside the audio callback
     engine.UpdatePitch();
+
+    // SING: options.json "Freeze Dump", for diagnosis only
+    if (engine.TakeDumpRequest())
+        DumpVoiceRecording();
 
     // volatile float avg_load = meter.GetAvgCpuLoad();
     // volatile float max_load = meter.GetMaxCpuLoad();
@@ -362,6 +400,7 @@ int main(void)
     engine.SetLatchFollows(options.latch_follows);
     engine.SetVoiceGate(options.voice_gate);
     ui.SetShowCpu(options.show_cpu);
+    engine.SetFreezeDump(options.freeze_dump);
 
     osc.Init(hw.seed.AudioSampleRate());
     osc.SetAmp(.2f);

@@ -210,6 +210,10 @@ namespace chompi
          *  that has them: robot holds the voice's band levels (Vocoder),
          *  keys (Human) the real voice (VoiceFreeze). */
         bool CanFreeze() const { return true; } // every character
+
+        /** the voice recording, for the freeze dump (diagnosis) */
+        const VoiceFreeze &VoiceRecording() const { return vfreeze_; }
+        bool HumanFrozen() const { return mode_ == ChordMode::Keys && vfreeze_.Frozen(); }
         void SetFreeze(bool on)
         {
             if (Vocoded())
@@ -380,7 +384,10 @@ namespace chompi
                right after switching has something to hold */
             if (mode_ == ChordMode::Keys && vfreeze_.Frozen())
             {
-                /* cross-fade live <-> frozen over kHumanFade */
+                /* cross-fade live <-> frozen over kHumanFade, equal power:
+                   the frozen moment may be an earlier note than the one
+                   being sung, and two different sounds summed by amplitude
+                   dip in the middle */
                 float g[size];
                 vfreeze_.Play(g, size);
                 const float target = human_frozen_ ? 1.f : 0.f;
@@ -389,13 +396,14 @@ namespace chompi
                 {
                     human_mix_ += human_mix_ < target ? step : -step;
                     human_mix_ = human_mix_ < 0.f ? 0.f : (human_mix_ > 1.f ? 1.f : human_mix_);
-                    in_[i] = in_[i] * (1.f - human_mix_) + g[i] * human_mix_;
+                    const float a = human_mix_ * 1.5707963f;
+                    in_[i] = in_[i] * cosf(a) + g[i] * sinf(a);
                 }
                 if (!human_frozen_ && human_mix_ <= 0.f)
                     vfreeze_.SetFreeze(false); // faded out: record again
             }
             else
-                vfreeze_.Record(in_, size, rec_note_);
+                vfreeze_.Record(in_, size, rec_note_, duck_hold_ <= 0 && duck_ >= .98f);
             in_now_ = in_;
 
             float hl[size], hr[size];
@@ -717,7 +725,7 @@ namespace chompi
         VoiceFreeze      vfreeze_;
         bool             human_frozen_;
         float            human_mix_;                   // 0 live .. 1 frozen
-        static constexpr float kHumanFade = .06f;      // s
+        static constexpr float kHumanFade = .12f;      // s
         float            rec_note_;
         float            character_, size_;
         ChordMode        pending_;

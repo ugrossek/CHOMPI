@@ -280,7 +280,7 @@ namespace chompi
         float smooth_[kBands];    // band levels smoothed over ~25 ms
         static constexpr float kSmooth = .04f; // per 1 ms block
         static constexpr float kScrubGlide = .08f; // per block, ~12 ms
-        static constexpr float kThawTime   = .08f; // s, frozen -> live
+        static constexpr float kThawTime   = .12f; // s, frozen -> live
         float thaw_;              // 1 -> 0 while fading back to the voice
     };
 

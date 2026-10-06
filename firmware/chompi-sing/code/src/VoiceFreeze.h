@@ -32,7 +32,10 @@ namespace chompi
             for (int i = 0; i < kLen; i++)
                 audio_[i] = 0.f;
             for (int i = 0; i < kFrames; i++)
+            {
                 pitch_[i] = 0.f;
+                clean_[i] = false;
+            }
             w_ = 0;
             fw_ = 0;
             frozen_ = false;
@@ -48,8 +51,11 @@ namespace chompi
             block_ = 48;
         }
 
-        /** live: record this block, and the sung note (0: not voiced) */
-        void Record(const float *in, size_t size, float note)
+        /** live: record this block, and the sung note (0: not voiced).
+         *  clean: false while the mic is ducked for a key click; a freeze
+         *  never holds such a block (with latch, chords change while
+         *  singing, and a repeated dip flutters). */
+        void Record(const float *in, size_t size, float note, bool clean = true)
         {
             if (frozen_)
                 return;
@@ -58,6 +64,7 @@ namespace chompi
                 audio_[w_] = in[i];
                 w_ = (w_ + 1) & (kLen - 1);
             }
+            clean_[fw_] = clean;
             pitch_[fw_] = note;
             fw_ = (fw_ + 1) & (kFrames - 1);
             block_ = int(size);
@@ -89,6 +96,14 @@ namespace chompi
         /** 0 = now .. 1 = the oldest kept moment */
         float Position() const { return target_ / (float(kLen) - 4.f * kMaxGrain); }
 
+        /** for the freeze dump: the newest sample and pitch frame, and where
+         *  the read point is (samples back) */
+        int   WriteHead() const { return w_; }
+        int   PitchHead() const { return fw_; }
+        float ReadBack() const { return pos_; }
+        const float *Audio() const { return audio_; }
+        const float *Pitches() const { return pitch_; }
+
         /** the sung note at the read point (0: not voiced there) */
         float Note() const { return note_; }
 
@@ -112,21 +127,25 @@ namespace chompi
                     Grain &gr = grain_[g];
                     if (gr.t >= gr.len)
                         continue;
-                    /* Hann: two of them, half a grain apart, sum to 1 */
+                    /* Hann: two of them, half a grain apart, sum to 1 (for
+                       grains that line up); noise grains, which share
+                       nothing, get the sine window, whose squares sum to 1,
+                       so the noise keeps its level through the fade */
                     const float ph = float(gr.t) / float(gr.len);
-                    w[g] = .5f - .5f * cosf(6.2831853f * ph);
+                    w[g] = note_ > 0.f ? .5f - .5f * cosf(6.2831853f * ph)
+                                       : sinf(3.1415927f * ph);
                     y += audio_[(gr.start + gr.t) & (kLen - 1)] * w[g];
                     gr.t++;
                 }
-                /* The windows keep the level of what the two grains share
-                   (the harmonics: they sum to one), but what they don't share
-                   (breath, the air above ~2 kHz) adds up by power and sags
-                   mid-fade, so a frozen voice came out duller. Lift just the
-                   highs by what the fade costs them at this instant. */
-                const float p = w[0] * w[0] + w[1] * w[1];
-                const float lift = p > .25f ? 1.f / sqrtf(p) : 2.f;
+                /* The breath and air in a voice differ from grain to grain,
+                   so the fades cost them a little level and a frozen voice
+                   is slightly duller. A steady lift of the highs (~+1 dB
+                   above ~2 kHz) makes up for it. (A lift that followed the
+                   fades pumped the highs at the grain rate: an audible high
+                   component on the unit.) */
+                (void)w;
                 hp_lp_ += kHpCoef * (y - hp_lp_);
-                out[i] = hp_lp_ + (y - hp_lp_) * lift;
+                out[i] = note_ > 0.f ? y + (y - hp_lp_) * kAirLift : y;
             }
         }
 
@@ -177,7 +196,7 @@ namespace chompi
             for (int j = k; j < k + win; j++)
             {
                 const float n = PitchAt(j);
-                if (n <= 0.f)
+                if (n <= 0.f || !clean_[(fw_ - 1 - j) & (kFrames - 1)])
                     return false;
                 lo = n < lo ? n : lo;
                 hi = n > hi ? n : hi;
@@ -304,9 +323,11 @@ namespace chompi
         int    next_;
         float  note_;
         uint32_t rand_ = 12345u;
+        float    hp_lp_ = 0.f;
+        static constexpr float kHpCoef  = .23f;  // one pole, ~2 kHz at 48 kHz
+        static constexpr float kAirLift = .15f;  // ~+1.2 dB above it
+        bool     clean_[kFrames] = {}; // per block, as recorded (no detector lag)
         float    r_ = 1.f;     // how alike the two overlapping grains are, 0..1
-        float    hp_lp_ = 0.f; // splits the output at ~2 kHz, see Play()
-        static constexpr float kHpCoef = .23f; // one pole, ~2 kHz at 48 kHz
     };
 
 } // namespace chompi

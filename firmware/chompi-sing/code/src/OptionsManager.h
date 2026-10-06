@@ -22,6 +22,7 @@ class OptionsManager
     bool    latch_follows;  // latched chords follow the voice
     bool    voice_gate;     // harmonies only while there is sound
     bool    show_cpu;       // audio load on the white keys in the menu
+    bool    freeze_dump;    // diagnosis: write the voice to the card on freeze
 
     void Init()
     {
@@ -32,6 +33,7 @@ class OptionsManager
         latch_follows    = true;
         voice_gate       = false;
         show_cpu         = false;
+        freeze_dump      = false;
 
         const char fname[] = "options.json";
         const FRESULT res  = f_stat(fname, nullptr);
@@ -79,6 +81,7 @@ class OptionsManager
         Entry(p, "Latch Follows Voice", latch_follows ? "true" : "false");
         Entry(p, "Voice Gate", voice_gate ? "true" : "false");
         Entry(p, "Show CPU", show_cpu ? "true" : "false");
+        Entry(p, "Freeze Dump", freeze_dump ? "true" : "false");
         p += sprintf(p, "\n\t]\n}\n");
 
         UINT bw = 0;
@@ -137,6 +140,8 @@ class OptionsManager
                 voice_gate = t;
             else if(strcmp(name, "Show CPU") == 0)
                 show_cpu = t;
+            else if(strcmp(name, "Freeze Dump") == 0)
+                freeze_dump = t;
             // anything else (TAPE's looper options in an old file): ignored
         }
     }

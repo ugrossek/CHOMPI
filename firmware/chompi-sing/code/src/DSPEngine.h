@@ -573,7 +573,23 @@ namespace daisy
         inline void SetFilter(float val) { cutoff_target_ = val; }
         /* SING: the lo-fi page is Speak & Spell, not TAPE's saturation */
         inline void SetCrush(float val) { crush_target_ = val; }
-        void ToggleFreeze() { harmonizer.SetFreeze(!harmonizer.Frozen()); }
+        void ToggleFreeze()
+        {
+            harmonizer.SetFreeze(!harmonizer.Frozen());
+            if (freeze_dump_ && harmonizer.HumanFrozen())
+                dump_pending_ = true;
+        }
+
+        /* SING: options.json "Freeze Dump": after a Human freeze, the main
+           loop writes the voice recording to the card, for diagnosis */
+        void SetFreezeDump(bool on) { freeze_dump_ = on; }
+        bool TakeDumpRequest()
+        {
+            const bool p = dump_pending_;
+            dump_pending_ = false;
+            return p && harmonizer.HumanFrozen(); // still frozen: the recording holds still
+        }
+        const chompi::VoiceFreeze &VoiceRecording() const { return harmonizer.VoiceRecording(); }
         bool CanFreeze() const { return harmonizer.CanFreeze(); }
         bool Frozen() const { return harmonizer.Frozen(); }
         void SetRing(float v) { harmonizer.SetRing(v); }
@@ -661,6 +677,7 @@ namespace daisy
         static constexpr int   kGateHoldBlocks = 150;   // ~150 ms at 48-sample blocks
         static constexpr float kGateLevel      = .014f; // input peak that opens it, ~-37 dB
         static constexpr float kGateEnvFall    = .93f;  // per block: ~14 ms to fall by 1/e
+        bool  freeze_dump_ = false, dump_pending_ = false;
         int   gate_hold_ = 0;
         float gate_env_  = 0.f;
         DjFilter filter_;

@@ -15,6 +15,7 @@ during play stalled the unit for seconds, so knobs always start from their defau
 | Latch Follows Voice | true/false | true: while latched, the chord follows your voice (key 8 = your note). false: latched notes stay put |
 | Voice Gate | true/false | true: harmonies only while there is a voice or a sound loud enough. false (default): every sound goes through, noises are part of the fun |
 | Show CPU | true/false | true: in the menu (chompi key held), the white keys show the audio load, for debugging |
+| Freeze Dump | true/false | diagnosis only: after a freeze in Human, writes the last 2.7 s of the voice to `freeze-audio.f32`, `freeze-pitch.f32` and `freeze-info.txt` in `/SING` (the unit pauses for a moment) |
 
 ## Candidates
 
