@@ -71,21 +71,29 @@ namespace chompi
                 }
                 env_[b] = 0.f;
             }
+            shift_ = 0.f;
             att_ = 1.f - expf(-1.f / (.002f * sr_));
             rel_ = 1.f - expf(-1.f / (.020f * sr_));
         }
+
+        /** "size": moves the voice's formants by bands against the carrier.
+         *  Positive: each synth band takes its level from a higher voice band,
+         *  so the mouth shape moves down: a bigger robot. Negative: smaller.
+         *  One band is about a third of an octave. */
+        void SetShift(float bands) { shift_ = bands; }
 
         /** mod: the voice; car_l/car_r: the synth carriers; adds the result
          *  into out_l/out_r */
         void Process(const float *mod, const float *car_l, const float *car_r,
                      float *out_l, float *out_r, size_t size)
         {
-            float band[kMaxBlock], cl[kMaxBlock], cr[kMaxBlock], e[kMaxBlock];
             if (size > kMaxBlock)
                 size = kMaxBlock;
+
+            /* the voice's level in every band */
+            float band[kMaxBlock];
             for (int b = 0; b < kBands; b++)
             {
-                /* the voice's level in this band */
                 for (size_t i = 0; i < size; i++)
                     band[i] = Run(ana_[b][1], Run(ana_[b][0], mod[i]));
                 float env = env_[b];
@@ -93,11 +101,27 @@ namespace chompi
                 {
                     const float x = fabsf(band[i]);
                     env += (x - env) * (x > env ? att_ : rel_);
-                    e[i] = env;
+                    lev_[b][i] = env;
                 }
                 env_[b] = env;
+            }
 
-                /* the carriers' same band, at that level */
+            /* each synth band at the level of voice band b + shift; shifted,
+               part of the voice falls off the ends, so make up a little */
+            float cl[kMaxBlock], cr[kMaxBlock];
+            const float gain = kGain * (1.f + .12f * fabsf(shift_));
+            for (int b = 0; b < kBands; b++)
+            {
+                const float src = b + shift_;
+                const int   s0  = int(floorf(src));
+                const float fr  = src - s0;
+                const float w0  = s0 >= 0 && s0 < kBands ? 1.f - fr : 0.f;
+                const float w1  = s0 + 1 >= 0 && s0 + 1 < kBands ? fr : 0.f;
+                if (w0 == 0.f && w1 == 0.f)
+                    continue; // nothing of the voice lands here
+                const float *l0 = lev_[s0 >= 0 && s0 < kBands ? s0 : 0];
+                const float *l1 = lev_[s0 + 1 >= 0 && s0 + 1 < kBands ? s0 + 1 : 0];
+
                 for (size_t i = 0; i < size; i++)
                 {
                     cl[i] = Run(syn_[0][b][1], Run(syn_[0][b][0], car_l[i]));
@@ -105,8 +129,9 @@ namespace chompi
                 }
                 for (size_t i = 0; i < size; i++)
                 {
-                    out_l[i] += cl[i] * e[i] * kGain;
-                    out_r[i] += cr[i] * e[i] * kGain;
+                    const float e = (l0[i] * w0 + l1[i] * w1) * gain;
+                    out_l[i] += cl[i] * e;
+                    out_r[i] += cr[i] * e;
                 }
             }
         }
@@ -147,7 +172,9 @@ namespace chompi
         Bq    ana_[kBands][2];
         Bq    syn_[2][kBands][2];
         float env_[kBands];
+        float lev_[kBands][kMaxBlock];
         float att_, rel_;
+        float shift_;
     };
 
 } // namespace chompi

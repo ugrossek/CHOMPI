@@ -535,6 +535,9 @@ namespace daisy
                                : m == M::Top ? M::Relative : M::Robot);
         }
         int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 keys, 2 top, 3 relative
+        bool RobotMode() const { return ChordModeIndex() == 0; }
+        void SetSize(float v) { harmonizer.SetSize(v); }
+        void SetCharacter(float v) { harmonizer.SetCharacter(v); }
 
         /* SING: voice gate on/off (menu) */
         void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }

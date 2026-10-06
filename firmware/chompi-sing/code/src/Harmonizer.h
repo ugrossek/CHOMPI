@@ -48,6 +48,8 @@ namespace chompi
             latch_    = false;
             mode_     = ChordMode::Robot;
             vocoder_.Init(samplerate);
+            SetSize(.5f);
+            SetCharacter(.5f);
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
@@ -168,6 +170,14 @@ namespace chompi
             UpdateTop(true);
         }
         ChordMode Mode() const { return mode_; }
+
+        /** robot: "size", 0 monster .. .5 as sung .. 1 mouse (formants
+         *  moved by up to 3 bands, about an octave, either way) */
+        void SetSize(float v) { vocoder_.SetShift((.5f - v) * 6.f); }
+
+        /** robot: "character" of the synth note, 0 soft (sine) .. .5
+         *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
+        void SetCharacter(float v) { character_ = v; }
 
         /** keys mode: the detected sung pitch (MIDI note, fractional), once
          *  per block. Smoothed a little; kept through unvoiced gaps. */
@@ -306,13 +316,23 @@ namespace chompi
                     /* the voice's synth note, with a little noise so the
                        vocoder keeps "s" and "sh" (classic vocoders do too) */
                     vo.osc.SetFreq(vo.hz, sr_);
+                    /* character: sine -> saw over the first half, saw ->
+                       noise over the second */
+                    const float m    = character_ < .5f ? character_ * 2.f : (character_ - .5f) * 2.f;
+                    const float wsin = character_ < .5f ? 1.f - m : 0.f;
+                    const float wsaw = character_ < .5f ? m : 1.f - m;
+                    const float wnoi = character_ < .5f ? kRobotNoise : kRobotNoise + m;
                     for (size_t i = 0; i < size; i++)
                     {
                         if (vo.gate)
                             vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
                         else
                             vo.env = vo.env - release_ > 0.f ? vo.env - release_ : 0.f;
-                        const float c = (vo.osc.Process() + kRobotNoise * Noise()) * vo.env;
+                        /* sine from the phase: sin(2 pi p) ~ -4u(1 - |u|), u = 2p - 1 */
+                        const float u   = 2.f * vo.osc.phase - 1.f;
+                        const float sn  = -4.f * u * (1.f - fabsf(u)) * 1.4f; // ~ the saw's level in the vocoder
+                        const float saw = vo.osc.Process();
+                        const float c   = (wsin * sn + wsaw * saw + wnoi * Noise()) * vo.env;
                         car_l[i] += c * gl;
                         car_r[i] += c * gr;
                     }
@@ -490,6 +510,7 @@ namespace chompi
         static constexpr float kRobotNoise = .05f;
 
         Vocoder          vocoder_;
+        float            character_;
         uint32_t         noise_;
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;

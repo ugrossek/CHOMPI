@@ -157,24 +157,45 @@ namespace chompi
     class NormalPage : public daisy::UiPage
     {
       private:
-        /* SING: knobs 1-3, two pages each (press to switch), laid out like
-         * TAPE (page 1 = sound, page 2 = level and envelope):
-         *    knob 1: transpose | harmony volume
-         *    knob 2: spread    | attack
-         *    knob 3: doubler   | release
-         *  The defaults in ui.h and Harmonizer::Init must match. */
-        void SingKnob(int knob, int page, float v)
+        /* SING: knobs 1-3, laid out like TAPE (page 1 = sound, page 2 =
+         * level and envelope). Each value lives in a row of enc_values:
+         *    knob 1: transpose (row 0) | harmony volume (row 1)
+         *    knob 2: spread (row 0)    | attack (row 1)  | size (row 2)
+         *    knob 3: doubler (row 0)   | release (row 1) | character (row 2)
+         *  Robot mode shows knobs 2 and 3 as size/character, attack/release,
+         *  spread/doubler (three pages); the other modes as spread/doubler,
+         *  attack/release. The defaults in ui.h and Harmonizer::Init must
+         *  match. */
+        void SingKnob(int knob, int row, float v)
         {
-            switch(knob * 2 + page)
+            switch(knob * 3 + row)
             {
                 case 0: fx_->SetTranspose(v); break;
                 case 1: fx_->SetGain(v); break;
-                case 2: fx_->SetSpread(v); break;
-                case 3: fx_->SetAttack(v); break;
-                case 4: fx_->SetDoubler(v); break;
-                case 5: fx_->SetDecay(v); break;
+                case 3: fx_->SetSpread(v); break;
+                case 4: fx_->SetAttack(v); break;
+                case 5: fx_->SetSize(v); break;
+                case 6: fx_->SetDoubler(v); break;
+                case 7: fx_->SetDecay(v); break;
+                case 8: fx_->SetCharacter(v); break;
                 default: break;
             }
+        }
+
+        /** the row of enc_values that knob's page shows */
+        uint8_t Row(int knob, uint8_t page) const
+        {
+            if ((knob == 1 || knob == 2) && fx_->RobotMode())
+            {
+                static const uint8_t kRobotRows[3] = {2, 1, 0};
+                return kRobotRows[page % 3];
+            }
+            return page;
+        }
+
+        uint8_t Pages(int knob) const
+        {
+            return (knob == 1 || knob == 2) && fx_->RobotMode() ? 3 : knob_num_pages[knob];
         }
 
         /** white key 0..14 left to right for a MIDI note of the keyboard
@@ -189,14 +210,16 @@ namespace chompi
             return w < 0 ? -1 : w + 7 * (n / 12);
         }
 
-        static void SingKnobColour(int knob, int page, float v, float &r, float &g, float &b)
+        static void SingKnobColour(int knob, int row, float v, float &r, float &g, float &b)
         {
             float lvl = 1.f;
-            switch(knob * 2 + page)
+            switch(knob * 3 + row)
             {
                 case 0: SingTransposeColour(v, r, g, b); return;
-                case 2: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
-                case 4: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
+                case 5: SingTransposeColour(v, r, g, b); return;                                    // size: centre = as sung
+                case 3: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
+                case 6: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
+                case 8: SingMix(sing_warm, sing_magenta, v, r, g, b); lvl = .4f + .6f * v; break;   // character
                 default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // volume, attack, release
             }
             r *= lvl; g *= lvl; b *= lvl;
@@ -395,7 +418,9 @@ namespace chompi
             // =========   encoders   =========
             for (int i = 0; i < 6; i++)
             {
-                uint8_t page = knob_page[i];
+                if (knob_page[i] >= Pages(i))
+                    knob_page[i] = 0; // the mode changed: robot has more pages
+                uint8_t page = Row(i, knob_page[i]);
                 float value = enc_values[page][i];
 
                 float r = 0.f; 
@@ -680,7 +705,7 @@ namespace chompi
                 {
                     uint8_t knob = key_map[buttonID];
                     knob_page[knob]++;
-                    knob_page[knob] %= knob_num_pages[knob];
+                    knob_page[knob] %= Pages(knob);
                 }
                 break;
             }
@@ -790,7 +815,7 @@ namespace chompi
             if (init_ignore)
                 return false;
 
-            uint8_t page = knob_page[encoderID];
+            uint8_t page = Row(encoderID, knob_page[encoderID]);
             float old_val = enc_values[page][encoderID];
 
 
@@ -855,7 +880,8 @@ namespace chompi
             shown_page_  = page;
             shown_t_     = System::GetNow();
 
-            if (stepsPerRevolution == 0) {
+            // no CC for rows without one (SING's robot size/character): 0 is bank select
+            if (stepsPerRevolution == 0 && cc_map[page][encoderID] != 0) {
                 hw_->SendCC(midi_channel, cc_map[page][encoderID], enc_values[page][encoderID] * 127);
             }
 

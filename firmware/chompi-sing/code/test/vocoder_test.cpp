@@ -39,15 +39,20 @@ static float Vowel(float t, float f0, float amp)
     return amp * s / sqrtf(p);
 }
 
-struct Result { float out_rms, in_rms, pitch_hz; float voiced_share; };
+struct Result { float out_rms, in_rms, pitch_hz; float voiced_share; float bright_hz; };
 
 /** run voice(t) through the vocoder with one carrier note; detector on output */
 static Result Run(std::function<float(float)> voice, float note_hz, float seconds,
-                  std::vector<float> *trace = nullptr)
+                  std::vector<float> *trace = nullptr, float shift = 0.f)
 {
     static Vocoder v;
     static PitchDetector pd;
     v.Init(kSr);
+    v.SetShift(shift);
+    /* brightness: rms of the sample-to-sample difference against the rms,
+       which grows with the spectrum's centre of gravity */
+    float prev = 0.f;
+    double s_diff = 0;
     pd.Init();
     SawOsc osc;
     osc.SetFreq(note_hz, kSr);
@@ -70,7 +75,9 @@ static Result Run(std::function<float(float)> voice, float note_hz, float second
         for (int i = 0; i < kBlock; i++)
         {
             if (trace) trace->push_back(ol[i]);
-            if (s > .1f * kSr) { so += ol[i] * ol[i]; si += mod[i] * mod[i]; n++; }
+            const float d = ol[i] - prev;
+            prev = ol[i];
+            if (s > .1f * kSr) { so += ol[i] * ol[i]; si += mod[i] * mod[i]; s_diff += d * d; n++; }
         }
         if (pd.Estimates() != last && s > .1f * kSr)
         {
@@ -80,7 +87,8 @@ static Result Run(std::function<float(float)> voice, float note_hz, float second
         }
     }
     return { float(sqrt(so / (n ? n : 1))), float(sqrt(si / (n ? n : 1))), last_hz,
-             est ? float(voiced) / est : 0.f };
+             est ? float(voiced) / est : 0.f,
+             so > 0 ? float(sqrt(s_diff / so) * kSr / (2.f * kPi)) : 0.f };
 }
 
 int main()
@@ -100,6 +108,25 @@ int main()
             Check(r.voiced_share > .9f, "output clearly pitched");
             Check(fabsf(20.f * log10f(r.out_rms / r.in_rms)) < 6.f, "output level within 6 dB of the voice");
         }
+    printf("\n");
+
+    /* size: formants moved by +-3 bands; still on the key's note, darker
+       for a big robot, brighter for a small one */
+    {
+        float bright[3];
+        const float shifts[3] = {3.f, 0.f, -3.f};
+        const char *names[3] = {"big (monster)", "as sung", "small (mouse)"};
+        for (int k = 0; k < 3; k++)
+        {
+            Result r = Run([](float t) { return Vowel(t, 196.f, .05f); }, 220.f, 1.f, nullptr, shifts[k]);
+            bright[k] = r.bright_hz;
+            printf("size %-14s -> output %6.1f Hz, level %+5.1f dB, brightness %5.0f Hz\n",
+                   names[k], r.pitch_hz, 20.f * log10f(r.out_rms / r.in_rms), r.bright_hz);
+            Check(fabsf(1200.f * log2f(r.pitch_hz / 220.f)) < 15.f, "size keeps the key's note");
+            Check(fabsf(20.f * log10f(r.out_rms / r.in_rms)) < 10.f, "size keeps the level within 10 dB");
+        }
+        Check(bright[0] < bright[1] && bright[1] < bright[2], "big is darker, small is brighter");
+    }
     printf("\n");
 
     /* talking: a whispered/unvoiced voice (filtered noise) still comes out */
