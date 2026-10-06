@@ -24,8 +24,8 @@ and it sings.
 - **Human** (warm white): your real voice, shifted onto the keys' notes, whatever you sing. Sing roughly
   in the range of the keys for the most natural sound.
 
-Key 8, the C in the middle, is C3 in both. In Human, that's where your voice comes through
-unchanged.
+Key 8 is middle C (C4) in both. In Human, the key of the note you sing passes your voice
+through unchanged: for children that's around the middle, for most grown-ups lower down.
 
 ## Buttons and switch
 
@@ -74,8 +74,9 @@ play, warm white the human and what's in tune.
 - **Keys:** held keys red. The key of the note you're singing lights up too: warm white when in
   tune, red when off (a tuner). Middle C dim white. Turn a knob and the white keys show its
   position for a moment (transpose: from the middle outwards).
-- **Knob rings** go from warm white to red, and brighter, as each control turns up. Knob 1 on
-  transpose: warm white at 0, red either way.
+- **Knob rings** show the page in its colour, after the Bauhaus primaries: **page 1 red, page 2
+  yellow, page 3 blue**, brighter as the control turns up. Knob 1 on transpose: warm white at 0,
+  red either way. The bar on the white keys takes the colour of the page you're turning.
 - **Big wheel's LEDs** while frozen: red for how far back, warm white for "now".
 - **Chompi key:** red while latched, otherwise your input level; knob 6 shows the output level.
   Both meters are dim white when quiet, brighter as it gets louder, red when it's hot.

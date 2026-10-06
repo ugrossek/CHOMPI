@@ -68,7 +68,7 @@ namespace chompi
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
-            sung_     = 48.f; // C3, key 8, until anything is sung
+            sung_     = 60.f; // C4, key 8, until anything is sung
             heard_any_ = false;
             follow_on_ = true;
 
@@ -171,7 +171,7 @@ namespace chompi
          *         doesn't matter; talking works. No shifters run.
          *  Keys:  "Human": each key sounds its own note, made from the real
          *         voice, whatever is sung (needs the pitch detector).
-         *  Key 8 is C3 in all of them, a comfortable singing note. */
+         *  Key 8 is middle C (C4) in both. */
         enum class ChordMode { Robot, Keys };
 
         bool Vocoded() const { return mode_ != ChordMode::Keys; }
@@ -561,15 +561,15 @@ namespace chompi
          *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            /* Human: from the sung note to the key's (key 8 = C3), or, while
+            /* Human: from the sung note to the key's (key 8 = C4), or, while
                following, the key's distance from key 8 */
             const bool follow = Following();
-            v.shift = follow ? v.semis : (48.f + v.semis) - sung_;
+            v.shift = follow ? v.semis : (60.f + v.semis) - sung_;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
             /* vocoded: the key's note, or, while following, the sung note
                plus the key's distance from key 8 */
-            const float note = (follow ? sung_ : 48.f) + v.semis;
+            const float note = (follow ? sung_ : 60.f) + v.semis;
             v.hz    = 440.f * powf(2.f, (note - 69.f + transpose_ + cents / 100.f) / 12.f);
         }
 

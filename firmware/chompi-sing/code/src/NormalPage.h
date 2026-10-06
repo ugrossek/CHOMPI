@@ -122,6 +122,26 @@ namespace chompi
        is played, warm white for the human and for what is in tune */
     static const float sing_red[3]   = {1.f, .05f, .03f};
     static const float sing_warm[3]  = {1.f, .85f, .65f};
+    /* the Bauhaus primaries for the knob pages: page 1 red, 2 yellow, 3 blue
+       (yellow leans orange, or the LEDs show it greenish) */
+    static const float sing_yellow[3] = {1.f, .50f, 0.f};
+    static const float sing_blue[3]   = {.08f, .25f, 1.f};
+
+    static inline const float *SingPageColour(int page)
+    {
+        return page == 1 ? sing_yellow : page == 2 ? sing_blue : sing_red;
+    }
+
+    /** a knob ring: the page's colour, brighter as the value goes up, never
+     *  so dim that the colour is lost on the LEDs' 23 steps */
+    static inline void SingPageRing(int page, float v, float &r, float &g, float &b)
+    {
+        const float *c  = SingPageColour(page);
+        const float lvl = .2f + .8f * v;
+        r = c[0] * lvl;
+        g = c[1] * lvl;
+        b = c[2] * lvl;
+    }
 
     /** the play key's colour for a character: robot red, human warm white */
     static inline const float *SingCharacterColour(int index)
@@ -228,20 +248,15 @@ namespace chompi
             return w < 0 ? -1 : w + 7 * (n / 12);
         }
 
-        static void SingKnobColour(int knob, int row, float v, float &r, float &g, float &b)
+        /** knobs 1-3: the colour of the page shown (page 1 red, 2 yellow,
+         *  3 blue), brighter as the value goes up; transpose keeps its own
+         *  (warm white at 0, red either way) */
+        static void SingKnobColour(int knob, int row, int page, float v, float &r, float &g, float &b)
         {
-            float lvl = 1.f;
-            switch(knob * 3 + row)
-            {
-                case 0: SingTransposeColour(v, r, g, b); return;
-                case 5: SingTransposeColour(v, r, g, b); return;                                    // size: centre = as sung
-                case 2: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .1f + .9f * v; break;   // metal
-                case 3:                                                                          // spread
-                case 6: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
-                case 8: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .4f + .6f * v; break;   // character
-                default: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .2f + .8f * v; break;  // volume, attack, release
-            }
-            r *= lvl; g *= lvl; b *= lvl;
+            if (knob == 0 && row == 0)
+                SingTransposeColour(v, r, g, b);
+            else
+                SingPageRing(page, v, r, g, b);
         }
 
       public:
@@ -412,7 +427,10 @@ namespace chompi
                     const float k0 = w / 15.f, k1 = (w + 1) / 15.f;
                     const bool  on = w >= 0 && bar_hi > k0 && bar_lo < k1;
                     if (on)
-                        SetSmtLedFloat(led_map[i], sing_warm[0] * bar_lvl, sing_warm[1] * bar_lvl, sing_warm[2] * bar_lvl);
+                    {
+                        const float *c = SingPageColour(shown_disp_page_); // the page turned
+                        SetSmtLedFloat(led_map[i], c[0] * bar_lvl, c[1] * bar_lvl, c[2] * bar_lvl);
+                    }
                     else
                         SetSmtLed(led_map[i], 0, 0, 0);
                 }
@@ -442,7 +460,7 @@ namespace chompi
                 case 1:
                 case 2:
                 {
-                    SingKnobColour(i, page, value, r, g, b);
+                    SingKnobColour(i, page, knob_page[i], value, r, g, b);
                     SetPthLedFloat(i + 1, r, g, b);
                     break;
                 }
@@ -460,25 +478,25 @@ namespace chompi
                                 fx_->SetDelayFeedback(0.f);
                             }
 
-                            // centre warm white, delay or reverb further out: red
-                            SingMix(sing_warm, sing_red, fabsf(value - .5f) * 2.f, r, g, b);
+                            // page 1 red, brighter further out from the centre
+                            SingPageRing(0, fabsf(value - .5f) * 2.f, r, g, b);
                         }
                         else {
                             fx_->SetReverb(value);
                             fx_->SetDelayFeedback(value);
 
-                            SingMix(sing_warm, sing_red, value, r, g, b); // SING
+                            SingPageRing(0, value, r, g, b); // SING: space, page 1 red
                         }
                     }
                     else if (page == 1) // lofi
                     {
                         fx_->SetCrush(value);
-                        SingMix(sing_warm, sing_red, value, r, g, b); // SING: Speak & Spell
+                        SingPageRing(1, value, r, g, b); // SING: Speak & Spell, page 2 yellow
                     }
                     else // filter
                     {
                         fx_->SetFilter(value);
-                        SingMix(sing_red, sing_warm, value, r, g, b); // SING: filter, closed red
+                        SingPageRing(2, value, r, g, b); // SING: filter, page 3 blue
                     }
 
 
@@ -547,7 +565,7 @@ namespace chompi
                     }
                     else
                     {
-                        SingMix(sing_warm, sing_red, value, r, g, b); // SING: input gain
+                        SingPageRing(1, value, r, g, b); // SING: input gain, page 2 yellow
 
                         fx_->SetInputGain(value);
                     }
@@ -778,6 +796,7 @@ namespace chompi
             /* SING: show where this knob now is on the white keys, briefly */
             shown_knob_  = encoderID;
             shown_page_  = page;
+            shown_disp_page_ = knob_page[encoderID];
             shown_t_     = System::GetNow();
 
             // no CC for rows without one (SING's robot size/character): 0 is bank select
@@ -821,7 +840,7 @@ namespace chompi
         static constexpr uint32_t kSungHoldMs = 80;
         float    sung_note_ = 0.f;
         uint32_t sung_t_    = 0;
-        int      shown_knob_ = 0, shown_page_ = 0;
+        int      shown_knob_ = 0, shown_page_ = 0, shown_disp_page_ = 0;
         uint32_t shown_t_    = 0;
         bool chompi_key_pressed = false;
         uint8_t* knob_page;

@@ -19,6 +19,8 @@
     --gold: #141414;
     --amber: #8A8378;
     --rose: #D7261E;
+    --yellow: #FFB000;
+    --blue: #1E4FD8;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -53,7 +55,16 @@
   .knob .name { font-weight: 800; font-size: 15px; line-height: 1.15; }
   .pages { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
   .pages li { display: grid; grid-template-columns: 15px 1fr; gap: 4px; }
-  .pages .p { color: var(--soft); font-weight: 700; }
+  /* page numbers as tiles in the page's colour, as the knob rings show it */
+  .pages .p:not(:empty) {
+    display: inline-grid; place-items: center; width: 15px; height: 15px; margin-top: 1px;
+    border-radius: 2px; font-weight: 800; font-size: 10.5px; color: #fff;
+  }
+  .pages li:nth-child(1) .p:not(:empty) { background: var(--coral); }
+  .pages li:nth-child(2) .p:not(:empty) { background: var(--yellow); color: var(--ink); }
+  .pages li:nth-child(3) .p:not(:empty) { background: var(--blue); }
+  .legend { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: -2px; }
+  .legend span { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 2px; color: #fff; font-size: 10px; letter-spacing: 0; }
   .pages b { font-weight: 800; }
   .r { color: var(--magenta); font-weight: 700; }
   .h { color: var(--ink); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
@@ -93,10 +104,10 @@
   <header>
     <h1>SING</h1>
     <span class="badge">Hold CHOMPI = menu</span>
-    <p class="tag">Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice. Use headphones. Key 8 (the middle C) is C3.</p>
+    <p class="tag">Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice. Use headphones. Key 8 is middle C.</p>
   </header>
 
-  <h2>KNOBS, LEFT TO RIGHT · PRESS TO SWITCH PAGE</h2>
+  <h2>KNOBS, LEFT TO RIGHT · PRESS TO SWITCH PAGE · THE RING SHOWS THE PAGE<span class="legend"><span style="background:var(--coral)">1</span><span style="background:var(--yellow);color:var(--ink)">2</span><span style="background:var(--blue)">3</span></span></h2>
   <section class="knobs">
     <div class="card knob">
       <div class="top"><span class="num">1</span><span class="name">Pitch &amp; level</span></div>
@@ -162,7 +173,7 @@
       <div class="head"><span class="dot"></span>Human</div>
       <div class="body">
         <p>Your real voice, moved onto the keys' notes, whatever you sing.</p>
-        <p class="try">Try: sing near the keys' range. Key 8 is your own note, unchanged.</p>
+        <p class="try">Try: sing near the keys' range. The key of the note you sing leaves your voice unchanged.</p>
       </div>
     </div>
     <div class="card buttons">
