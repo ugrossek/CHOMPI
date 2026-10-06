@@ -11,7 +11,7 @@ namespace chompi
 
 
         void Init(Hardware *hw, Engine *fx, float** enc_arr, const float** def_arr,
-            uint8_t* page, bool ps_quant, bool split_delay)
+            uint8_t* page, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
@@ -19,7 +19,6 @@ namespace chompi
             enc_defaults = def_arr;
             knob_page = page;
             
-            quantized_pitch_ = ps_quant;
             split_delay_ = split_delay;
 
 
@@ -446,7 +445,6 @@ namespace chompi
         const float** enc_defaults;
         uint8_t* knob_page;
 
-        bool quantized_pitch_;
         bool split_delay_;
 
 

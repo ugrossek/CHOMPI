@@ -46,7 +46,7 @@ namespace chompi
     {
     public:
         void Init(Hardware *hw, Engine *fx,
-                    uint8_t ch_in, uint8_t ch_out, bool pitch_shift_quant, bool split_delay)
+                    uint8_t ch_in, uint8_t ch_out, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
@@ -70,14 +70,14 @@ namespace chompi
                     canvasLedDisplay);
 
             normal_page_.Init(hw_, fx_, enc_rows, 
-                def_rows, knob_page, ch_out, pitch_shift_quant, split_delay);
+                def_rows, knob_page, ch_out, split_delay);
             ui.OpenPage(normal_page_);
 
             boot_page_.Init(hw_, fx_);
             ui.OpenPage(boot_page_);
 
             menu_page_.Init(hw_, fx_, enc_rows, def_rows, knob_page,
-                pitch_shift_quant, split_delay);
+                split_delay);
 
             test_page_.Init(hw_, fx_);
 

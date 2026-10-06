@@ -239,7 +239,7 @@ namespace chompi
         bool init_ignore = true;
 
         void Init(Hardware *hw, Engine *fx, float** enc_arr, const float** def_arr, 
-                    uint8_t* page, uint8_t midi_out_channel, bool ps_quant, bool split_delay)
+                    uint8_t* page, uint8_t midi_out_channel, bool split_delay)
         {
             hw_ = hw;
             fx_ = fx;
@@ -249,7 +249,6 @@ namespace chompi
 
             midi_channel = midi_out_channel;
 
-            quantized_pitch_ = !ps_quant;
             split_delay_ = split_delay;
 
             for (int knob = 0; knob < 6; knob++)
@@ -737,15 +736,11 @@ namespace chompi
                 else if(page == 0 && encoderID <= 2)
                 {
                 }
-                else if((encoderID == 0 && page == 0 && quantized_pitch_)
-                    || (encoderID == 4 && quantized_pitch_))
+                else if (encoderID == 1 && page == 0) // spread
                 {
-                    inc = 0.f;
+                    inc = turns * kEncoderFineStep;
                 }
-                else if ((encoderID == 0 && page == 0 && !quantized_pitch_)
-                    || (encoderID == 1 && page == 0)
-                    || (encoderID == 2 && page == 0)
-                    || (encoderID == 4 && !quantized_pitch_))
+                else if (encoderID == 2 && page == 0) // doubler
                 {
                     inc = turns * kEncoderFineStep;
                 }
@@ -821,7 +816,6 @@ namespace chompi
         uint32_t shown_t_    = 0;
         bool chompi_key_pressed = false;
         uint8_t* knob_page;
-        bool quantized_pitch_;
         bool split_delay_;
 
         bool batt_display;

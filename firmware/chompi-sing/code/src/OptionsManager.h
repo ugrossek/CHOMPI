@@ -3,55 +3,45 @@
 #include "fatfs.h"
 #include "core_json.h"
 
-#define OPT_VERSION "1"
-
 namespace chompi {
-class OptionsManager 
+
+/** SING's options.json, in its folder on the card (/SING). Read once at
+ *  power-on, then written back with every option, so a new card gets a
+ *  complete file to edit. Never written while playing (that stalled the
+ *  unit). Unknown, missing or broken entries keep their defaults; see
+ *  OPTIONS.md. Same layout as TAPE's file:
+ *    {"chompi": [{"name": "...", "value": ...}, ...]}
+ */
+class OptionsManager
 {
-    public:
-    OptionsManager() {}
-    ~OptionsManager() {}
+  public:
+    uint8_t midi_ch_in;     // 0..15
+    uint8_t midi_ch_out;    // 0..15
+    uint8_t monitor_position; // a MonitorMode: 0 headphones, 1 all outputs, 3 off
+    bool    delay_split;    // knob 4: delay left, reverb right
+    bool    latch_follows;  // latched chords follow the voice
+    bool    voice_gate;     // harmonies only while there is sound
+    bool    show_cpu;       // audio load on the white keys in the menu
 
-    void StrAppend(char* buffer, char* append)
-    {
-        size_t len = strlen(buffer);
-        size_t app_len = strlen(append);
-
-        for(size_t i = 0; i < app_len; i++)
-        {
-            buffer[len + i] = append[i];
-        }
-        buffer[len + app_len] = '\0';
-    }
-
-    /** Init with defaults,
-        open the file and parse, if valid overriding defaults,
-        write a new file no matter what
-    */
     void Init()
     {
-        // fill in defaults
-        record_latch = false;
-        midi_ch_in = 0;
-        midi_ch_out = 0;
-        tape_slew_on = true;
+        midi_ch_in       = 0;
+        midi_ch_out      = 0;
         monitor_position = 0;
-        pitch_shift_quantization = true;
-        delay_split = false;
-        latch_follows = true;  // SING
-        voice_gate = false;    // SING
-        show_cpu = false;      // SING
+        delay_split      = false;
+        latch_follows    = true;
+        voice_gate       = false;
+        show_cpu         = false;
 
-        /** TODO: make sure the open settings are correct */
-        const char fname[32] = "options.json";
+        const char fname[] = "options.json";
+        const FRESULT res  = f_stat(fname, nullptr);
 
-        FRESULT res = f_stat(fname, nullptr);
-
-        // create if not exist, don't overwrite
+        // create if not there, don't overwrite
         f_open(&fptr_opt, fname, (FA_OPEN_ALWAYS | FA_WRITE | FA_READ));
 
-        UINT br;
-        f_read(&fptr_opt, &opt_file[0], kOptFileSize, &br);
+        UINT br = 0;
+        f_read(&fptr_opt, &opt_file[0], kOptFileSize - 1, &br);
+        opt_file[br] = '\0';
 
         if(res == FR_OK)
             Parse();
@@ -59,237 +49,96 @@ class OptionsManager
         WriteFile();
     }
 
-    /** Write a JSON file with whatever settings we have store locally
-        These might be defaults, or whatever we parsed from the file most recently
-    */
+  private:
+    static const size_t kOptFileSize = 4096;
+    static const size_t kMaxEntries  = 32; // read at most this many
+
+    FIL  fptr_opt;
+    char opt_file[kOptFileSize];
+
+    /** append one entry; first: no comma before it */
+    void Entry(char *&p, const char *name, const char *value, bool first = false)
+    {
+        p += sprintf(p, "%s\n\t\t{\n\t\t\t\"name\": \"%s\",\n\t\t\t\"value\": %s\n\t\t}",
+                     first ? "" : ",", name, value);
+    }
+
     void WriteFile()
     {
-        // header
-        std::fill_n(opt_file, kOptFileSize, '\0');
-        strcpy(opt_file, "{\n\t\"chompi\": [\n\t\t{\n\t\t\t\"name\": \"Record Latch\",\n\t\t\t\"value\": ");
+        char  num[8];
+        char *p = opt_file;
+        p += sprintf(p, "{\n\t\"chompi\": [");
+        sprintf(num, "%d", midi_ch_in + 1);
+        Entry(p, "Midi In Channel", num, true);
+        sprintf(num, "%d", midi_ch_out + 1);
+        Entry(p, "Midi Out Channel", num);
+        /* in the file: 1 headphones, 2 all outputs, 3 off */
+        sprintf(num, "%d", monitor_position == 3 ? 3 : monitor_position + 1);
+        Entry(p, "Monitor Position", num);
+        Entry(p, "Split Delay", delay_split ? "true" : "false");
+        Entry(p, "Latch Follows Voice", latch_follows ? "true" : "false");
+        Entry(p, "Voice Gate", voice_gate ? "true" : "false");
+        Entry(p, "Show CPU", show_cpu ? "true" : "false");
+        p += sprintf(p, "\n\t]\n}\n");
 
-        // rec latch
-        char append[72];
-        sprintf(append, "%s", record_latch ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // midi in channel
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Midi In Channel\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%d", midi_ch_in + 1);
-        StrAppend(opt_file, append);
-
-        // midi out channels
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Midi Out Channel\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%d", int(midi_ch_out + 1));
-        StrAppend(opt_file, append);
-
-        // Tape Slew On
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Tape Slew On\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%s", tape_slew_on ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // Monitor Position
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Monitor Position\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%d", int(monitor_position + 1));
-        StrAppend(opt_file, append);
-
-        // Pitch Shift Quantization. true == quant in shift menu (default), false == quant in normal menu
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Pitch Quantize In Shift Menu\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%s", pitch_shift_quantization ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // Delay Split
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Split Delay\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-
-        sprintf(append, "%s", delay_split ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // SING: latched chords follow the voice
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Latch Follows Voice\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-        sprintf(append, "%s", latch_follows ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // SING: harmonies only while there is a voice or a sound
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Voice Gate\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-        sprintf(append, "%s", voice_gate ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // SING: audio load on the white keys in the menu
-        sprintf(append, "\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Show CPU\",\n\t\t\t\"value\": ");
-        StrAppend(opt_file, append);
-        sprintf(append, "%s", show_cpu ? "true" : "false");
-        StrAppend(opt_file, append);
-
-        // footer
-        sprintf(append, "\n\t\t}\n\t]\n}");
-        StrAppend(opt_file, append);
-
-        // write the file
         UINT bw = 0;
-
         f_lseek(&fptr_opt, 0);
-        f_write(&fptr_opt, opt_file, strlen(opt_file), &bw);
+        f_write(&fptr_opt, opt_file, p - opt_file, &bw);
         f_truncate(&fptr_opt);
         f_sync(&fptr_opt);
     }
 
-    /** loads the JSON file, storing in name/value pairs for all keys */
-    void Parse()
+    /** the value of entry i as a 0-terminated string in buf, or false */
+    bool Value(size_t len, size_t i, const char *field, char *buf, size_t buf_len)
     {
-        JSONStatus_t json_res;
-
-        size_t len = strlen(opt_file);
-        json_res = JSON_Validate(opt_file, len);
-
-        // is the file valid
-        if(json_res == JSONSuccess)
-        {
-            char   query[51];
-            char*  value;
-            size_t value_len;
-
-            /** TODO: ? Parse version number. Don't think we'll actually need this tbh  */
-
-            for(size_t i = 0; i < kNumOptions; i++)
-            {
-                sprintf(query, "chompi[%d].name", i);
-                json_res = JSON_Search(
-                    opt_file, len, query, strlen(query), &value, &value_len);
-                if(json_res != JSONSuccess)
-                    continue; // fewer entries than expected: keep the defaults
-                char save = value[value_len];
-                value[value_len] = '\0';
-
-                int field = -1;
-
-                if(strcmp(value, "Record Latch") == 0 && json_res == JSONSuccess)
-                    field = 0;
-                if(strcmp(value, "Midi In Channel") == 0 && json_res == JSONSuccess)
-                    field = 1;
-                if(strcmp(value, "Midi Out Channel") == 0 && json_res == JSONSuccess)
-                    field = 2;
-                if(strcmp(value, "Tape Slew On") == 0 && json_res == JSONSuccess)
-                    field = 3;
-                if(strcmp(value, "Monitor Position") == 0 && json_res == JSONSuccess)
-                    field = 4;
-                if(strcmp(value, "Pitch Quantize In Shift Menu") == 0 && json_res == JSONSuccess)
-                    field = 5;
-                if(strcmp(value, "Split Delay") == 0 && json_res == JSONSuccess)
-                    field = 6;
-                if(strcmp(value, "Latch Follows Voice") == 0)
-                    field = 7;
-                if(strcmp(value, "Voice Gate") == 0)
-                    field = 8;
-                if(strcmp(value, "Show CPU") == 0)
-                    field = 9;
-
-                value[value_len] = save;
-
-                if(field == 0 || field == 3 || field == 5 || field == 6)
-                {
-                    sprintf(query, "chompi[%d].value", i);
-                    json_res = JSON_Search(
-                        opt_file, len, query, strlen(query), &value, &value_len);
-                    if(json_res != JSONSuccess)
-                        continue;
-                    save = value[value_len];
-                    value[value_len] = '\0';
-
-                    if(strcmp(value, "true") == 0 && json_res == JSONSuccess && field == 0)
-                        record_latch = true;
-                    else if(strcmp(value, "false") == 0 && json_res == JSONSuccess && field == 3)
-                        tape_slew_on = false;
-                    else if(strcmp(value, "false") == 0 && json_res == JSONSuccess && field == 5)
-                        pitch_shift_quantization = false;
-                    else if(strcmp(value, "true") == 0 && json_res == JSONSuccess && field == 6)
-                        delay_split = true;
-
-                    value[value_len] = save;
-                }
-                else if(field >= 7 && field <= 9) // SING's switches, true / false
-                {
-                    sprintf(query, "chompi[%d].value", i);
-                    json_res = JSON_Search(
-                        opt_file, len, query, strlen(query), &value, &value_len);
-                    if(json_res != JSONSuccess)
-                        continue;
-                    save = value[value_len];
-                    value[value_len] = '\0';
-                    const bool t = strcmp(value, "true") == 0;
-                    const bool f = strcmp(value, "false") == 0;
-                    if(t || f)
-                    {
-                        if(field == 7) latch_follows = t;
-                        if(field == 8) voice_gate = t;
-                        if(field == 9) show_cpu = t;
-                    }
-                    value[value_len] = save;
-                }
-                else if(field == 1 || field == 2 || field == 4)
-                {
-                    sprintf(query, "chompi[%d].value", i);
-                    json_res = JSON_Search(
-                        opt_file, len, query, strlen(query), &value, &value_len);
-                    if(json_res != JSONSuccess)
-                        continue;
-                    save = value[value_len];
-                    value[value_len] = '\0';
-
-                    const uint8_t val = atoi(value) - 1;
-                    // midi channels
-                    if(val < 16 && json_res == JSONSuccess && (field == 1 || field == 2))
-                    {
-                        if(field == 1)
-                            midi_ch_in = val;
-                        else if(field == 2)
-                            midi_ch_out = val;
-                    }
-                    // monitor position
-                    else if(val > 0 && val < 3 && field == 4)
-                    {
-                        monitor_position = val;
-                    }
-
-                    value[value_len] = save;
-                }
-            }
-        }
+        char   query[40];
+        char  *value;
+        size_t value_len;
+        sprintf(query, "chompi[%d].%s", int(i), field);
+        if(JSON_Search(opt_file, len, query, strlen(query), &value, &value_len) != JSONSuccess
+           || value_len >= buf_len)
+            return false;
+        memcpy(buf, value, value_len);
+        buf[value_len] = '\0';
+        return true;
     }
 
-    bool record_latch;
-    uint8_t midi_ch_in;
-    uint8_t midi_ch_out;
-    bool tape_slew_on;
-    uint8_t monitor_position;
-    bool delay_split;
-    bool latch_follows; // SING: latched chords follow the voice
-    bool voice_gate;    // SING: harmonies only while there is sound
-    bool show_cpu;      // SING: audio load on the white keys in the menu
-    
-    /**
-    * if true, the shift menu is quantized, and normal is not.
-    * if false, normal is quantized, and the shift menu is not.
-    */
-    bool pitch_shift_quantization;
+    void Parse()
+    {
+        const size_t len = strlen(opt_file);
+        if(JSON_Validate(opt_file, len) != JSONSuccess)
+            return;
 
-    private:
-        FIL fptr_opt;
+        for(size_t i = 0; i < kMaxEntries; i++)
+        {
+            char name[40], value[16];
+            if(!Value(len, i, "name", name, sizeof(name)))
+                break; // no more entries
+            if(!Value(len, i, "value", value, sizeof(value)))
+                continue;
 
-        static const size_t kOptFileSize = 4096;
-        static const size_t kNumOptions = 10;
-        char opt_file[kOptFileSize];
+            const bool t = strcmp(value, "true") == 0;
+            const bool f = strcmp(value, "false") == 0;
+            const int  n = atoi(value);
+
+            if(strcmp(name, "Midi In Channel") == 0 && n >= 1 && n <= 16)
+                midi_ch_in = n - 1;
+            else if(strcmp(name, "Midi Out Channel") == 0 && n >= 1 && n <= 16)
+                midi_ch_out = n - 1;
+            else if(strcmp(name, "Monitor Position") == 0 && n >= 1 && n <= 3)
+                monitor_position = n == 3 ? 3 : n - 1;
+            else if(!t && !f)
+                continue; // the rest are true / false
+            else if(strcmp(name, "Split Delay") == 0)
+                delay_split = t;
+            else if(strcmp(name, "Latch Follows Voice") == 0)
+                latch_follows = t;
+            else if(strcmp(name, "Voice Gate") == 0)
+                voice_gate = t;
+            else if(strcmp(name, "Show CPU") == 0)
+                show_cpu = t;
+            // anything else (TAPE's looper options in an old file): ignored
+        }
+    }
 };
 } // namespace chompi

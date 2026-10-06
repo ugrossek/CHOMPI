@@ -347,7 +347,7 @@ int main(void)
 
     LedSetup();
     ui.Init(&hw, &engine,
-        options.midi_ch_in, options.midi_ch_out, options.pitch_shift_quantization, options.delay_split);
+        options.midi_ch_in, options.midi_ch_out, options.delay_split);
 
     hw.StartLowPriorityCallback(SDCallback, 1000);
     engine.cpu_meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
