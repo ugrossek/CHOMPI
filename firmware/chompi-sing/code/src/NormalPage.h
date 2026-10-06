@@ -126,20 +126,10 @@ namespace chompi
     static const float sing_rose[3]    = {1.f, .45f, .60f};
     static const float sing_warm[3]    = {1.f, .85f, .65f};
 
-    static const float sing_sky[3] = {.30f, .65f, 1.f};
-
-    /** the play key's colour for a character: robot magenta, monster red,
-     *  angel sky blue, human gold */
+    /** the play key's colour for a character: robot magenta, human gold */
     static inline const float *SingCharacterColour(int index)
     {
-        static const float monster[3] = {1.f, .05f, 0.f};
-        switch (index)
-        {
-            case 0: return sing_magenta;
-            case 1: return monster;
-            case 2: return sing_sky;
-            default: return sing_gold;
-        }
+        return index == 0 ? sing_magenta : sing_gold;
     }
 
     /** knob 1 transpose ring: warm white at 0, coral below, gold above,

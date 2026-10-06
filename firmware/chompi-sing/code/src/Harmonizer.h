@@ -166,31 +166,14 @@ namespace chompi
         void SetGateOpen(bool open) { gate_open_ = open; }
 
         /** How keys turn into voices (the play button switches):
-         *  Robot, Monster, Angel: a vocoder: each key plays a synth note
-         *         that the voice's words are imprinted on (Kraftwerk). The
-         *         voice's pitch doesn't matter; talking works. No shifters
-         *         run. The three differ in octave, mouth size and sound.
+         *  Robot: a vocoder: each key plays a synth note that the voice's
+         *         words are imprinted on (Kraftwerk). The voice's pitch
+         *         doesn't matter; talking works. No shifters run.
          *  Keys:  "Human": each key sounds its own note, made from the real
          *         voice, whatever is sung (needs the pitch detector).
          *  Key 8 is C3 in all of them, a comfortable singing note. */
-        enum class ChordMode { Robot, Monster, Angel, Keys };
+        enum class ChordMode { Robot, Keys };
 
-        /** the robot characters: a vocoder each, with its own starting point
-         *  that size and character (knobs 2, 3) then move from */
-        struct Character
-        {
-            float octave; // the synth notes, semitones
-            float shift;  // vocoder bands: + bigger mouth
-            float colour; // added to the character knob: - softer, + rougher
-            bool  choir;  // two slightly detuned synth notes per key
-        };
-        static const Character &CharacterOf(ChordMode m)
-        {
-            static const Character kRobot   = {0.f, 0.f, 0.f, false};
-            static const Character kMonster = {-12.f, 2.5f, .15f, false};
-            static const Character kAngel   = {0.f, -1.f, -.3f, true};
-            return m == ChordMode::Monster ? kMonster : m == ChordMode::Angel ? kAngel : kRobot;
-        }
         bool Vocoded() const { return mode_ != ChordMode::Keys; }
         /** switch character: the harmonies fade out, the switch happens in
          *  the silence, and they fade back in (Process) */
@@ -217,7 +200,7 @@ namespace chompi
             size_ = v;
             ApplySize();
         }
-        void ApplySize() { vocoder_.SetShift((.5f - size_) * 6.f + CharacterOf(mode_).shift); }
+        void ApplySize() { vocoder_.SetShift((.5f - size_) * 6.f); }
 
         /** robot: "character" of the synth note, 0 soft (sine) .. .5
          *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
@@ -443,14 +426,10 @@ namespace chompi
                 {
                     /* the voice's synth note, with a little noise so the
                        vocoder keeps "s" and "sh" (classic vocoders do too) */
-                    const Character &ch = CharacterOf(mode_);
-                    /* choir (Angel): two notes, 10 cents either side */
-                    vo.osc.SetFreq(vo.hz * (ch.choir ? .99424f : 1.f), sr_);
-                    vo.osc2.SetFreq(vo.hz * 1.00579f, sr_);
+                    vo.osc.SetFreq(vo.hz, sr_);
                     /* character: sine -> saw over the first half, saw ->
-                       noise over the second; the character shifts it */
-                    float chr = character_ + ch.colour;
-                    chr = chr < 0.f ? 0.f : (chr > 1.f ? 1.f : chr);
+                       noise over the second */
+                    const float chr = character_;
                     const float m    = chr < .5f ? chr * 2.f : (chr - .5f) * 2.f;
                     const float wsin = chr < .5f ? 1.f - m : 0.f;
                     const float wsaw = chr < .5f ? m : 1.f - m;
@@ -464,9 +443,7 @@ namespace chompi
                         /* sine from the phase: sin(2 pi p) ~ -4u(1 - |u|), u = 2p - 1 */
                         const float u   = 2.f * vo.osc.phase - 1.f;
                         const float sn  = -4.f * u * (1.f - fabsf(u)) * 1.4f; // ~ the saw's level in the vocoder
-                        float saw = vo.osc.Process();
-                        if (ch.choir)
-                            saw = (saw + vo.osc2.Process()) * .7f;
+                        const float saw = vo.osc.Process();
                         const float c   = (wsin * sn + wsaw * saw + wnoi * Noise()) * vo.env * kVocodedLevel;
                         car_l[i] += c * gl;
                         car_r[i] += c * gr;
@@ -570,7 +547,6 @@ namespace chompi
         {
             StereoPitchShifter shifter;
             SawOsc             osc;   // robot mode
-            SawOsc             osc2;  // Angel's second, detuned note
             float              hz;    // robot mode: the note, with transpose
             int                key;
             float              ratio;
@@ -594,8 +570,7 @@ namespace chompi
             /* vocoded: the key's note, or, while following, the sung note
                plus the key's distance from key 8 */
             const float note = (follow ? sung_ : 48.f) + v.semis;
-            v.hz    = 440.f * powf(2.f, (note - 69.f + transpose_ + cents / 100.f
-                                         + CharacterOf(mode_).octave) / 12.f);
+            v.hz    = 440.f * powf(2.f, (note - 69.f + transpose_ + cents / 100.f) / 12.f);
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
