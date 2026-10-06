@@ -79,10 +79,10 @@ namespace chompi
                     default: c = sing_warm; lvl = .1f; break;
                 }
                 SetPthLedFloat(7, c[0] * lvl, c[1] * lvl, c[2] * lvl);
-                const float fz = !fx_->RobotMode() ? 0.f : fx_->Frozen() ? 1.f : .08f;
+                const float fz = !fx_->CanFreeze() ? 0.f : fx_->Frozen() ? 1.f : .08f;
                 SetPthLedFloat(8, sing_warm[0] * fz, sing_warm[1] * fz, sing_warm[2] * fz);
-                const float back = fx_->RobotMode() && fx_->Frozen() ? fx_->ScrubPosition() : 0.f;
-                const float now_ = fx_->RobotMode() && fx_->Frozen() ? 1.f - back : 0.f;
+                const float back = fx_->CanFreeze() && fx_->Frozen() ? fx_->ScrubPosition() : 0.f;
+                const float now_ = fx_->CanFreeze() && fx_->Frozen() ? 1.f - back : 0.f;
                 SetPthLedFloat(5, sing_magenta[0] * back, sing_magenta[1] * back, sing_magenta[2] * back);
                 SetPthLedFloat(6, sing_warm[0] * now_, sing_warm[1] * now_, sing_warm[2] * now_);
             }
@@ -160,7 +160,7 @@ namespace chompi
 
             // SING: no preset keys (TAPE: save / copy / erase)
             // KEY_23: robot freeze, bright white while frozen; dark outside robot mode
-            if(fx_->RobotMode())
+            if(fx_->CanFreeze())
             {
                 const float f = fx_->Frozen() ? 1.f : .08f;
                 SetSmtLedFloat(7, sing_warm[0] * f, sing_warm[1] * f, sing_warm[2] * f);
@@ -291,7 +291,7 @@ namespace chompi
                 else if(encoderID == 4)
                 {
                     // SING: the big wheel is the time wheel here too
-                    if(fx_->RobotMode())
+                    if(fx_->CanFreeze())
                         fx_->ScrubTime(turns);
                     enc_values[0][4] = 1.f - fx_->ScrubPosition();
                     return true;
@@ -459,7 +459,7 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_23): // SING: robot freeze
-                if(rising && fx_->RobotMode())
+                if(rising && fx_->CanFreeze())
                     fx_->ToggleFreeze();
                 break;
 

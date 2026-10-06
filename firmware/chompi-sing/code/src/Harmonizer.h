@@ -4,6 +4,7 @@
 #include "MicFilter.h"
 #include "PitchShifter.h"
 #include "Vocoder.h"
+#include "VoiceFreeze.h"
 
 namespace chompi
 {
@@ -13,6 +14,9 @@ namespace chompi
 
     /** the vocoder's time-wheel history, in SDRAM: chompi_main.cpp */
     extern float vocoder_hist[Vocoder::kHistFrames][Vocoder::kBands];
+    /** the real voice's recording for freeze and the time wheel (Human) */
+    extern float voice_audio[VoiceFreeze::kLen];
+    extern float voice_pitch[VoiceFreeze::kFrames];
 
     /** SING's live harmonizer.
      *
@@ -51,6 +55,8 @@ namespace chompi
             latch_    = false;
             mode_     = ChordMode::Robot;
             vocoder_.Init(samplerate, vocoder_hist);
+            vfreeze_.Init(samplerate, voice_audio, voice_pitch);
+            rec_note_ = 0.f;
             SetSize(.5f);
             SetCharacter(.5f);
             ring_phase_ = 0.f;
@@ -171,6 +177,9 @@ namespace chompi
         enum class ChordMode { Robot, Keys, Top, Relative };
         void SetMode(ChordMode m)
         {
+            /* a new character starts live */
+            vocoder_.SetFreeze(false);
+            vfreeze_.SetFreeze(false);
             mode_ = m;
             UpdateTop(true);
         }
@@ -184,13 +193,36 @@ namespace chompi
          *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
         void SetCharacter(float v) { character_ = v; }
 
-        /** robot: freeze the voice's sound, see Vocoder::SetFreeze */
-        void SetFreeze(bool on) { vocoder_.SetFreeze(on); }
-        bool Frozen() const { return vocoder_.Frozen(); }
+        /** Freeze and the time wheel, the same controls for every character
+         *  that has them: robot holds the voice's band levels (Vocoder),
+         *  keys (Human) the real voice (VoiceFreeze). */
+        bool CanFreeze() const { return mode_ == ChordMode::Robot || mode_ == ChordMode::Keys; }
+        void SetFreeze(bool on)
+        {
+            if (mode_ == ChordMode::Robot)
+                vocoder_.SetFreeze(on);
+            else if (mode_ == ChordMode::Keys)
+                vfreeze_.SetFreeze(on);
+        }
+        bool Frozen() const
+        {
+            return mode_ == ChordMode::Robot ? vocoder_.Frozen()
+                 : mode_ == ChordMode::Keys  ? vfreeze_.Frozen() : false;
+        }
 
-        /** robot: time wheel, see Vocoder::Scrub */
-        void Scrub(float frames) { vocoder_.Scrub(frames); }
-        float ScrubPosition() const { return vocoder_.ScrubPosition(); }
+        /** time wheel: ms, positive = further back */
+        void Scrub(float ms)
+        {
+            if (mode_ == ChordMode::Robot)
+                vocoder_.Scrub(ms); // one frame per 1 ms block
+            else if (mode_ == ChordMode::Keys)
+                vfreeze_.Scrub(ms);
+        }
+        float ScrubPosition() const
+        {
+            return mode_ == ChordMode::Robot ? vocoder_.ScrubPosition()
+                 : mode_ == ChordMode::Keys  ? vfreeze_.Position() : 0.f;
+        }
 
         /** "metal": a ring modulator on the harmonies (Dalek). 0 off; up,
          *  more of it and a higher modulator, 30 Hz .. ~480 Hz */
@@ -204,9 +236,17 @@ namespace chompi
          *  per block. Smoothed a little; kept through unvoiced gaps. */
         void SetSung(bool voiced, float note)
         {
+            rec_note_ = voiced ? note : 0.f; // recorded with the voice
             if (mode_ != ChordMode::Keys)
                 return;
-            if (voiced)
+            if (vfreeze_.Frozen())
+            {
+                /* frozen: the note that was sung where the wheel points */
+                const float n = vfreeze_.Note();
+                if (n > 0.f)
+                    sung_ += (n - sung_) * kSungSmooth;
+            }
+            else if (voiced)
             {
                 sung_ = heard_any_ ? sung_ + (note - sung_) * kSungSmooth : note;
                 heard_any_ = true;
@@ -303,6 +343,14 @@ namespace chompi
                 in_[i] = x;
             }
 
+            /* Human frozen: the voice comes from the recording; otherwise
+               the live voice is recorded, in every character, so a freeze
+               right after switching has something to hold */
+            if (mode_ == ChordMode::Keys && vfreeze_.Frozen())
+                vfreeze_.Play(in_, size);
+            else
+                vfreeze_.Record(in_, size, rec_note_);
+
             float hl[size], hr[size];
             for (size_t i = 0; i < size; i++)
                 hl[i] = hr[i] = 0.f;
@@ -393,7 +441,8 @@ namespace chompi
                         ring_phase_ -= 1.f;
                 }
 
-            const float gate_target = !gate_on_ || gate_open_ ? 1.f : 0.f;
+            /* a freeze keeps sounding when the voice stops: the gate stays open */
+            const float gate_target = !gate_on_ || gate_open_ || Frozen() ? 1.f : 0.f;
             for (size_t i = 0; i < size; i++)
             {
                 if (gate_ < gate_target)
@@ -545,6 +594,8 @@ namespace chompi
         static constexpr float kRobotNoise = .05f;
 
         Vocoder          vocoder_;
+        VoiceFreeze      vfreeze_;
+        float            rec_note_;
         float            character_;
         float            ring_mix_, ring_inc_, ring_phase_;
         uint32_t         noise_;

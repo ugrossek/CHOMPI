@@ -378,8 +378,9 @@ namespace daisy
                 harmonizer.SetGateOpen(gate_hold_ > 0);
                 harmonizer.SetSung(pitch_.Voiced(), pitch_.Note());
 
-                if(harmonizer.Active())
-                    harmonizer.Process(live, mic, out[0], out[1], size);
+                /* always, not only while keys are held: freeze and the time
+                   wheel record the voice all the time */
+                harmonizer.Process(live, mic, out[0], out[1], size);
             }
 
             for(size_t i = 0; i < size; i++)
@@ -611,6 +612,7 @@ namespace daisy
         /* SING: the lo-fi page is Speak & Spell, not TAPE's saturation */
         inline void SetCrush(float val) { crush_target_ = val; }
         void ToggleFreeze() { harmonizer.SetFreeze(!harmonizer.Frozen()); }
+        bool CanFreeze() const { return harmonizer.CanFreeze(); }
         bool Frozen() const { return harmonizer.Frozen(); }
         void SetRing(float v) { harmonizer.SetRing(v); }
         /* SING: big wheel = time wheel (robot): one detent = 25 ms of the

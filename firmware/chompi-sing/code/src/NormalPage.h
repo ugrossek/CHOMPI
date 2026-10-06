@@ -481,7 +481,7 @@ namespace chompi
                 }
                 case 4: // SING: time wheel
                 {
-                    if(fx_->RobotMode() && fx_->Frozen())
+                    if(fx_->CanFreeze() && fx_->Frozen())
                     {
                         /* left LED: how far back, magenta; right: now, warm */
                         const float back = fx_->ScrubPosition();
@@ -616,7 +616,7 @@ namespace chompi
 
             // SING: loop key = freeze: white while frozen, dim in robot mode, off otherwise
             {
-                const float lvl = !fx_->RobotMode() ? 0.f : fx_->Frozen() ? 1.f : .08f;
+                const float lvl = !fx_->CanFreeze() ? 0.f : fx_->Frozen() ? 1.f : .08f;
                 SetPthLedFloat(led_map[34], sing_warm[0] * lvl, sing_warm[1] * lvl, sing_warm[2] * lvl);
             }
 
@@ -727,7 +727,7 @@ namespace chompi
             }
             case static_cast<uint16_t>(Hardware::SwId::KEY_28): // SING: loop = freeze (robot)
             {
-                if (rising && fx_->RobotMode())
+                if (rising && fx_->CanFreeze())
                     fx_->ToggleFreeze();
                 hw_->SendCC(midi_channel, 27, rising ? 127 : 0);
                 break;
@@ -830,7 +830,7 @@ namespace chompi
                 /* SING: the time wheel (robot mode): back through the last
                    ~2 s of the voice; the bar on the white keys shows where,
                    full = now */
-                if (fx_->RobotMode() && stepsPerRevolution == 0)
+                if (fx_->CanFreeze() && stepsPerRevolution == 0)
                     fx_->ScrubTime(turns);
                 enc_values[0][4] = 1.f - fx_->ScrubPosition();
                 (void)old_val;
