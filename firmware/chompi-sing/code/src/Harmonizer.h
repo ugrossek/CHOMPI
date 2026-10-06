@@ -45,6 +45,7 @@ namespace chompi
                 voices_[v].env  = 0.f;
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
+                voices_[v].lpf   = Lp2();
                 voices_[v].shift = 0.f;
                 voices_[v].pan   = 0.f;
             }
@@ -64,7 +65,6 @@ namespace chompi
             SetSize(.5f);
             SetCharacter(.5f);
             ring_phase_ = 0.f;
-            SetRing(0.f);
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
@@ -76,8 +76,7 @@ namespace chompi
                before a page is shown */
             SetTranspose(.5f);
             SetLevel(.75f);
-            SetAttack(.1f);
-            SetRelease(.5f);
+            SetEnvelope(.4f);
             SetDoubler(0.f);
             SetSpread(0.f);
 
@@ -138,11 +137,13 @@ namespace chompi
         /** knob 1, page 2: harmony volume, .5 = about as loud as the dry voice */
         void SetLevel(float v) { level_ = v * 2.f * kLevel; }
 
-        /** knob 2, page 2: 2 ms .. 500 ms */
-        void SetAttack(float v) { attack_ = 1.f / (.002f * powf(250.f, v) * sr_); }
-
-        /** knob 3, page 2: 20 ms .. 3 s */
-        void SetRelease(float v) { release_ = 1.f / (.02f * powf(150.f, v) * sr_); }
+        /** Envelope, one knob (chompi + knob 5): 0 short and plucky (attack
+         *  2 ms, release 50 ms) .. 1 slow and swelling (200 ms, 3 s) */
+        void SetEnvelope(float v)
+        {
+            attack_  = 1.f / (.002f * powf(100.f, v) * sr_);
+            release_ = 1.f / (.05f * powf(60.f, v) * sr_);
+        }
 
         /** knob 3, page 1: chorus taps + slight detune per voice */
         void SetDoubler(float v)
@@ -172,9 +173,9 @@ namespace chompi
          *  Keys:  "Human": each key sounds its own note, made from the real
          *         voice, whatever is sung (needs the pitch detector).
          *  Key 8 is middle C (C4) in both. */
-        enum class ChordMode { Robot, Keys };
+        enum class ChordMode { Robot, Keys, Toy };
 
-        bool Vocoded() const { return mode_ != ChordMode::Keys; }
+        bool Vocoded() const { return mode_ != ChordMode::Keys; } // Robot, Toy
         /** switch character: the harmonies fade out, the switch happens in
          *  the silence, and they fade back in (Process) */
         void SetMode(ChordMode m) { pending_ = m; }
@@ -202,8 +203,9 @@ namespace chompi
         }
         void ApplySize() { vocoder_.SetShift((.5f - size_) * 6.f); }
 
-        /** robot: "character" of the synth note, 0 soft (sine) .. .5
-         *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
+        /** knob 3, "character": Robot's synth note, 0 soft (sine) .. .5
+         *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise); Human soft ..
+         *  bright (HumanCharacter); Toy how much toy (Toy) */
         void SetCharacter(float v) { character_ = v; }
 
         /** Freeze and the time wheel, the same controls for every character
@@ -249,13 +251,6 @@ namespace chompi
             return Vocoded() ? vocoder_.ScrubPosition() : vfreeze_.Position();
         }
 
-        /** "metal": a ring modulator on the harmonies (Dalek). 0 off; up,
-         *  more of it and a higher modulator, 30 Hz .. ~480 Hz */
-        void SetRing(float v)
-        {
-            ring_mix_ = v * 2.f < 1.f ? v * 2.f : 1.f;
-            ring_inc_ = 30.f * powf(2.f, v * 4.f) / sr_;
-        }
 
         /** keys mode: the detected sung pitch (MIDI note, fractional), once
          *  per block. Smoothed a little; kept through unvoiced gaps. */
@@ -410,18 +405,19 @@ namespace chompi
             for (size_t i = 0; i < size; i++)
                 hl[i] = hr[i] = 0.f;
 
-            /* robot: the voices build the vocoder's carriers instead; Human
-               with character right of centre also uses the vocoder, on
-               noise, for the whisper (wsum: the held voices' weights) */
-            const bool robot   = Vocoded();
-            const float whisper = !robot && character_ > .51f ? (character_ - .5f) * 2.f : 0.f;
-            float car_l[size], car_r[size], wsum_l[size], wsum_r[size];
+            /* Robot and Toy: the voices build the vocoder's carriers */
+            const bool robot = Vocoded();
+            const bool toy   = mode_ == ChordMode::Toy;
+            float car_l[size], car_r[size];
             if (robot)
                 for (size_t i = 0; i < size; i++)
                     car_l[i] = car_r[i] = 0.f;
-            if (whisper > 0.f)
-                for (size_t i = 0; i < size; i++)
-                    wsum_l[i] = wsum_r[i] = 0.f;
+
+            /* Human: shifting up moves the voice's formants up with the notes
+               and brightens it (the chipmunk). Each voice gets a lowpass that
+               closes with its upward shift; character towards bright eases
+               it off. */
+            const float bright = !robot && character_ > .5f ? (character_ - .5f) * 2.f : 0.f;
 
             for (size_t v = 0; v < kVoices; v++)
             {
@@ -436,15 +432,15 @@ namespace chompi
                 const float gl = cosf(a) * 1.4142136f * level_;
                 const float gr = sinf(a) * 1.4142136f * level_;
 
-
                 if (robot)
                 {
                     /* the voice's synth note, with a little noise so the
                        vocoder keeps "s" and "sh" (classic vocoders do too) */
                     vo.osc.SetFreq(vo.hz, sr_);
                     /* character: sine -> saw over the first half, saw ->
-                       noise over the second */
-                    const float chr = character_;
+                       noise over the second; Toy keeps the buzz (its
+                       character is how much toy, see Toy()) */
+                    const float chr = toy ? .5f : character_;
                     const float m    = chr < .5f ? chr * 2.f : (chr - .5f) * 2.f;
                     const float wsin = chr < .5f ? 1.f - m : 0.f;
                     const float wsaw = chr < .5f ? m : 1.f - m;
@@ -465,21 +461,30 @@ namespace chompi
                     }
                 }
                 else
-                for (size_t i = 0; i < size; i++)
                 {
-                    if (vo.gate)
-                        vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
-                    else
-                        vo.env = vo.env - release_ > 0.f ? vo.env - release_ : 0.f;
-
-                    float l = in_[i], r = in_[i];
-                    vo.shifter.Process(vo.ratio, &l, &r);
-                    hl[i] += l * vo.env * gl;
-                    hr[i] += r * vo.env * gr;
-                    if (whisper > 0.f)
+                    /* a 12 dB/octave lowpass that closes as the voice is
+                       shifted up, so the shifted voice reaches about as high
+                       as the sung one: shifting moves the voice's 2-6 kHz
+                       up into the very highs, which a gentle shelf barely
+                       touched (measured) */
+                    const float up = vo.shift + transpose_;
+                    float fc = up > 0.f ? kChipmunkTop * exp2f(-up * kChipmunkSlope / 12.f) : kChipmunkTop;
+                    fc = fc < kChipmunkFloor ? kChipmunkFloor : fc;
+                    fc += (kChipmunkTop - fc) * bright;
+                    Lowpass(vo.lpf, fc);
+                    for (size_t i = 0; i < size; i++)
                     {
-                        wsum_l[i] += vo.env * gl;
-                        wsum_r[i] += vo.env * gr;
+                        if (vo.gate)
+                            vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
+                        else
+                            vo.env = vo.env - release_ > 0.f ? vo.env - release_ : 0.f;
+
+                        float l = in_[i], r = in_[i];
+                        vo.shifter.Process(vo.ratio, &l, &r);
+                        l = vo.lpf.Run(0, l);
+                        r = vo.lpf.Run(1, r);
+                        hl[i] += l * vo.env * gl;
+                        hr[i] += r * vo.env * gr;
                     }
                 }
                 if (!vo.gate && vo.env <= 0.f)
@@ -490,21 +495,9 @@ namespace chompi
                 vocoder_.Process(in_, car_l, car_r, hl, hr, size,
                                  spread_ > 0.f, Active());
             else
-                HumanCharacter(hl, hr, car_l, car_r, wsum_l, wsum_r, whisper, size);
-
-            /* ring modulator: the harmonies times a sine */
-            if (ring_mix_ > 0.f)
-                for (size_t i = 0; i < size; i++)
-                {
-                    const float u = 2.f * ring_phase_ - 1.f;
-                    const float m = -4.f * u * (1.f - fabsf(u)); // ~ sin(2 pi phase)
-                    const float g = 1.f - ring_mix_ + ring_mix_ * m;
-                    hl[i] *= g;
-                    hr[i] *= g;
-                    ring_phase_ += ring_inc_;
-                    if (ring_phase_ >= 1.f)
-                        ring_phase_ -= 1.f;
-                }
+                HumanCharacter(hl, hr, bright, size);
+            if (toy)
+                Toy(hl, hr, size);
 
             /* switching character: fade out, switch in the silence, fade in */
             {
@@ -565,6 +558,20 @@ namespace chompi
         }
 
     private:
+        /** a 2-pole lowpass (Q .707), stereo */
+        struct Lp2
+        {
+            float b0 = 1.f, b1 = 0.f, a1 = 0.f, a2 = 0.f; // b2 = b0
+            float z1[2] = {0.f, 0.f}, z2[2] = {0.f, 0.f};
+            float fc = -1.f;
+            float Run(int c, float x)
+            {
+                const float y = b0 * x + z1[c];
+                z1[c] = b1 * x - a1 * y + z2[c];
+                z2[c] = b0 * x - a2 * y;
+                return y;
+            }
+        };
         struct Voice
         {
             StereoPitchShifter shifter;
@@ -577,6 +584,7 @@ namespace chompi
             float              pan;
             float              env;
             bool               gate;
+            Lp2                lpf;        // Human: the chipmunk compensation
         };
 
         /** pitch = key + transpose, plus a few cents of alternating detune
@@ -645,11 +653,11 @@ namespace chompi
         Voice            voices_[kVoices];
         /** Human's size and character (the robot's are in the vocoder):
          *  character left of centre softens (a lowpass, 12 kHz down to
-         *  800 Hz); right of centre adds breath (noise that follows the
-         *  voice) for the held keys; size tilts the tone, left darker and
-         *  fuller (bigger), right brighter and thinner (smaller). */
-        void HumanCharacter(float *hl, float *hr, float *car_l, float *car_r,
-                            const float *wsum_l, const float *wsum_r, float whisper, size_t size)
+         *  800 Hz), right of centre brightens (the chipmunk compensation
+         *  eases off, see Process, and a little presence above ~2 kHz);
+         *  size tilts the tone, left darker and fuller (bigger), right
+         *  brighter and thinner (smaller). */
+        void HumanCharacter(float *hl, float *hr, float bright, size_t size)
         {
             if (character_ < .49f)
             {
@@ -663,24 +671,15 @@ namespace chompi
                     hr[i] = soft_r_;
                 }
             }
-            else if (whisper > 0.f)
+            else if (bright > 0.f)
             {
-                /* breath: noise above ~2.5 kHz that follows the voice's
-                   level, for the held keys, with a little less voice. Sung
-                   it turns breathy; whispered it stays a whisper. (Was the
-                   vocoder on noise: too much CPU with 7 voices, and sung it
-                   replaced the voice with noise.) */
-                (void)car_l;
-                (void)car_r;
+                const float g = kPresence * bright;
                 for (size_t i = 0; i < size; i++)
                 {
-                    const float x = fabsf(in_now_[i]);
-                    breath_env_ += (x - breath_env_) * (x > breath_env_ ? kBreathAtt : kBreathRel);
-                    const float n = Noise();
-                    breath_lp_ += kBreathHp * (n - breath_lp_);
-                    const float air = (n - breath_lp_) * breath_env_ * kBreathGain * whisper;
-                    hl[i] = hl[i] * (1.f - .35f * whisper) + air * wsum_l[i];
-                    hr[i] = hr[i] * (1.f - .35f * whisper) + air * wsum_r[i];
+                    pres_l_ += kPresenceCoef * (hl[i] - pres_l_);
+                    pres_r_ += kPresenceCoef * (hr[i] - pres_r_);
+                    hl[i] += (hl[i] - pres_l_) * g;
+                    hr[i] += (hr[i] - pres_r_) * g;
                 }
             }
 
@@ -699,14 +698,67 @@ namespace chompi
             }
         }
 
-        static constexpr float kTiltCoef = .123f; // one pole, ~1 kHz at 48 kHz
-        static constexpr float kBreathHp   = .28f;   // one pole, ~2.5 kHz: below is taken out
-        static constexpr float kBreathAtt  = .02f;   // the voice's level, ~1 ms up
-        static constexpr float kBreathRel  = .0007f; // ~30 ms down
-        static constexpr float kBreathGain = .5f; // full right ~ as loud as the voice alone
-        float breath_env_ = 0.f, breath_lp_ = 0.f;
+        /** Toy: the robot as an 80s talking toy. Character is how much:
+         *  fewer samples and bits (Speak & Spell, 48 kHz down to ~5 kHz,
+         *  16 bits down to 5) and a ring modulator at a low, Dalek-ish
+         *  frequency (metal). */
+        void Toy(float *hl, float *hr, size_t size)
+        {
+            const float t    = character_;
+            const float step = exp2f(-t * 3.2f);
+            const float q    = exp2f(15.f - t * 11.f);
+            const float mix  = .75f * t;
+            const float inc  = (45.f + 40.f * t) / sr_;
+            /* a one-pole near half the reduced sample rate */
+            const float smooth = 1.f - expf(-6.2831853f * .45f * step * .5f);
+            for (size_t i = 0; i < size; i++)
+            {
+                toy_acc_ += step;
+                if (toy_acc_ >= 1.f)
+                {
+                    toy_acc_ -= 1.f;
+                    toy_l_ = roundf(hl[i] * q) / q;
+                    toy_r_ = roundf(hr[i] * q) / q;
+                }
+                /* smooth the steps, as the real toy's output filter did:
+                   held samples alone spray images into the highs */
+                toy_sl_ += smooth * (toy_l_ - toy_sl_);
+                toy_sr_ += smooth * (toy_r_ - toy_sr_);
+                const float u = 2.f * ring_phase_ - 1.f;
+                const float m = -4.f * u * (1.f - fabsf(u)); // ~ sin(2 pi phase)
+                const float g = 1.f - mix + mix * m;
+                hl[i] = toy_sl_ * g;
+                hr[i] = toy_sr_ * g;
+                ring_phase_ += inc;
+                if (ring_phase_ >= 1.f)
+                    ring_phase_ -= 1.f;
+            }
+        }
+
+        static constexpr float kTiltCoef     = .123f; // one pole, ~1 kHz at 48 kHz
+        static constexpr float kPresenceCoef = .23f;  // one pole, ~2 kHz
+        static constexpr float kPresence     = .4f;   // ~+3 dB above it, fully bright
+        /* the chipmunk compensation: the lowpass starts at kChipmunkTop and
+           closes kChipmunkSlope octaves per octave of upward shift */
+        static constexpr float kChipmunkTop   = 14000.f;
+        static constexpr float kChipmunkSlope = 1.f;
+        static constexpr float kChipmunkFloor = 3000.f;
+
+        void Lowpass(Lp2 &f, float fc)
+        {
+            if (fabsf(fc - f.fc) < 1.f)
+                return;
+            f.fc = fc;
+            const float w = 6.2831853f * fc / sr_, al = sinf(w) * .7071068f, c = cosf(w), a0 = 1.f + al;
+            f.b0 = (1.f - c) * .5f / a0;
+            f.b1 = (1.f - c) / a0;
+            f.a1 = -2.f * c / a0;
+            f.a2 = (1.f - al) / a0;
+        }
         float soft_l_ = 0.f, soft_r_ = 0.f, tilt_l_ = 0.f, tilt_r_ = 0.f;
-        const float *in_now_ = nullptr; // this block's voice, for the whisper
+        float pres_l_ = 0.f, pres_r_ = 0.f;
+        float toy_acc_ = 0.f, toy_l_ = 0.f, toy_r_ = 0.f, toy_sl_ = 0.f, toy_sr_ = 0.f;
+        const float *in_now_ = nullptr; // this block's voice
 
         /** white noise, -1..1 (xorshift) */
         float Noise()
@@ -731,7 +783,7 @@ namespace chompi
         ChordMode        pending_;
         float            switch_gain_;
         static constexpr float kSwitchFade = .025f; // s, each way
-        float            ring_mix_, ring_inc_, ring_phase_;
+        float            ring_phase_; // Toy's metal
         uint32_t         noise_;
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;

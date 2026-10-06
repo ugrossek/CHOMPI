@@ -10,28 +10,31 @@ and it sings.
 
 1. Plug in headphones (the built-in mic and speaker feed back).
 2. Hold a key or two and say "hello". The **robot** sings it on those notes.
-3. Press **play** for **Human**: your real voice on the keys' notes instead.
+3. Press **play** for **Human** (your real voice on the keys' notes) and again for **Toy** (an 80s
+   talking toy).
 4. Flip the **toggle** to latch, hold a chord, let go, and sing a melody: the chord follows you.
 5. Press **loop** to freeze the sound, then turn the **big wheel** to go back in time.
 
-## Two characters
+## Three characters
 
 **Play** switches between them; its light shows which one is on.
 
 - **Robot** (red): a vocoder, the Kraftwerk kind. Each key plays a buzzy synth note and your
   voice's words are imprinted on it. The pitch you sing doesn't matter, and talking, whispering,
   clapping or a squeaky door all work.
-- **Human** (warm white): your real voice, shifted onto the keys' notes, whatever you sing. Sing roughly
-  in the range of the keys for the most natural sound.
+- **Human** (warm white): your real voice, shifted onto the keys' notes, whatever you sing. Sing
+  roughly in the range of the keys for the most natural sound.
+- **Toy** (yellow): the robot as an 80s talking toy: Speak & Spell's grainy, low-fi voice and a
+  metallic Dalek ring. Character sets how much.
 
-Key 8 is middle C (C4) in both. In Human, the key of the note you sing passes your voice
+Key 8 is middle C (C4) in all three. In Human, the key of the note you sing passes your voice
 through unchanged: for children that's around the middle, for most grown-ups lower down.
 
 ## Buttons and switch
 
 | | |
 |---|---|
-| **Play** | next character: Robot (red) / Human (warm white) |
+| **Play** | next character: Robot (red) / Human (warm white) / Toy (yellow) |
 | **Loop** | **freeze**: holds the sound you're making, so you can stop and keep playing chords with it (white while frozen); press again to go back to live |
 | **Big wheel** | **time wheel**: turn left to go back through the last ~2 seconds (it freezes); slowly says it slowly, back and forth scratches. Press to go back to live |
 | **Toggle switch** | **latch**: notes keep sounding after you let go. Press a sounding key again to drop it. While latched, the chord **follows your voice**: key 8 is your note, the other keys keep their distance from it |
@@ -39,42 +42,35 @@ through unchanged: for children that's around the middle, for most grown-ups low
 
 ## Knobs
 
-Press a knob to switch its page.
+One page each, except the effects (knob 4) and the volume (knob 6), which have two, as in TAPE:
+press them to switch. Every knob has a second control: **hold the chompi key and turn**.
 
-| Knob | Page 1 | Page 2 | Page 3 |
+| Knob | Turn | Chompi + turn | Chompi + press |
 |---|---|---|---|
-| **1** | **transpose**, ±12 semitones, continuous | **harmony volume** | **metal**: ring modulator (Dalek), off fully left |
-| **2** | **size**: left big, right small | **spread** | **attack** |
-| **3** | **character**: left soft, right airy | **doubler** | **release** |
-| **4** | **space**: reverb and delay | **Speak & Spell**: fewer samples and bits | **filter** |
-| **5** | the big wheel: time wheel, above | | |
-| **6** | **output volume** | **input gain** | |
+| **1** | **pitch**, ±12 semitones, continuous | pitch in fifths and octaves | reset |
+| **2** | **size**: left big, right small | **width**: voices spread left and right | reset |
+| **3** | **character** (below) | **doubler**: a thicker, chorused sound | reset |
+| **4**, page 1 (red) | **space**: reverb to the left, echo to the right, off in the middle | **echo time** | reset the effects |
+| **4**, page 2 (blue) | **filter**: low-pass to the left, high-pass to the right, off in the middle | **resonance** | reset the effects |
+| **5** | the big wheel: **time wheel** (above) | **envelope**: short and plucky ← → slow and swelling | |
+| **6**, page 1 (red) | **output volume** | **mix**: your voice ← → the harmonies | where your own voice goes: headphones / all outputs / off |
+| **6**, page 2 (blue) | **input gain** | **compression** | |
 
-The knobs are the same in both characters, latched or not. Page 2 is the ensemble (harmony
-volume, spread, doubler), page 3 the shape (metal, attack, release). Size and character start in
-the middle:
+Size, character, pitch and mix start in the middle. **Character** means:
 
-- **Size:** Robot moves its mouth (formants), from monster to mouse. Human tilts the tone,
-  darker and fuller to the left, brighter and thinner to the right.
-- **Character:** Robot's synth goes from a soft sine through the Kraftwerk buzz to noise (a
-  whisper). Human gets softer to the left and breathier to the right: air that follows your
-  voice, so singing turns breathy and whispering stays a whisper.
+- **Robot:** a soft sine to the left, the Kraftwerk buzz in the middle, noise (a whisper) to the
+  right.
+- **Human:** softer to the left, brighter to the right.
+- **Toy:** how much toy: a little grainy to the left, full Speak & Spell and Dalek metal to the
+  right.
 
-Spread places the voices left and right; doubler thickens them with a chorus. Hold knob 6 for
-two seconds to see the battery.
+**Size** is the robot's mouth (formants), from monster to mouse; on Human it tilts the tone,
+darker and fuller to the left, brighter and thinner to the right. Hold knob 6 for two seconds to
+see the battery.
 
-## Menu (hold the chompi key)
+## The chompi key
 
-| | |
-|---|---|
-| Knob 1, turn | transpose in **fifths and octaves** (−12, −7, 0, +7, +12) |
-| Knob 1, 2 or 3, press | reset all three pages of that knob to the start (white while held) |
-| Knob 4, turn | the effect's detail: delay time, wobble (on Speak & Spell), filter resonance |
-| Knob 4, press | reset all effects |
-| Knob 6, turn | output compression |
-| Knob 6, press | where your own voice goes: headphones (warm white), all outputs (red), off (very dim) |
-
-The keys keep playing while the menu is open.
+Holding it gives every knob its second control (the table above); the keys keep playing.
 
 ## Lights
 
@@ -84,9 +80,10 @@ play, warm white the human and what's in tune.
 - **Keys:** held keys red. The key of the note you're singing lights up too: warm white when in
   tune, red when off (a tuner). Middle C dim white. Turn a knob and the white keys show its
   position for a moment (transpose: from the middle outwards).
-- **Knob rings** show the page in its colour, after the Bauhaus primaries: **page 1 red, page 2
-  yellow, page 3 blue**, brighter as the control turns up. Knob 1 on transpose: warm white at 0,
-  red either way. The bar on the white keys takes the colour of the page you're turning.
+- **Knob rings:** pitch, size and character are warm white in the middle and red the further out.
+  Knobs 4 and 6 show their page: **page 1 red, page 2 blue**. While the chompi key is held, the
+  rings show the second controls in white. The bar on the white keys shows the value you're
+  turning, for a moment.
 - **Big wheel's LEDs** while frozen: red for how far back, warm white for "now".
 - **Chompi key:** red while latched, otherwise your input level; knob 6 shows the output level.
   Both meters are dim white when quiet, brighter as it gets louder, red when it's hot.
@@ -121,7 +118,11 @@ Every start begins from the defaults; SING doesn't save knob settings.
   reads them from a 2-second history.
 - **Human** ([`Harmonizer.h`](code/src/Harmonizer.h)): each key runs the voice through its own
   WSOLA pitch shifter ([`PitchShifter.h`](code/src/PitchShifter.h)), by the distance from the
-  sung note to the key's note. Freeze holds the latest steady moment of the voice, not one in the
+  sung note to the key's note. Shifting up moves the voice's formants up too and brightens it
+  (the chipmunk); a lowpass per voice that closes with the shift eases it. Real formant
+  preservation is for a later shifter.
+- **Toy:** the robot's vocoder, then fewer samples and bits with a smoothing filter (as the real
+  toy's output stage) and a ring modulator. Freeze holds the latest steady moment of the voice, not one in the
   middle of a glide or a consonant.
 - **Pitch** ([`PitchDetector.h`](code/src/PitchDetector.h)): YIN on the input, every 4 ms, 80 Hz
   to 1 kHz, computed in the main loop so it doesn't take time from the voices.

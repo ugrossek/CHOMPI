@@ -63,6 +63,12 @@
   .pages li:nth-child(1) .p:not(:empty) { background: var(--coral); }
   .pages li:nth-child(2) .p:not(:empty) { background: var(--yellow); color: var(--ink); }
   .pages li:nth-child(3) .p:not(:empty) { background: var(--blue); }
+  .rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+  .rows li { display: grid; grid-template-columns: 44px 1fr; gap: 4px; align-items: baseline; }
+  .rows .k { font-size: 10px; font-weight: 800; color: var(--soft); letter-spacing: .04em; }
+  .rows .k.c { color: var(--coral); }
+  .rows .pg { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 2px;
+              color: #fff; font-size: 10.5px; font-weight: 800; margin-right: 4px; vertical-align: -2px; }
   .legend { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: -2px; }
   .legend span { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 2px; color: #fff; font-size: 10px; letter-spacing: 0; }
   .pages b { font-weight: 800; }
@@ -72,7 +78,9 @@
   .menu-line .m { color: var(--coral); font-weight: 800; }
 
   /* middle row */
-  .mid { display: grid; grid-template-columns: 1fr 1fr 1.45fr; gap: 10px; margin-bottom: 18px; }
+  .mid { display: grid; grid-template-columns: 1fr 1fr 1fr 1.55fr; gap: 10px; margin-bottom: 18px; }
+  .char.toy .head { background: var(--yellow); color: var(--ink); }
+  .char.toy .head .dot { background: var(--ink); opacity: .8; }
   .char { overflow: hidden; }
   .char .head { padding: 9px 13px; font-weight: 900; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; }
   .char .head .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: .9; }
@@ -103,63 +111,58 @@
 <body>
   <header>
     <h1>SING</h1>
-    <span class="badge">Hold CHOMPI = menu</span>
+    <span class="badge">Hold CHOMPI = second controls</span>
     <p class="tag">Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice. Use headphones. Key 8 is middle C.</p>
   </header>
 
-  <h2>KNOBS, THE SAME IN BOTH CHARACTERS · PRESS TO SWITCH PAGE · THE RING SHOWS THE PAGE<span class="legend"><span style="background:var(--coral)">1</span><span style="background:var(--yellow);color:var(--ink)">2</span><span style="background:var(--blue)">3</span></span></h2>
+  <h2>KNOBS · HOLD CHOMPI + TURN: SECOND CONTROL · CHOMPI + PRESS: RESET · KNOBS 4, 6: PRESS FOR PAGE<span class="legend"><span style="background:var(--coral)">1</span><span style="background:var(--blue)">2</span></span></h2>
   <section class="knobs">
     <div class="card knob">
-      <div class="top"><span class="num">1</span><span class="name">Pitch &amp; level</span></div>
-      <ul class="pages">
-        <li><span class="p">1</span><span><b>transpose</b> ±12</span></li>
-        <li><span class="p">2</span><span><b>harmony volume</b></span></li>
-        <li><span class="p">3</span><span><b>metal</b> (Dalek), left = off</span></li>
+      <div class="top"><span class="num">1</span><span class="name">Pitch</span></div>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><b>pitch</b> ±12</span></li>
+        <li><span class="k c">chompi</span><span>fifths &amp; octaves</span></li>
       </ul>
-      <div class="menu-line"><span class="m">menu</span> turn: fifths &amp; octaves · press: reset</div>
     </div>
     <div class="card knob">
-      <div class="top"><span class="num">2</span><span class="name">Size &amp; spread</span></div>
-      <ul class="pages">
-        <li><span class="p">1</span><span><b>size</b>: left big, right small</span></li>
-        <li><span class="p">2</span><span><b>spread</b></span></li>
-        <li><span class="p">3</span><span><b>attack</b></span></li>
+      <div class="top"><span class="num">2</span><span class="name">Size</span></div>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><b>size</b>: big / small</span></li>
+        <li><span class="k c">chompi</span><span><b>width</b></span></li>
       </ul>
-      <div class="menu-line"><span class="m">menu</span> press: reset</div>
     </div>
     <div class="card knob">
-      <div class="top"><span class="num">3</span><span class="name">Sound</span></div>
-      <ul class="pages">
-        <li><span class="p">1</span><span><b>character</b>: left soft, right airy</span></li>
-        <li><span class="p">2</span><span><b>doubler</b></span></li>
-        <li><span class="p">3</span><span><b>release</b></span></li>
+      <div class="top"><span class="num">3</span><span class="name">Character</span></div>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><b>character</b> (below)</span></li>
+        <li><span class="k c">chompi</span><span><b>doubler</b></span></li>
       </ul>
-      <div class="menu-line"><span class="m">menu</span> press: reset</div>
     </div>
     <div class="card knob">
       <div class="top"><span class="num">4</span><span class="name">Effects</span></div>
-      <ul class="pages">
-        <li><span class="p">1</span><span><b>space</b>: reverb &amp; delay</span></li>
-        <li><span class="p">2</span><span><b>Speak &amp; Spell</b></span></li>
-        <li><span class="p">3</span><span><b>filter</b></span></li>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><span class="pg" style="background:var(--coral)">1</span><b>space</b>: reverb / echo</span></li>
+        <li><span class="k c">chompi</span><span>echo time</span></li>
+        <li><span class="k">turn</span><span><span class="pg" style="background:var(--blue)">2</span><b>filter</b>: low / high</span></li>
+        <li><span class="k c">chompi</span><span>resonance</span></li>
       </ul>
-      <div class="menu-line"><span class="m">menu</span> turn: delay time / wobble / resonance · press: reset</div>
     </div>
     <div class="card knob">
       <div class="top"><span class="num big">5</span><span class="name">Time wheel</span></div>
-      <ul class="pages">
-        <li><span class="p"></span><span><b>turn left</b>: back through the last 2 s (freezes); slow = slowly, back &amp; forth = scratch</span></li>
-        <li><span class="p"></span><span><b>press</b>: back to live</span></li>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><b>back in time</b>; press: live</span></li>
+        <li><span class="k c">chompi</span><span><b>envelope</b>: short / long</span></li>
       </ul>
     </div>
     <div class="card knob">
       <div class="top"><span class="num">6</span><span class="name">Volume</span></div>
-      <ul class="pages">
-        <li><span class="p">1</span><span><b>output volume</b></span></li>
-        <li><span class="p">2</span><span><b>input gain</b></span></li>
-        <li><span class="p"></span><span>hold 2 s: battery</span></li>
+      <ul class="rows">
+        <li><span class="k">turn</span><span><span class="pg" style="background:var(--coral)">1</span><b>volume</b></span></li>
+        <li><span class="k c">chompi</span><span><b>mix</b>: voice / harmonies</span></li>
+        <li><span class="k">turn</span><span><span class="pg" style="background:var(--blue)">2</span><b>input gain</b></span></li>
+        <li><span class="k c">chompi</span><span>compression</span></li>
       </ul>
-      <div class="menu-line"><span class="m">menu</span> turn: compression · press: your voice to headphones / all / off</div>
+      <div class="menu-line"><span class="m">chompi + press</span> your voice: phones / all / off</div>
     </div>
   </section>
 
@@ -167,24 +170,31 @@
     <div class="card char robot">
       <div class="head"><span class="dot"></span>Robot</div>
       <div class="body">
-        <p>A vocoder, the Kraftwerk kind: every key plays a synth note that says what you say. Your pitch doesn't matter.</p>
-        <p class="try">Try: talk, whisper, clap, a squeaky door. Size fully left = monster, right = mouse; character in the middle = Kraftwerk.</p>
+        <p>A vocoder, the Kraftwerk kind: the keys' synth notes say what you say.</p>
+        <p class="try">Character: soft / buzz / whisper. Size: monster / mouse.</p>
       </div>
     </div>
     <div class="card char human">
       <div class="head"><span class="dot"></span>Human</div>
       <div class="body">
-        <p>Your real voice, moved onto the keys' notes, whatever you sing.</p>
-        <p class="try">Try: sing near the keys' range. Size makes you darker or brighter; character right makes you breathy.</p>
+        <p>Your real voice on the keys' notes, whatever you sing.</p>
+        <p class="try">Character: soft / bright.</p>
+      </div>
+    </div>
+    <div class="card char toy">
+      <div class="head"><span class="dot"></span>Toy</div>
+      <div class="body">
+        <p>An 80s talking toy: Speak &amp; Spell and Dalek metal.</p>
+        <p class="try">Character: how much toy.</p>
       </div>
     </div>
     <div class="card buttons">
       <h2>BUTTONS &amp; SWITCH</h2>
       <table>
-        <tr><td>Play</td><td>next character: <span class="chip" style="background:var(--coral)"></span>Robot · <span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span>Human</td></tr>
-        <tr><td>Loop</td><td><b>freeze</b> the sound you're making (white); again: live</td></tr>
-        <tr><td>Toggle</td><td><b>latch</b>: notes keep sounding; the chord <b>follows your voice</b> (key 8 = your note). Press a key again to drop it</td></tr>
-        <tr><td>CHOMPI</td><td>hold for the menu: <span style="color:var(--coral);font-weight:800">menu</span> lines above</td></tr>
+        <tr><td>Play</td><td><span class="chip" style="background:var(--coral)"></span>Robot · <span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span>Human · <span class="chip" style="background:var(--yellow)"></span>Toy</td></tr>
+        <tr><td>Loop</td><td><b>freeze</b> the sound (white); again: live</td></tr>
+        <tr><td>Toggle</td><td><b>latch</b>: the chord keeps sounding and <b>follows your voice</b>; press a key again to drop it</td></tr>
+        <tr><td>CHOMPI</td><td>hold: the <b>second controls</b> (red above)</td></tr>
       </table>
     </div>
   </section>
@@ -195,28 +205,28 @@
       <ul class="plain">
         <li><span class="chip" style="background:var(--coral)"></span><b>held keys</b> red · middle C dim white</li>
         <li><span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span><b>the note you sing</b>: white in tune, red when off</li>
-        <li><span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span><b>white keys</b> show a knob's position for a moment</li>
+        <li><span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span><b>white keys</b> show the value you turn</li>
         <li><span class="chip" style="background:var(--coral)"></span><b>chompi key</b> red while latched, else your input level</li>
-        <li><span class="chip" style="background:var(--coral)"></span><b>wheel LEDs</b> while frozen: red how far back, white now</li>
+        <li><span class="chip" style="background:var(--coral)"></span><b>rings</b>: white middle, red out; knobs 4, 6 page red / blue</li>
       </ul>
     </div>
     <div class="card panel">
       <h2>OPTIONS.JSON (IN /SING)</h2>
       <ul class="plain">
         <li><code>Latch Follows Voice</code> true: latched chords follow you</li>
-        <li><code>Voice Gate</code> false: every noise plays along; true: only a voice</li>
-        <li><code>Show CPU</code> false: true shows the load on the keys in the menu</li>
+        <li><code>Voice Gate</code> false: every noise plays along</li>
+        <li><code>Show CPU</code> false: true shows the load in the menu</li>
         <li><code>Monitor Position</code> 1 headphones, 2 all, 3 off</li>
       </ul>
     </div>
     <div class="card panel">
       <h2>TRY</h2>
       <ul class="plain">
-        <li>Hold C-E-G, say <b>"hello"</b>, then turn size fully left</li>
+        <li>Hold C-E-G, say <b>"hello"</b>, turn size</li>
         <li>Sing <b>"aaa"</b>, press loop, stop singing, play chords</li>
         <li>Say a word, then <b>turn the wheel back</b> slowly</li>
         <li>Latch a chord, sing a <b>melody</b> over it</li>
-        <li>An <b>external mic</b> avoids key clicks</li>
+        <li>An <b>external mic</b> avoids key clicks; use headphones</li>
       </ul>
     </div>
   </section>

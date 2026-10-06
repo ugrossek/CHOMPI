@@ -127,9 +127,10 @@ namespace chompi
     static const float sing_yellow[3] = {1.f, .50f, 0.f};
     static const float sing_blue[3]   = {.08f, .25f, 1.f};
 
+    /* knobs 4 and 6: page 1 red, page 2 blue (yellow is Toy's) */
     static inline const float *SingPageColour(int page)
     {
-        return page == 1 ? sing_yellow : page == 2 ? sing_blue : sing_red;
+        return page == 1 ? sing_blue : sing_red;
     }
 
     /** a knob ring: the page's colour, brighter as the value goes up, never
@@ -143,10 +144,11 @@ namespace chompi
         b = c[2] * lvl;
     }
 
-    /** the play key's colour for a character: robot red, human warm white */
+    /** the play key's colour for a character: Robot red, Human warm white,
+     *  Toy yellow */
     static inline const float *SingCharacterColour(int index)
     {
-        return index == 0 ? sing_red : sing_warm;
+        return index == 0 ? sing_red : index == 1 ? sing_warm : sing_yellow;
     }
 
     /** knob 1 transpose ring: warm white at 0, red either way, brighter
@@ -189,7 +191,9 @@ namespace chompi
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
 
-    static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 1, 2}; // SING: knob 1 page 3 = metal
+    /* SING: knobs 1-3 and 5 have one page and a chompi layer (MenuPage);
+       knob 4 (space, filter) and knob 6 (volume, input gain) have two */
+    static const uint8_t knob_num_pages[6] = {1, 1, 1, 2, 1, 2};
 
     class NormalPage : public daisy::UiPage
     {
@@ -204,17 +208,13 @@ namespace chompi
          *  Harmonizer::Init must match. */
         void SingKnob(int knob, int row, float v)
         {
-            switch(knob * 3 + row)
+            if (row != 0)
+                return; // the chompi layer is set in MenuPage
+            switch(knob)
             {
                 case 0: fx_->SetTranspose(v); break;
-                case 1: fx_->SetGain(v); break;
-                case 2: fx_->SetRing(v); break;
-                case 3: fx_->SetSpread(v); break;
-                case 4: fx_->SetAttack(v); break;
-                case 5: fx_->SetSize(v); break;
-                case 6: fx_->SetDoubler(v); break;
-                case 7: fx_->SetDecay(v); break;
-                case 8: fx_->SetCharacter(v); break;
+                case 1: fx_->SetSize(v); break;
+                case 2: fx_->SetCharacter(v); break;
                 default: break;
             }
         }
@@ -226,18 +226,11 @@ namespace chompi
          *  (metal, attack, release). */
         uint8_t Row(int knob, uint8_t page) const
         {
-            if (knob == 1 || knob == 2)
-            {
-                static const uint8_t kRows[3] = {2, 0, 1};
-                return kRows[page % 3];
-            }
+            (void)knob;
             return page;
         }
 
-        uint8_t Pages(int knob) const
-        {
-            return knob == 1 || knob == 2 ? 3 : knob_num_pages[knob];
-        }
+        uint8_t Pages(int knob) const { return knob_num_pages[knob]; }
 
         /** white key 0..14 left to right for a MIDI note of the keyboard
          *  (48..72), or -1 for a black key */
@@ -256,10 +249,12 @@ namespace chompi
          *  (warm white at 0, red either way) */
         static void SingKnobColour(int knob, int row, int page, float v, float &r, float &g, float &b)
         {
-            if (knob == 0 && row == 0)
-                SingTransposeColour(v, r, g, b);
-            else
-                SingPageRing(page, v, r, g, b);
+            (void)knob;
+            (void)row;
+            (void)page;
+            /* pitch, size and character are all centred: warm white in the
+               middle, red the further out either way */
+            SingTransposeColour(v, r, g, b);
         }
 
       public:
@@ -491,15 +486,10 @@ namespace chompi
                             SingPageRing(0, value, r, g, b); // SING: space, page 1 red
                         }
                     }
-                    else if (page == 1) // lofi
-                    {
-                        fx_->SetCrush(value);
-                        SingPageRing(1, value, r, g, b); // SING: Speak & Spell, page 2 yellow
-                    }
-                    else // filter
+                    else // SING: page 2, filter: low-pass left, off in the middle, high-pass right
                     {
                         fx_->SetFilter(value);
-                        SingPageRing(2, value, r, g, b); // SING: filter, page 3 blue
+                        SingPageRing(1, fabsf(value - .5f) * 2.f, r, g, b);
                     }
 
 
@@ -568,7 +558,7 @@ namespace chompi
                     }
                     else
                     {
-                        SingPageRing(1, value, r, g, b); // SING: input gain, page 2 yellow
+                        SingPageRing(1, value, r, g, b); // SING: input gain, page 2 blue
 
                         fx_->SetInputGain(value);
                     }

@@ -201,23 +201,6 @@ namespace daisy
                 outl[i] = daisysp::SoftClip(saturate_amt_ * outl[i]); 
                 outr[i] = daisysp::SoftClip(saturate_amt_ * outr[i]); 
 
-                /* SING: Speak & Spell, fewer samples and fewer bits as the
-                   lo-fi knob turns up: 48 kHz -> ~4 kHz, 16 -> 4 bits */
-                fonepole(crush_, crush_target_, .001f);
-                if (crush_ > .002f)
-                {
-                    crush_acc_ += exp2f(-crush_ * 3.6f);
-                    if (crush_acc_ >= 1.f)
-                    {
-                        crush_acc_ -= 1.f;
-                        const float q = exp2f(15.f - crush_ * 12.f);
-                        crush_l_ = roundf(outl[i] * q) / q;
-                        crush_r_ = roundf(outr[i] * q) / q;
-                    }
-                    outl[i] = crush_l_;
-                    outr[i] = crush_r_;
-                }
-
                 // reduce amplitude to prevent LUFs from blowing up
                 const float gain = 1.f - daisysp::SoftClip(.4f * (saturate_amt_ - 1.f)) * .7f;
                 outl[i] *= gain;
@@ -293,8 +276,9 @@ namespace daisy
                 monitor[i] += sig;
                 monitor[size + i] += sig;
 
-                out[0][i] += sig;
-                out[1][i] += sig;
+                // SING: the mix knob turns the dry voice down (the meter keeps it)
+                out[0][i] += sig * dry_gain_;
+                out[1][i] += sig * dry_gain_;
             }
         }
 
@@ -311,8 +295,8 @@ namespace daisy
                 monitor[i] += sigl;
                 monitor[size + i] += sigr;
 
-                out[0][i] += sigl;
-                out[1][i] += sigr;
+                out[0][i] += sigl * dry_gain_;
+                out[1][i] += sigr * dry_gain_;
             }
         }
 
@@ -517,11 +501,9 @@ namespace daisy
         {
             using M = chompi::Harmonizer<7>::ChordMode;
             const M m = harmonizer.Mode();
-            harmonizer.SetMode(m == M::Robot ? M::Keys : M::Robot);
+            harmonizer.SetMode(m == M::Robot ? M::Keys : m == M::Keys ? M::Toy : M::Robot);
         }
-        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 human
-        /* robot has size and character on knobs 2, 3 */
-        bool RobotMode() const { return ChordModeIndex() == 0; }
+        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 human, 2 toy
         void SetSize(float v) { harmonizer.SetSize(v); }
         void SetCharacter(float v) { harmonizer.SetCharacter(v); }
 
@@ -540,12 +522,25 @@ namespace daisy
         bool IsLatched() { return harmonizer.Latched(); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 
-        void SetAttack(float val) { harmonizer.SetAttack(val); }
+        /* SING: envelope, short and plucky .. slow and swelling (chompi + knob 5) */
+        void SetEnvelope(float val) { harmonizer.SetEnvelope(val); }
 
-        void SetDecay(float val) { harmonizer.SetRelease(val); }
-
-        // returns the value for the encoder tracking
-        void SetGain(float val) { harmonizer.SetLevel(val); }
+        /* SING: mix (chompi + knob 6, page 1): .5 your voice at full and the
+           harmonies at their usual 75%; left the harmonies fade out, right
+           your voice does, and the harmonies come up to full */
+        void SetMix(float m)
+        {
+            if (m < .5f)
+            {
+                dry_gain_ = 1.f;
+                harmonizer.SetLevel(.75f * m * 2.f);
+            }
+            else
+            {
+                dry_gain_ = 1.f - (m - .5f) * 2.f;
+                harmonizer.SetLevel(.75f + .25f * (m - .5f) * 2.f);
+            }
+        }
 
         void SetInputGain(float gain) 
         {
@@ -571,8 +566,6 @@ namespace daisy
         inline void SetWarble(float val) { warble_.SetFreq(val); }
 
         inline void SetFilter(float val) { cutoff_target_ = val; }
-        /* SING: the lo-fi page is Speak & Spell, not TAPE's saturation */
-        inline void SetCrush(float val) { crush_target_ = val; }
         void ToggleFreeze()
         {
             harmonizer.SetFreeze(!harmonizer.Frozen());
@@ -592,7 +585,6 @@ namespace daisy
         const chompi::VoiceFreeze &VoiceRecording() const { return harmonizer.VoiceRecording(); }
         bool CanFreeze() const { return harmonizer.CanFreeze(); }
         bool Frozen() const { return harmonizer.Frozen(); }
-        void SetRing(float v) { harmonizer.SetRing(v); }
         /* SING: big wheel = time wheel (robot): one detent = 25 ms of the
            last ~2 s, left = further back */
         void ScrubTime(int detents) { harmonizer.Scrub(-25.f * detents); }
@@ -697,7 +689,7 @@ namespace daisy
         float reverb_time_, reverb_time_target_;
         float dly_amt_, dly_amt_target_;
         float saturate_amt_, saturate_amt_target_;
-        float crush_ = 0.f, crush_target_ = 0.f, crush_acc_ = 0.f, crush_l_ = 0.f, crush_r_ = 0.f;
+        float dry_gain_ = 1.f; // SING: the mix knob's share of the dry voice
         float cutoff_, cutoff_target_;
         float res_, res_target_;
         

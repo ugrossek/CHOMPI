@@ -13,11 +13,14 @@ namespace chompi
 {
 
     static const float enc_defaults[3][6] = {
-        /* SING, knobs 1-3: transpose (.5 = 0), spread, doubler /
-           harmony volume, attack, release -- must match Harmonizer::Init */
-        {.5f, 0.f, 0.f, 0.f, .75f, .84f},  // page 1
-        {.75f, .1f, .5f, 0.f, 0.f, .75f},  // page 2
-        {0.f, .5f, .5f, .5f, 0.f, 0.f},   // page 3; SING: metal off; robot size, character (.5 = as sung, sawtooth)
+        /* SING -- must match Harmonizer::Init and Engine:
+           page 1: pitch (.5 = 0), size, character (centred), space (.5 =
+                   off: reverb left, echo right), -, volume
+           page 2: -, -, -, filter (.5 = off), -, input gain
+           chompi layer (MenuPage): -, width, doubler, -, envelope, mix (.5) */
+        {.5f, .5f, .5f, .5f, .75f, .84f},
+        {0.f, 0.f, 0.f, .5f, 0.f, .75f},
+        {0.f, 0.f, 0.f, 0.f, .4f, .5f},
     };
 
     static const uint8_t midi2key[49] = {

@@ -86,15 +86,11 @@ namespace chompi
                 {
                     SetPthLedFloat(4, 1.f, 1.f, 1.f);
                 }
-                else if(knob_page[3] == 0) // magic
+                else if(knob_page[3] == 0) // space: echo time
                 {
                     SetPthLedFloat(4, delay_time, delay_time, delay_time);
                 }
-                else if(knob_page[3] == 1) // lofi
-                {
-                    SetPthLedFloat(4, warble, warble, warble);
-                }
-                else // filter
+                else // filter: resonance
                 {
                     SetPthLedFloat(4, resonance, resonance, resonance);
                 }
@@ -128,11 +124,13 @@ namespace chompi
                             break;
                     }
                 }
+                else if(knob_page[5] == 0)
+                {
+                    // SING: mix, warm white in the middle, red towards voice or harmonies
+                    SingTransposeColour(enc_values[2][5], r, g, b);
+                }
                 else
                 {
-                    // headphone os gain
-                    // float idx = final_comp;
-
                     // SING: compression, warm white -> red, brighter as it goes up
                     SingMix(sing_warm, sing_red, final_comp, r, g, b);
                     const float lvl = final_comp * .9f + .1f;
@@ -151,11 +149,21 @@ namespace chompi
                 if(knob_reset_[0])
                     r = g = b = 1.f;
                 SetPthLedFloat(1, r, g, b);
-                // knobs 2, 3: white while being reset
-                if(knob_reset_[1])
-                    SetPthLedFloat(2, 1.f, 1.f, 1.f);
-                if(knob_reset_[2])
-                    SetPthLedFloat(3, 1.f, 1.f, 1.f);
+                // knobs 2, 3: width, doubler (white, brighter as they go up);
+                // white while being reset
+                for(int k = 1; k <= 2; k++)
+                {
+                    const float v = knob_reset_[k] ? 1.f : .12f + .88f * enc_values[2][k];
+                    SetPthLedFloat(k + 1, sing_warm[0] * v, sing_warm[1] * v, sing_warm[2] * v);
+                }
+
+                // the big wheel's LEDs: envelope, left short, right long
+                {
+                    const float e = enc_values[2][4];
+                    const float sh = .08f + .92f * (1.f - e), lg = .08f + .92f * e;
+                    SetPthLedFloat(5, sing_warm[0] * sh, sing_warm[1] * sh, sing_warm[2] * sh);
+                    SetPthLedFloat(6, sing_warm[0] * lg, sing_warm[1] * lg, sing_warm[2] * lg);
+                }
             }
 
             // SING: no preset keys (TAPE: save / copy / erase)
@@ -174,8 +182,24 @@ namespace chompi
             SetSmtLedFloat(4, 0.f, 0.f, 0.f);
 
             if(!show_cpu_)
+            {
+                /* the chompi-layer value just turned, as a white bar for a
+                   moment (mix: from the middle outwards) */
+                const bool show = shown_layer_knob_ >= 0 && System::GetNow() - shown_layer_t_ < 1500;
+                float lo = 0.f, hi = 0.f;
+                if(show)
+                {
+                    const float v = enc_values[2][shown_layer_knob_];
+                    lo = shown_layer_knob_ == 5 ? fminf(v, .5f) : 0.f;
+                    hi = shown_layer_knob_ == 5 ? fmaxf(v, .5f) : v;
+                }
                 for (int w = 0; w < 15; w++)
-                    SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
+                {
+                    const float k0 = w / 15.f, k1 = (w + 1) / 15.f;
+                    const float l  = show && hi > k0 && lo < k1 ? .45f : 0.f;
+                    SetSmtLedFloat(24 - w, sing_warm[0] * l, sing_warm[1] * l, sing_warm[2] * l);
+                }
+            }
             else
             /* SING: audio CPU load on the white keys, low C = 0, high C =
                100%: a dim bar for the average, one bright key for the peak
@@ -242,51 +266,44 @@ namespace chompi
                 return true;
             }
 
-            /* the other pages of knobs 1-3 have no second-level function
-               (in TAPE they moved the sample window etc.) */
-            if(encoderID <= 2)
-                return true;
-
+            /* SING: the chompi layer, every knob's second control; their
+               values live in row 2 of enc_values (knob 4's in delay_time and
+               resonance, knob 6's compression in final_comp, as in TAPE) */
+            auto layer = [&](int k) -> float & {
+                enc_values[2][k] = fclamp(enc_values[2][k] + inc, 0.f, 1.f);
+                shown_layer_knob_ = k;
+                shown_layer_t_    = System::GetNow();
+                return enc_values[2][k];
+            };
+            switch(encoderID)
             {
-                if (encoderID == 3)
-                {
-                    if(page == 0) // magic
+                case 1: fx_->SetSpread(layer(1)); break;  // width
+                case 2: fx_->SetDoubler(layer(2)); break; // doubler
+                case 3:
+                    if(page == 0) // space: echo time
                     {
-                        delay_time += inc;
-                        delay_time = fclamp(delay_time, 0.f, 1.f);
+                        delay_time = fclamp(delay_time + inc, 0.f, 1.f);
                         fx_->SetDelayTime(delay_time);
                     }
-                    else if (page == 1) // lofi
+                    else // filter: resonance
                     {
-                        warble += inc;
-                        warble = fclamp(warble, 0.f, 1.f);
-                        fx_->SetWarble(warble);
-                    }
-                    else if(page == 2) // filter
-                    {
-                        resonance += inc;
-                        resonance = fclamp(resonance, 0.f, 1.f);
+                        resonance = fclamp(resonance + inc, 0.f, 1.f);
                         fx_->SetFilterResonance(resonance);
                     }
-                }
-                else if(encoderID == 4)
-                {
-                    // SING: the big wheel is the time wheel here too
-                    if(fx_->CanFreeze())
-                        fx_->ScrubTime(turns);
-                    enc_values[0][4] = 1.f - fx_->ScrubPosition();
-                    return true;
-                }               
-                else if(encoderID == 5)
-                {
-                    final_comp += inc;
-                    final_comp = fclamp(final_comp, 0.f, 1.f);
-                    fx_->SetFinalComp(final_comp);
-                    input_toggled = false;
-                }
+                    break;
+                case 4: fx_->SetEnvelope(layer(4)); break; // envelope
+                case 5:
+                    if(page == 0) // mix: your voice <-> the harmonies
+                        fx_->SetMix(layer(5));
+                    else // compression
+                    {
+                        final_comp = fclamp(final_comp + inc, 0.f, 1.f);
+                        fx_->SetFinalComp(final_comp);
+                        input_toggled = false;
+                    }
+                    break;
+                default: break;
             }
-
-
             return true;
         }
 
@@ -310,16 +327,14 @@ namespace chompi
                 break;
 
 
-            /* SING: knobs 1-3 pressed here reset all three of their pages,
+            /* SING: knobs 1-3 pressed here reset the knob and its chompi layer,
                like knob 4 does the effects; the ring is white while held */
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
                 knob_reset_[0] = rising;
-                if(rising) // transpose 0, harmony volume, metal off
+                if(rising) // pitch back to 0
                 {
                     ResetKnob(0);
                     fx_->SetTranspose(enc_values[0][0]);
-                    fx_->SetGain(enc_values[1][0]);
-                    fx_->SetRing(enc_values[2][0]);
                 }
                 break;
 
@@ -329,23 +344,21 @@ namespace chompi
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
                 knob_reset_[1] = rising;
-                if(rising) // spread, attack, size
+                if(rising) // size, width
                 {
                     ResetKnob(1);
-                    fx_->SetSpread(enc_values[0][1]);
-                    fx_->SetAttack(enc_values[1][1]);
-                    fx_->SetSize(enc_values[2][1]);
+                    fx_->SetSize(enc_values[0][1]);
+                    fx_->SetSpread(enc_values[2][1]);
                 }
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // knob 3
                 knob_reset_[2] = rising;
-                if(rising) // doubler, release, character
+                if(rising) // character, doubler
                 {
                     ResetKnob(2);
-                    fx_->SetDoubler(enc_values[0][2]);
-                    fx_->SetDecay(enc_values[1][2]);
-                    fx_->SetCharacter(enc_values[2][2]);
+                    fx_->SetCharacter(enc_values[0][2]);
+                    fx_->SetDoubler(enc_values[2][2]);
                 }
                 break;
 
@@ -368,8 +381,7 @@ namespace chompi
 
                     fx_->SetReverb(enc_values[0][3]);
                     fx_->SetDelayFeedback(enc_values[0][3]);
-                    fx_->SetCrush(enc_values[1][3]); // SING: Speak & Spell
-                    fx_->SetFilter(enc_values[2][3]);
+                    fx_->SetFilter(enc_values[1][3]); // SING: filter is page 2
 
                     delay_time = .5f;
                     resonance = 0.f;
@@ -480,6 +492,8 @@ namespace chompi
 
         bool fx_reset = false;
         bool knob_reset_[3] = {false, false, false}; // SING: knobs 1-3 pressed in the menu
+        int      shown_layer_knob_ = -1; // SING: the chompi-layer value last turned
+        uint32_t shown_layer_t_    = 0;
 
         /** all three pages of knob k (0..2) back to their defaults */
         void ResetKnob(int k)

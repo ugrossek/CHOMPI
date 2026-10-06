@@ -29,7 +29,7 @@ class OptionsManager
         midi_ch_in       = 0;
         midi_ch_out      = 0;
         monitor_position = 0;
-        delay_split      = false;
+        delay_split      = true;  // SING: space is reverb left, echo right
         latch_follows    = true;
         voice_gate       = false;
         show_cpu         = false;
