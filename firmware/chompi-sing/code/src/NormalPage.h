@@ -479,7 +479,23 @@ namespace chompi
 
                     break;
                 }
-                case 4: // transport
+                case 4: // SING: time wheel
+                {
+                    if(fx_->RobotMode() && fx_->Frozen())
+                    {
+                        /* left LED: how far back, magenta; right: now, warm */
+                        const float back = fx_->ScrubPosition();
+                        SetPthLedFloat(5, sing_magenta[0] * back, sing_magenta[1] * back, sing_magenta[2] * back);
+                        SetPthLedFloat(6, sing_warm[0] * (1.f - back), sing_warm[1] * (1.f - back), sing_warm[2] * (1.f - back));
+                    }
+                    else
+                    {
+                        SetPthLedFloat(5, 0.f, 0.f, 0.f);
+                        SetPthLedFloat(6, 0.f, 0.f, 0.f);
+                    }
+                    break;
+                }
+                case 99: // TAPE's transport display, unused in SING
                 {                    
                     if(fx_->GetLooperIsEmpty())
                     {
@@ -584,77 +600,25 @@ namespace chompi
 
             /** PTH leds */
             float r, g, b;
-            // play key
-            if(fx_->GetLooperIsEmpty() && !fx_->IsLooperRecordArmed())
+            // SING: play key = the mode: robot magenta, keys gold, top note coral, relative dim
             {
-                r = g = b = 0.f;
-            }
-            else if(fx_->IsLooperRecordArmed())
-            {
-                r = g = b = 1.f;
-            }
-            else if(fx_->IsLooperFirstRecording() && fx_->IsLooperRecording())
-            {
-                r = teal[0];
-                g = teal[1];
-                b = teal[2];
-            }
-            else if(fx_->IsLooperPlaying())
-            {
-                float position = 1.f - fx_->GetLooperPosition();
-                r = teal[0] * position;
-                g = teal[1] * position;
-                b = teal[2] * position;
-            }
-            else // we're paused
-            {
-                float position = 1.f - fx_->GetLooperPosition();
-                r = position;
-                g = position;
-                b = position;
-            }
-
-            SetPthLedFloat(led_map[33], r, g, b);
-
-            // loop key
-            if(fx_->GetLooperIsEmpty() && !fx_->IsLooperRecordArmed())
-            {
-                r = g = b = 0.f;
-            }
-            else if(fx_->IsLooperRecordArmed())
-            {
-                if(now - last_arm_blink > 300)
+                const float *c = sing_gold;
+                float lvl = 1.f;
+                switch (fx_->ChordModeIndex())
                 {
-                    arm_blink = !arm_blink;
-                    last_arm_blink = now;
+                    case 0: c = sing_magenta; break;
+                    case 1: c = sing_gold; break;
+                    case 2: c = sing_coral; break;
+                    default: c = sing_warm; lvl = .1f; break;
                 }
-
-                r = arm_blink ? 1.f : 0.f;
-                g = 0.f;
-                b = 0.f;
-            }
-            else if(fx_->IsLooperFirstRecording() && fx_->IsLooperRecording())
-            {
-                r = red[0];
-                g = red[1];
-                b = red[2];
-            }
-            else if(fx_->IsLooperRecording()) // overdub
-            {
-                float position = fx_->GetLooperPosition();
-                r = yellow[0] * position;
-                g = yellow[1] * position;
-                b = yellow[2] * position;
-            }
-            else
-            {
-                float position = fx_->GetLooperPosition();
-                r = position;
-                g = position;
-                b = position;
+                SetPthLedFloat(led_map[33], c[0] * lvl, c[1] * lvl, c[2] * lvl);
             }
 
-            SetPthLedFloat(led_map[34], r, g, b);
+            // SING: loop key = freeze: white while frozen, dim in robot mode, off otherwise
+            {
+                const float lvl = !fx_->RobotMode() ? 0.f : fx_->Frozen() ? 1.f : .08f;
+                SetPthLedFloat(led_map[34], sing_warm[0] * lvl, sing_warm[1] * lvl, sing_warm[2] * lvl);
+            }
 
             // chompi key
             fx_->SetInputMonitor(true); // SING: dry voice per monitor mode (menu, knob 6)
@@ -754,17 +718,17 @@ namespace chompi
                 break;
 
             // CC buttons
-            case static_cast<uint16_t>(Hardware::SwId::KEY_27): // play
+            case static_cast<uint16_t>(Hardware::SwId::KEY_27): // SING: play = next mode
             {
-                last_arm_blink = System::GetNow();
-                fx_->LooperPlayButton(rising);    
+                if (rising)
+                    fx_->CycleChordMode();
                 hw_->SendCC(midi_channel, 26, rising ? 127 : 0);
                 break;
             }
-            case static_cast<uint16_t>(Hardware::SwId::KEY_28): // loop
+            case static_cast<uint16_t>(Hardware::SwId::KEY_28): // SING: loop = freeze (robot)
             {
-                last_arm_blink = System::GetNow();
-                fx_->LooperRecordButton(rising);
+                if (rising && fx_->RobotMode())
+                    fx_->ToggleFreeze();
                 hw_->SendCC(midi_channel, 27, rising ? 127 : 0);
                 break;
             }
@@ -863,18 +827,13 @@ namespace chompi
             }
             else if (encoderID == 4)
             {
-                if (fx_->IsLooperPlaying())
-                {
-                    if(quantized_pitch_)
-                        enc_values[0][4] = fx_->SetLooperPitchQuantized(turns, enc_values[0][4]);
-                    else
-                        fx_->SetLooperPitchFree(enc_values[0][4]);
-                }
-                else
-                {
-                    enc_values[0][4] = old_val;
-                    fx_->SetLooperScrub(turns);
-                }  
+                /* SING: the time wheel (robot mode): back through the last
+                   ~2 s of the voice; the bar on the white keys shows where,
+                   full = now */
+                if (fx_->RobotMode() && stepsPerRevolution == 0)
+                    fx_->ScrubTime(turns);
+                enc_values[0][4] = 1.f - fx_->ScrubPosition();
+                (void)old_val;
             }
 
             /* SING: show where this knob now is on the white keys, briefly */

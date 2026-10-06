@@ -52,10 +52,21 @@ namespace chompi
         static constexpr int   kBands = 16;
         static constexpr float kLow   = 120.f;  // centre of the lowest band, Hz
         static constexpr float kHigh  = 7500.f; // centre of the highest band, Hz
+        /** band levels kept for the time wheel: one frame per audio block
+         *  (1 ms at 48 samples), so about 2 s */
+        static constexpr int   kHistFrames = 2048; // power of two
 
-        void Init(float samplerate)
+        /** hist: kHistFrames x kBands floats for the time wheel, in slow
+         *  memory is fine (SDRAM on CHOMPI) */
+        void Init(float samplerate, float (*hist)[kBands])
         {
             sr_ = samplerate;
+            hist_   = hist;
+            hist_w_ = 0;
+            pos_ = target_ = 0.f;
+            for (int f = 0; f < kHistFrames; f++)
+                for (int b = 0; b < kBands; b++)
+                    hist_[f][b] = 0.f;
             const float ratio = powf(kHigh / kLow, 1.f / (kBands - 1));
             /* Q so that neighbouring bands meet about where each is 3 dB
                down; two biquads in a row make each band steeper */
@@ -86,8 +97,30 @@ namespace chompi
         /** Freeze: hold the voice's band levels as they are now, so the
          *  synth keeps saying the current sound ("aaa") while the voice is
          *  free to stop. Off: follow the voice again. */
-        void SetFreeze(bool on) { freeze_ = on; }
+        void SetFreeze(bool on)
+        {
+            if (on && !freeze_)
+            {
+                pos_ = target_ = 0.f; // at "now"
+                for (int b = 0; b < kBands; b++)
+                    held_[b] = env_[b];
+            }
+            freeze_ = on;
+        }
         bool Frozen() const { return freeze_; }
+
+        /** Time wheel: move the frozen read point by frames (1 ms each),
+         *  positive = further back in time, over the last ~2 s. Freezes if
+         *  needed. The sound glides there, so turning slowly says it slowly. */
+        void Scrub(float frames)
+        {
+            if (!freeze_)
+                SetFreeze(true);
+            target_ += frames;
+            target_ = target_ < 0.f ? 0.f : (target_ > kHistFrames - 2 ? kHistFrames - 2 : target_);
+        }
+        /** 0 = now .. 1 = the oldest kept moment */
+        float ScrubPosition() const { return target_ / float(kHistFrames - 2); }
 
         /** mod: the voice; car_l/car_r: the synth carriers; adds the result
          *  into out_l/out_r */
@@ -97,16 +130,30 @@ namespace chompi
             if (size > kMaxBlock)
                 size = kMaxBlock;
 
-            /* the voice's level in every band (frozen: as it was) */
-            float band[kMaxBlock];
-            for (int b = 0; b < kBands; b++)
+            /* frozen: the band levels from the history at the wheel's
+               position, ramped across the block */
+            if (freeze_)
             {
-                if (freeze_)
+                pos_ += (target_ - pos_) * kScrubGlide;
+                const int   i0 = int(pos_);
+                const float fr = pos_ - i0;
+                const int   newest = hist_w_ - 1;
+                const float *a = hist_[(newest - i0) & (kHistFrames - 1)];
+                const float *c = hist_[(newest - i0 - 1) & (kHistFrames - 1)];
+                for (int b = 0; b < kBands; b++)
                 {
+                    const float to = a[b] + (c[b] - a[b]) * fr;
+                    const float step = (to - held_[b]) / float(size);
                     for (size_t i = 0; i < size; i++)
-                        lev_[b][i] = env_[b];
-                    continue;
+                        lev_[b][i] = held_[b] + step * float(i + 1);
+                    held_[b] = to;
                 }
+            }
+
+            /* live: the voice's level in every band, also into the history */
+            float band[kMaxBlock];
+            for (int b = 0; b < kBands && !freeze_; b++)
+            {
                 for (size_t i = 0; i < size; i++)
                     band[i] = Run(ana_[b][1], Run(ana_[b][0], mod[i]));
                 float env = env_[b];
@@ -117,7 +164,10 @@ namespace chompi
                     lev_[b][i] = env;
                 }
                 env_[b] = env;
+                hist_[hist_w_][b] = env;
             }
+            if (!freeze_)
+                hist_w_ = (hist_w_ + 1) & (kHistFrames - 1);
 
             /* each synth band at the level of voice band b + shift; shifted,
                part of the voice falls off the ends, so make up a little */
@@ -189,6 +239,11 @@ namespace chompi
         float att_, rel_;
         float shift_;
         bool  freeze_;
+        float (*hist_)[kBands];
+        int   hist_w_;
+        float pos_, target_;      // frames back from the newest
+        float held_[kBands];      // frozen levels at the end of the last block
+        static constexpr float kScrubGlide = .08f; // per block, ~12 ms
     };
 
 } // namespace chompi

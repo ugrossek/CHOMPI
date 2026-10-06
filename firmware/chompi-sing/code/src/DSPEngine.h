@@ -613,6 +613,10 @@ namespace daisy
         void ToggleFreeze() { harmonizer.SetFreeze(!harmonizer.Frozen()); }
         bool Frozen() const { return harmonizer.Frozen(); }
         void SetRing(float v) { harmonizer.SetRing(v); }
+        /* SING: big wheel = time wheel (robot): one detent = 25 ms of the
+           last ~2 s, left = further back */
+        void ScrubTime(int detents) { harmonizer.Scrub(-25.f * detents); }
+        float ScrubPosition() const { return harmonizer.ScrubPosition(); }
         inline void SetFilterResonance(float val) { res_target_ = val; }
         inline void SetSaturate(float val) 
         { 

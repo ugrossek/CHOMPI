@@ -40,6 +40,7 @@ int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
  *  zeroing there does not matter. */
 chompi::Harmonizer<kMaxPoly> DSY_DTCMRAM_BSS harmonizer;
 float DSY_SDRAM_BSS chompi::chorus_mem[2][chompi::kChorusLen];
+float DSY_SDRAM_BSS chompi::vocoder_hist[chompi::Vocoder::kHistFrames][chompi::Vocoder::kBands];
 
 /* The heap, for the few things that malloc -- chiefly the USB serial port,
  *  which calloc's ~550 bytes when a computer configures the device.

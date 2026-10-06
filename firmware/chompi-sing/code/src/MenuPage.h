@@ -66,39 +66,25 @@ namespace chompi
             }
             SetPthLedFloat(0, r, g, b);
         
-            // play / overdub keys
+            /* SING: play = mode, loop = freeze, big wheel = time wheel, as on
+               the normal page */
             {
-                const float gain = fx_->GetLooperDubGain();
-                SetPthLedFloat(7, gain, gain, gain);
-                SetPthLedFloat(8, gain, gain, gain);
-
-                if(!fx_->GetLooperIsEmpty())
+                const float *c = sing_gold;
+                float lvl = 1.f;
+                switch (fx_->ChordModeIndex())
                 {
-                    float idx = enc_values[0][4] < .5f ? enc_values[0][4] * 2.f : (1.f - enc_values[0][4]) * 2.f; // 0 - 1 - 0
-                    int led_on = enc_values[0][4] > .5f ? 6 : 5;
-                    int led_off = enc_values[0][4] > .5f ? 5 : 6;
-
-                    r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                    g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                    b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-
-                    SetPthLedFloat(led_on, r, g, b);
-
-                    if (idx > .8f)
-                    {
-                        float dim = (idx - .8f) * 5.f;
-
-                        r = color_xfade(0.f, red[0], dim);
-                        g = color_xfade(0.f, red[1], dim);
-                        b = color_xfade(0.f, red[2], dim);
-
-                        SetPthLedFloat(led_off, r, g, b);
-                    }
-                    else
-                    {
-                        SetPthLedFloat(led_off, 0.f, 0.f, 0.f);
-                    }
+                    case 0: c = sing_magenta; break;
+                    case 1: c = sing_gold; break;
+                    case 2: c = sing_coral; break;
+                    default: c = sing_warm; lvl = .1f; break;
                 }
+                SetPthLedFloat(7, c[0] * lvl, c[1] * lvl, c[2] * lvl);
+                const float fz = !fx_->RobotMode() ? 0.f : fx_->Frozen() ? 1.f : .08f;
+                SetPthLedFloat(8, sing_warm[0] * fz, sing_warm[1] * fz, sing_warm[2] * fz);
+                const float back = fx_->RobotMode() && fx_->Frozen() ? fx_->ScrubPosition() : 0.f;
+                const float now_ = fx_->RobotMode() && fx_->Frozen() ? 1.f - back : 0.f;
+                SetPthLedFloat(5, sing_magenta[0] * back, sing_magenta[1] * back, sing_magenta[2] * back);
+                SetPthLedFloat(6, sing_warm[0] * now_, sing_warm[1] * now_, sing_warm[2] * now_);
             }
 
             // shift encoder display
@@ -304,6 +290,12 @@ namespace chompi
                 }
                 else if(encoderID == 4)
                 {
+                    // SING: the big wheel is the time wheel here too
+                    if(fx_->RobotMode())
+                        fx_->ScrubTime(turns);
+                    enc_values[0][4] = 1.f - fx_->ScrubPosition();
+                    return true;
+
                     if(quantized_pitch_)
                         enc_values[0][4] = fx_->SetLooperPitchQuantized(turns, enc_values[0][4]);
                     else
@@ -484,12 +476,9 @@ namespace chompi
             // white keys and play/pause
             default:
                 // play pause, overdub gain setting
+                // SING: play (mode) and loop (freeze) work as on the normal page
                 if(buttonID == 33 || buttonID == 34)
-                {
-                    const float gain = buttonID == 33 ? -.1f : .1f;
-                    fx_->IncrementLooperDubGain(gain);
-                    break;
-                }
+                    return false;
                 // SING: the keys keep playing harmonies while the menu is open
                 return false;
             }

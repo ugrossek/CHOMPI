@@ -11,6 +11,9 @@ namespace chompi
     static constexpr size_t kChorusLen = 2048; // power of two, ~42 ms
     extern float chorus_mem[2][kChorusLen];
 
+    /** the vocoder's time-wheel history, in SDRAM: chompi_main.cpp */
+    extern float vocoder_hist[Vocoder::kHistFrames][Vocoder::kBands];
+
     /** SING's live harmonizer.
      *
      *  Every held key gets a voice that pitch-shifts the live input by its
@@ -47,7 +50,7 @@ namespace chompi
             sr_ = samplerate;
             latch_    = false;
             mode_     = ChordMode::Robot;
-            vocoder_.Init(samplerate);
+            vocoder_.Init(samplerate, vocoder_hist);
             SetSize(.5f);
             SetCharacter(.5f);
             ring_phase_ = 0.f;
@@ -184,6 +187,10 @@ namespace chompi
         /** robot: freeze the voice's sound, see Vocoder::SetFreeze */
         void SetFreeze(bool on) { vocoder_.SetFreeze(on); }
         bool Frozen() const { return vocoder_.Frozen(); }
+
+        /** robot: time wheel, see Vocoder::Scrub */
+        void Scrub(float frames) { vocoder_.Scrub(frames); }
+        float ScrubPosition() const { return vocoder_.ScrubPosition(); }
 
         /** "metal": a ring modulator on the harmonies (Dalek). 0 off; up,
          *  more of it and a higher modulator, 30 Hz .. ~480 Hz */

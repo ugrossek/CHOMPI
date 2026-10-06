@@ -23,16 +23,19 @@ static void Check(bool ok, const char *what)
     if (!ok) { printf("    FAIL: %s\n", what); failures++; }
 }
 static float Noise() { return 2.f * (rand() / float(RAND_MAX)) - 1.f; }
+static float hist[Vocoder::kHistFrames][Vocoder::kBands];
 
-/* a sung "a": harmonics shaped by three formants, rms = amp */
-static float Vowel(float t, float f0, float amp)
+/* a sung vowel: harmonics shaped by three formants, rms = amp; "a" by
+   default, "i" with i = true */
+static float Vowel(float t, float f0, float amp, bool i = false)
 {
+    const float f1 = i ? 280.f : 700.f, f2 = i ? 2250.f : 1220.f, f3 = i ? 2900.f : 2600.f;
     auto fm = [](float f, float fc, float bw) { const float d = (f - fc) / bw; return 1.f / (1.f + d * d); };
     float s = 0.f, p = 0.f;
     for (int h = 1; h * f0 < 6000.f; h++)
     {
         const float fh = h * f0;
-        const float g = 1.f / h * (fm(fh, 700, 80) + .6f * fm(fh, 1220, 100) + .3f * fm(fh, 2600, 120) + .02f);
+        const float g = 1.f / h * (fm(fh, f1, 80) + .6f * fm(fh, f2, 100) + .3f * fm(fh, f3, 120) + .02f);
         s += g * sinf(2.f * kPi * fh * t + h * 1.3f);
         p += g * g * .5f;
     }
@@ -47,7 +50,7 @@ static Result Run(std::function<float(float)> voice, float note_hz, float second
 {
     static Vocoder v;
     static PitchDetector pd;
-    v.Init(kSr);
+    v.Init(kSr, hist);
     v.SetShift(shift);
     /* brightness: rms of the sample-to-sample difference against the rms,
        which grows with the spectrum's centre of gravity */
@@ -141,7 +144,7 @@ int main()
     /* freeze: sing, freeze, stop singing: the sound stays; unfreeze: gone */
     {
         Vocoder v;
-        v.Init(kSr);
+        v.Init(kSr, hist);
         SawOsc osc;
         osc.SetFreq(220.f, kSr);
         float mod[kBlock], car[kBlock], ol[kBlock], orr[kBlock];
@@ -167,6 +170,43 @@ int main()
         printf("freeze: singing %.4f, frozen in silence %.4f, unfrozen %.6f\n", sung, frozen, after);
         Check(frozen > .5 * sung, "a freeze keeps the sound while the voice is silent");
         Check(after < 1e-4, "unfreezing lets it go");
+    }
+
+    /* time wheel: say "a" for 600 ms, then "i" for 600 ms, freeze and turn
+       back 900 ms: the sound is the "a" again (brightness of each) */
+    {
+        Vocoder v;
+        v.Init(kSr, hist);
+        SawOsc osc;
+        osc.SetFreq(220.f, kSr);
+        float mod[kBlock], car[kBlock], ol[kBlock], orr[kBlock];
+        float prev = 0.f;
+        auto block = [&](int s, int what) { // 0 silence, 1 "a", 2 "i"; returns brightness, rms
+            double e = 0, d = 0;
+            for (int i = 0; i < kBlock; i++)
+            {
+                mod[i] = what ? Vowel((s + i) / kSr, 196.f, .05f, what == 2) : 0.f;
+                car[i] = osc.Process();
+                ol[i] = orr[i] = 0.f;
+            }
+            v.Process(mod, car, car, ol, orr, kBlock);
+            for (int i = 0; i < kBlock; i++) { e += ol[i] * ol[i]; d += (ol[i] - prev) * (ol[i] - prev); prev = ol[i]; }
+            return std::pair<double, double>(e > 0 ? sqrt(d / e) * kSr / (2 * kPi) : 0, sqrt(e / kBlock));
+        };
+        int s = 0;
+        double br_a = 0, br_i = 0;
+        for (int b = 0; b < 600; b++, s += kBlock) { auto r = block(s, 1); if (b > 300) br_a += r.first / 299; }
+        for (int b = 0; b < 600; b++, s += kBlock) { auto r = block(s, 2); if (b > 300) br_i += r.first / 299; }
+        v.Scrub(0.f); // freeze at "now" (the "i")
+        double br_now = 0, br_back = 0;
+        for (int b = 0; b < 200; b++, s += kBlock) { auto r = block(s, 0); if (b > 100) br_now += r.first / 99; }
+        v.Scrub(900.f);
+        for (int b = 0; b < 300; b++, s += kBlock) { auto r = block(s, 0); if (b > 200) br_back += r.first / 99; }
+        printf("time wheel: \"a\" %.0f Hz, \"i\" %.0f Hz bright; frozen now %.0f Hz, 900 ms back %.0f Hz; position %.2f\n",
+               br_a, br_i, br_now, br_back, v.ScrubPosition());
+        Check(fabs(br_now - br_i) < .15 * br_i, "frozen at now sounds like the latest sound");
+        Check(fabs(br_back - br_a) < .15 * br_a, "turned back, it sounds like what was said then");
+        Check(v.ScrubPosition() > .4f && v.ScrubPosition() < .5f, "position ~900 of ~2000 ms");
     }
 
     /* silence in, silence out */
