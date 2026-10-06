@@ -531,9 +531,10 @@ namespace daisy
         {
             using M = chompi::Harmonizer<7>::ChordMode;
             const M m = harmonizer.Mode();
-            harmonizer.SetMode(m == M::Keys ? M::Top : m == M::Top ? M::Relative : M::Keys);
+            harmonizer.SetMode(m == M::Robot ? M::Keys : m == M::Keys ? M::Top
+                               : m == M::Top ? M::Relative : M::Robot);
         }
-        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 keys, 1 top, 2 relative
+        int ChordModeIndex() const { return int(harmonizer.Mode()); } // 0 robot, 1 keys, 2 top, 3 relative
 
         /* SING: voice gate on/off (menu) */
         void ToggleVoiceGate() { harmonizer.SetGateOn(!harmonizer.GateOn()); }

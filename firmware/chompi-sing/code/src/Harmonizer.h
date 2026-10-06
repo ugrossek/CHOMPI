@@ -3,6 +3,7 @@
 #include "daisysp.h"
 #include "MicFilter.h"
 #include "PitchShifter.h"
+#include "Vocoder.h"
 
 namespace chompi
 {
@@ -45,7 +46,11 @@ namespace chompi
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
             latch_    = false;
-            mode_     = ChordMode::Keys;
+            mode_     = ChordMode::Robot;
+            vocoder_.Init(samplerate);
+            noise_    = 22222u;
+            for (size_t v = 0; v < kVoices; v++)
+                voices_[v].osc.phase = float(v) / kVoices; // not all in step
             top_      = 0.f;
             sung_     = 60.f;
             heard_any_ = false;
@@ -149,11 +154,14 @@ namespace chompi
          *  voice on the third of C major. The top key itself is the voice and
          *  adds nothing. Doesn't need to know what is sung. */
         /** How keys turn into voices:
+         *  Robot:    a vocoder: each key plays a buzzy synth note that the
+         *            voice's words are imprinted on (Kraftwerk). Pitch of the
+         *            voice doesn't matter; talking works. No shifters run.
          *  Keys:     each key sounds its own note, made from the voice,
          *            whatever is sung (like a vocoder; needs the detector)
          *  Top:      see above
          *  Relative: each key shifts the voice by its distance from middle C */
-        enum class ChordMode { Keys, Top, Relative };
+        enum class ChordMode { Robot, Keys, Top, Relative };
         void SetMode(ChordMode m)
         {
             mode_ = m;
@@ -268,6 +276,13 @@ namespace chompi
             for (size_t i = 0; i < size; i++)
                 hl[i] = hr[i] = 0.f;
 
+            /* robot: the voices build the vocoder's carriers instead */
+            const bool robot = mode_ == ChordMode::Robot;
+            float car_l[size], car_r[size];
+            if (robot)
+                for (size_t i = 0; i < size; i++)
+                    car_l[i] = car_r[i] = 0.f;
+
             for (size_t v = 0; v < kVoices; v++)
             {
                 Voice &vo = voices_[v];
@@ -286,6 +301,23 @@ namespace chompi
                 const float heard_target = IsTop(vo) ? 0.f : 1.f;
                 const float heard_step   = (heard_target - vo.heard) / float(size);
 
+                if (robot)
+                {
+                    /* the voice's synth note, with a little noise so the
+                       vocoder keeps "s" and "sh" (classic vocoders do too) */
+                    vo.osc.SetFreq(vo.hz, sr_);
+                    for (size_t i = 0; i < size; i++)
+                    {
+                        if (vo.gate)
+                            vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
+                        else
+                            vo.env = vo.env - release_ > 0.f ? vo.env - release_ : 0.f;
+                        const float c = (vo.osc.Process() + kRobotNoise * Noise()) * vo.env;
+                        car_l[i] += c * gl;
+                        car_r[i] += c * gr;
+                    }
+                }
+                else
                 for (size_t i = 0; i < size; i++)
                 {
                     vo.heard += heard_step;
@@ -302,6 +334,9 @@ namespace chompi
                 if (!vo.gate && vo.env <= 0.f)
                     vo.key = -1;
             }
+
+            if (robot)
+                vocoder_.Process(in_, car_l, car_r, hl, hr, size);
 
             const float gate_target = !gate_on_ || gate_open_ ? 1.f : 0.f;
             for (size_t i = 0; i < size; i++)
@@ -348,6 +383,8 @@ namespace chompi
         struct Voice
         {
             StereoPitchShifter shifter;
+            SawOsc             osc;   // robot mode
+            float              hz;    // robot mode: the note, with transpose
             int                key;
             float              ratio;
             float              semis; // the key, from middle C
@@ -367,6 +404,7 @@ namespace chompi
                                                : v.semis;
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
+            v.hz    = 261.62557f * powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
         }
 
         /** the highest held key, in top mode; held voices follow it when it
@@ -440,6 +478,19 @@ namespace chompi
         static constexpr float kDuckFloor = .03f;  /* -30 dB while a key clicks */
 
         Voice            voices_[kVoices];
+        /** white noise, -1..1 (xorshift) */
+        float Noise()
+        {
+            noise_ ^= noise_ << 13;
+            noise_ ^= noise_ >> 17;
+            noise_ ^= noise_ << 5;
+            return float(int32_t(noise_)) * (1.f / 2147483648.f);
+        }
+
+        static constexpr float kRobotNoise = .05f;
+
+        Vocoder          vocoder_;
+        uint32_t         noise_;
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
         float            attack_, release_;

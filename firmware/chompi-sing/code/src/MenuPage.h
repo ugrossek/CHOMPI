@@ -174,11 +174,12 @@ namespace chompi
 
             // SING: no preset keys (TAPE: save / copy / erase)
             SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            // KEY_24: chord mode, keys gold, top note coral, relative dim
+            // KEY_24: chord mode, robot magenta, keys gold, top note coral, relative dim
             switch(fx_->ChordModeIndex())
             {
-                case 0: SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]); break;
-                case 1: SetSmtLedFloat(8, sing_coral[0], sing_coral[1], sing_coral[2]); break;
+                case 0: SetSmtLedFloat(8, sing_magenta[0], sing_magenta[1], sing_magenta[2]); break;
+                case 1: SetSmtLedFloat(8, sing_gold[0], sing_gold[1], sing_gold[2]); break;
+                case 2: SetSmtLedFloat(8, sing_coral[0], sing_coral[1], sing_coral[2]); break;
                 default: SetSmtLedFloat(8, sing_gold[0] * .08f, sing_gold[1] * .08f, sing_gold[2] * .08f); break;
             }
             // KEY_25: voice gate, rose when on
