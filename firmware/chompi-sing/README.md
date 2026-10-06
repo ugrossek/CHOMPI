@@ -18,10 +18,10 @@ and it sings.
 
 **Play** switches between them; its light shows which one is on.
 
-- **Robot** (magenta): a vocoder, the Kraftwerk kind. Each key plays a buzzy synth note and your
+- **Robot** (red): a vocoder, the Kraftwerk kind. Each key plays a buzzy synth note and your
   voice's words are imprinted on it. The pitch you sing doesn't matter, and talking, whispering,
   clapping or a squeaky door all work.
-- **Human** (gold): your real voice, shifted onto the keys' notes, whatever you sing. Sing roughly
+- **Human** (warm white): your real voice, shifted onto the keys' notes, whatever you sing. Sing roughly
   in the range of the keys for the most natural sound.
 
 Key 8, the C in the middle, is C3 in both. In Human, that's where your voice comes through
@@ -31,7 +31,7 @@ unchanged.
 
 | | |
 |---|---|
-| **Play** | next character: Robot (magenta) / Human (gold) |
+| **Play** | next character: Robot (red) / Human (warm white) |
 | **Loop** | **freeze**: holds the sound you're making, so you can stop and keep playing chords with it (white while frozen); press again to go back to live |
 | **Big wheel** | **time wheel**: turn left to go back through the last ~2 seconds (it freezes); slowly says it slowly, back and forth scratches. Press to go back to live |
 | **Toggle switch** | **latch**: notes keep sounding after you let go. Press a sounding key again to drop it. While latched, the chord **follows your voice**: key 8 is your note, the other keys keep their distance from it |
@@ -68,13 +68,16 @@ The keys keep playing while the menu is open.
 
 ## Lights
 
-- **Keys:** held keys magenta. The key of the note you're singing lights up too: warm white when
-  in tune, coral when flat, gold when sharp (a tuner). Middle C dim amber. Turn a knob and the
-  white keys show its position for a moment (transpose: from the middle outwards).
-- **Knob rings** brighten as each control turns up. Knob 1 on transpose: warm white at 0, coral
-  down, gold up.
-- **Big wheel's LEDs** while frozen: magenta for how far back, warm white for "now".
-- **Chompi key:** magenta while latched, otherwise your input level.
+Red and warm white, after Kraftwerk's *Die Mensch-Maschine*: red is the robot and what you
+play, warm white the human and what's in tune.
+
+- **Keys:** held keys red. The key of the note you're singing lights up too: warm white when in
+  tune, red when off (a tuner). Middle C dim white. Turn a knob and the white keys show its
+  position for a moment (transpose: from the middle outwards).
+- **Knob rings** go from warm white to red, and brighter, as each control turns up. Knob 1 on
+  transpose: warm white at 0, red either way.
+- **Big wheel's LEDs** while frozen: red for how far back, warm white for "now".
+- **Chompi key:** red while latched, otherwise your input level.
 
 ## Options
 

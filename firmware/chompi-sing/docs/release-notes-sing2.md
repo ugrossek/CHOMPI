@@ -6,7 +6,7 @@ SING turns CHOMPI into an instrument led by your voice. Press keys and sing, tal
 
 **New in SING 2**
 
-- **Two characters on the play button.** **Robot** (magenta): a vocoder, the Kraftwerk kind; the pitch you sing doesn't matter, and talking, whispering and noises all work. **Human** (gold): your real voice, moved onto the keys' notes, whatever you sing.
+- **Two characters on the play button.** **Robot** (red): a vocoder, the Kraftwerk kind; the pitch you sing doesn't matter, and talking, whispering and noises all work. **Human** (warm white): your real voice, moved onto the keys' notes, whatever you sing.
 - **The keys play their own notes.** Press C-E-G, hear C-E-G. Key 8 is C3.
 - **Freeze on the loop button:** hold the sound you're making and keep playing chords with it.
 - **Time wheel on the big wheel:** go back through the last 2 seconds, slowly or scratching.

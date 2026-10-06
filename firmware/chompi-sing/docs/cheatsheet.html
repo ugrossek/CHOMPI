@@ -8,16 +8,17 @@
   /* Rendered at 1200 x 750 CSS px, device scale 2 -> 2400 x 1500 PNG
      (render.sh). Colours follow SING's lights. */
   :root {
-    --paper: #FAF6F0;
-    --card: #FFFFFF;
-    --ink: #1B1815;
-    --soft: #6E655B;
-    --line: #EAE1D5;
-    --coral: #E5564A;
-    --magenta: #E8247A;
-    --gold: #F2B51D;
-    --amber: #FF9431;
-    --rose: #FF7393;
+    /* palette A, "Die Mensch-Maschine": red, black, paper */
+    --paper: #F1ECE2;
+    --card: #FBF8F2;
+    --ink: #141414;
+    --soft: #6F695F;
+    --line: #DCD4C6;
+    --coral: #D7261E;
+    --magenta: #D7261E;
+    --gold: #141414;
+    --amber: #8A8378;
+    --rose: #D7261E;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -31,12 +32,13 @@
   header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   h1 { font-size: 44px; font-weight: 900; letter-spacing: -.04em; margin: 0; line-height: 1; }
   .badge {
-    background: var(--coral); color: #fff; border-radius: 7px; padding: 5px 11px;
-    font-weight: 800; font-size: 14px; box-shadow: 0 2px 0 #B8392F;
+    background: var(--coral); color: #fff; border-radius: 2px; padding: 5px 11px;
+    font-weight: 800; font-size: 14px; letter-spacing: .02em;
   }
+  header { border-bottom: 5px solid var(--coral); padding-bottom: 12px; }
   header .tag { margin-left: auto; color: var(--soft); font-size: 12.5px; text-align: right; max-width: 480px; }
   h2 { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: var(--soft); margin: 0 0 7px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .card { background: var(--card); border: 1.5px solid var(--ink); border-radius: 3px; }
 
   /* knobs */
   .knobs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px; }
@@ -47,14 +49,14 @@
     background: var(--ink); color: #fff; font-weight: 800; font-size: 13px;
     display: grid; place-items: center;
   }
-  .num.big { background: var(--magenta); width: 30px; height: 30px; font-size: 15px; }
+  .num.big { background: var(--coral); width: 30px; height: 30px; font-size: 15px; }
   .knob .name { font-weight: 800; font-size: 15px; line-height: 1.15; }
   .pages { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
   .pages li { display: grid; grid-template-columns: 15px 1fr; gap: 4px; }
   .pages .p { color: var(--soft); font-weight: 700; }
   .pages b { font-weight: 800; }
   .r { color: var(--magenta); font-weight: 700; }
-  .h { color: #B98100; font-weight: 700; }
+  .h { color: var(--ink); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
   .menu-line { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--soft); }
   .menu-line .m { color: var(--coral); font-weight: 800; }
 
@@ -64,8 +66,8 @@
   .char .head { padding: 9px 13px; font-weight: 900; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 8px; }
   .char .head .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: .9; }
   .char.robot .head { background: var(--magenta); }
-  .char.human .head { background: var(--gold); color: var(--ink); }
-  .char.human .head .dot { background: var(--ink); opacity: .8; }
+  .char.human .head { background: var(--ink); color: var(--paper); }
+  .char.human .head .dot { background: var(--paper); opacity: .95; }
   .char .body { padding: 11px 13px 12px; }
   .char p { margin: 0 0 6px; }
   .char .try { color: var(--soft); }
@@ -166,7 +168,7 @@
     <div class="card buttons">
       <h2>BUTTONS &amp; SWITCH</h2>
       <table>
-        <tr><td>Play</td><td>next character: <span class="chip" style="background:var(--magenta)"></span>Robot · <span class="chip" style="background:var(--gold)"></span>Human</td></tr>
+        <tr><td>Play</td><td>next character: <span class="chip" style="background:var(--coral)"></span>Robot · <span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span>Human</td></tr>
         <tr><td>Loop</td><td><b>freeze</b> the sound you're making (white); again: live</td></tr>
         <tr><td>Toggle</td><td><b>latch</b>: notes keep sounding; the chord <b>follows your voice</b> (key 8 = your note). Press a key again to drop it</td></tr>
         <tr><td>CHOMPI</td><td>hold for the menu: <span style="color:var(--coral);font-weight:800">menu</span> lines above</td></tr>
@@ -178,11 +180,11 @@
     <div class="card panel">
       <h2>LIGHTS</h2>
       <ul class="plain">
-        <li><span class="chip" style="background:var(--magenta)"></span><b>held keys</b> magenta · middle C dim amber</li>
-        <li><span class="chip" style="background:#F4EADC;box-shadow:inset 0 0 0 1px #d8cfc2"></span><b>the note you sing</b>: warm white in tune, coral flat, gold sharp</li>
-        <li><span class="chip" style="background:var(--gold)"></span><b>white keys</b> show a knob's position for a moment</li>
-        <li><span class="chip" style="background:var(--magenta)"></span><b>chompi key</b> magenta while latched, else your input level</li>
-        <li><span class="chip" style="background:var(--rose)"></span><b>wheel LEDs</b> while frozen: how far back vs. now</li>
+        <li><span class="chip" style="background:var(--coral)"></span><b>held keys</b> red · middle C dim white</li>
+        <li><span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span><b>the note you sing</b>: white in tune, red when off</li>
+        <li><span class="chip" style="background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink)"></span><b>white keys</b> show a knob's position for a moment</li>
+        <li><span class="chip" style="background:var(--coral)"></span><b>chompi key</b> red while latched, else your input level</li>
+        <li><span class="chip" style="background:var(--coral)"></span><b>wheel LEDs</b> while frozen: red how far back, white now</li>
       </ul>
     </div>
     <div class="card panel">

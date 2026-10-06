@@ -118,22 +118,19 @@ namespace chompi
     static const float dark_orange[3] = {.77f, .38f, .06f};
     static const float yellow_green[3] = {.706f, 1.f, 0.f};
 
-    /* SING: "warm stage" palette, to tell it apart from TAPE */
-    static const float sing_magenta[3] = {1.f, .12f, .47f};
-    static const float sing_coral[3]   = {1.f, .42f, .30f};
-    static const float sing_amber[3]   = {1.f, .55f, 0.f};
-    static const float sing_gold[3]    = {1.f, .78f, .10f};
-    static const float sing_rose[3]    = {1.f, .45f, .60f};
-    static const float sing_warm[3]    = {1.f, .85f, .65f};
+    /* palette A, "Die Mensch-Maschine": red for the robot and for what
+       is played, warm white for the human and for what is in tune */
+    static const float sing_red[3]   = {1.f, .05f, .03f};
+    static const float sing_warm[3]  = {1.f, .85f, .65f};
 
-    /** the play key's colour for a character: robot magenta, human gold */
+    /** the play key's colour for a character: robot red, human warm white */
     static inline const float *SingCharacterColour(int index)
     {
-        return index == 0 ? sing_magenta : sing_gold;
+        return index == 0 ? sing_red : sing_warm;
     }
 
-    /** knob 1 transpose ring: warm white at 0, coral below, gold above,
-     *  brighter the further out */
+    /** knob 1 transpose ring: warm white at 0, red either way, brighter
+     *  the further out */
     static inline void SingTransposeColour(float v, float &r, float &g, float &b);
 
     /** colour between a and b at t, into r/g/b */
@@ -153,7 +150,7 @@ namespace chompi
             r = sing_warm[0]; g = sing_warm[1]; b = sing_warm[2];
             return;
         }
-        const float *c   = semis < 0.f ? sing_coral : sing_gold;
+        const float *c   = sing_red; // up or down: red, brighter further out
         const float  lvl = .35f + .65f * fminf(fabsf(semis) / 12.f, 1.f);
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
@@ -224,11 +221,11 @@ namespace chompi
             {
                 case 0: SingTransposeColour(v, r, g, b); return;
                 case 5: SingTransposeColour(v, r, g, b); return;                                    // size: centre = as sung
-                case 2: SingMix(sing_warm, sing_rose, v, r, g, b); lvl = .1f + .9f * v; break;      // metal
-                case 3: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
-                case 6: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
-                case 8: SingMix(sing_warm, sing_magenta, v, r, g, b); lvl = .4f + .6f * v; break;   // character
-                default: SingMix(sing_warm, sing_gold, v, r, g, b); lvl = .2f + .8f * v; break;     // volume, attack, release
+                case 2: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .1f + .9f * v; break;   // metal
+                case 3:                                                                          // spread
+                case 6: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
+                case 8: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .4f + .6f * v; break;   // character
+                default: SingMix(sing_warm, sing_red, v, r, g, b); lvl = .2f + .8f * v; break;  // volume, attack, release
             }
             r *= lvl; g *= lvl; b *= lvl;
         }
@@ -333,7 +330,7 @@ namespace chompi
                 }
             }
 
-            /* SING: held keys magenta; the middle C dim amber and
+            /* SING: held keys red; the middle C dim warm white and
                the outer Cs dimmer, for orientation. Idle markers stay off
                while the mic is monitored, as in TAPE. */
             /* SING: for a moment after a knob turn, the white keys show its
@@ -361,7 +358,7 @@ namespace chompi
 
             /* SING: the key of the note being sung, folded into the
                keyboard's two octaves: warm white when in tune (within 15
-               cents), coral when flat, gold when sharp. Held over short
+               cents), red when off. Held over short
                unvoiced gaps so it doesn't flicker. */
             float sung;
             const uint32_t now_ms = System::GetNow();
@@ -381,9 +378,7 @@ namespace chompi
                 while (m > 72)
                     m -= 12;
                 sung_key = m;
-                const float *c = fabsf(cents) < 15.f ? sing_warm
-                                 : cents < 0.f      ? sing_coral
-                                                    : sing_gold;
+                const float *c = fabsf(cents) < 15.f ? sing_warm : sing_red; // in tune / off
                 sr = c[0] * .8f;
                 sg = c[1] * .8f;
                 sb = c[2] * .8f;
@@ -394,7 +389,7 @@ namespace chompi
                 const bool c_key = key_map[i] % 12 == 0;
                 const int  w     = WhiteKeyIndex(key_map[i]); // 0..14, -1 black
                 if (fx_->IsHarmonyKeyHeld(i))
-                    SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
+                    SetSmtLedFloat(led_map[i], sing_red[0], sing_red[1], sing_red[2]);
                 else if (key_map[i] == sung_key)
                     SetSmtLedFloat(led_map[i], sr, sg, sb);
                 else if (show_value)
@@ -403,14 +398,14 @@ namespace chompi
                     const float k0 = w / 15.f, k1 = (w + 1) / 15.f;
                     const bool  on = w >= 0 && bar_hi > k0 && bar_lo < k1;
                     if (on)
-                        SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
+                        SetSmtLedFloat(led_map[i], sing_warm[0] * bar_lvl, sing_warm[1] * bar_lvl, sing_warm[2] * bar_lvl);
                     else
                         SetSmtLed(led_map[i], 0, 0, 0);
                 }
                 else if (c_key)
                 {
                     const float dim = key_map[i] == 60 ? .3f : .1f;
-                    SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
+                    SetSmtLedFloat(led_map[i], sing_warm[0] * dim, sing_warm[1] * dim, sing_warm[2] * dim);
                 }
                 else
                     SetSmtLed(led_map[i], 0, 0, 0);
@@ -451,26 +446,25 @@ namespace chompi
                                 fx_->SetDelayFeedback(0.f);
                             }
 
-                            // SING: delay gold <- centre -> reverb magenta
-                            if (value < .5f) SingMix(sing_warm, sing_gold, (.5f - value) * 2.f, r, g, b);
-                            else             SingMix(sing_warm, sing_magenta, (value - .5f) * 2.f, r, g, b);
+                            // centre warm white, delay or reverb further out: red
+                            SingMix(sing_warm, sing_red, fabsf(value - .5f) * 2.f, r, g, b);
                         }
                         else {
                             fx_->SetReverb(value);
                             fx_->SetDelayFeedback(value);
 
-                            SingMix(sing_gold, sing_magenta, value, r, g, b); // SING
+                            SingMix(sing_warm, sing_red, value, r, g, b); // SING
                         }
                     }
                     else if (page == 1) // lofi
                     {
                         fx_->SetCrush(value);
-                        SingMix(sing_amber, red, value, r, g, b); // SING: Speak & Spell
+                        SingMix(sing_warm, sing_red, value, r, g, b); // SING: Speak & Spell
                     }
                     else // filter
                     {
                         fx_->SetFilter(value);
-                        SingMix(sing_coral, sing_warm, value, r, g, b); // SING: filter
+                        SingMix(sing_red, sing_warm, value, r, g, b); // SING: filter, closed red
                     }
 
 
@@ -482,9 +476,9 @@ namespace chompi
                 {
                     if(fx_->CanFreeze() && fx_->Frozen())
                     {
-                        /* left LED: how far back, magenta; right: now, warm */
+                        /* left LED: how far back, red; right: now, warm white */
                         const float back = fx_->ScrubPosition();
-                        SetPthLedFloat(5, sing_magenta[0] * back, sing_magenta[1] * back, sing_magenta[2] * back);
+                        SetPthLedFloat(5, sing_red[0] * back, sing_red[1] * back, sing_red[2] * back);
                         SetPthLedFloat(6, sing_warm[0] * (1.f - back), sing_warm[1] * (1.f - back), sing_warm[2] * (1.f - back));
                     }
                     else
@@ -566,9 +560,9 @@ namespace chompi
             fx_->SetInputMonitor(true); // SING: dry voice per monitor mode (menu, knob 6)
             if (fx_->IsLatched()) // SING: latch on
             {
-                r = sing_magenta[0];
-                g = sing_magenta[1];
-                b = sing_magenta[2];
+                r = sing_red[0];
+                g = sing_red[1];
+                b = sing_red[2];
             }
             else // input level, as TAPE shows while monitoring
             {

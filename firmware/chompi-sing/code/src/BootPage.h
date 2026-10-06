@@ -17,12 +17,11 @@ namespace chompi
 
         void RandomColors()
         {
-            /* SING: a colour from the "warm stage" palette */
-            static const float kWarm[6][3] = {
-                {1.f, .12f, .47f}, {1.f, .45f, .60f}, {1.f, .42f, .30f},
-                {1.f, .55f, 0.f},  {1.f, .78f, .10f}, {1.f, .85f, .65f},
+            /* SING: red or warm white, "Die Mensch-Maschine" */
+            static const float kColours[2][3] = {
+                {1.f, .05f, .03f}, {1.f, .85f, .65f},
             };
-            const float *c = kWarm[System::GetNow() % 6];
+            const float *c = kColours[System::GetNow() % 2];
             r = c[0];
             g = c[1];
             b = c[2];

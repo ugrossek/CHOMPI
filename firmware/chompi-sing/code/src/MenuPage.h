@@ -74,7 +74,7 @@ namespace chompi
                 SetPthLedFloat(8, sing_warm[0] * fz, sing_warm[1] * fz, sing_warm[2] * fz);
                 const float back = fx_->CanFreeze() && fx_->Frozen() ? fx_->ScrubPosition() : 0.f;
                 const float now_ = fx_->CanFreeze() && fx_->Frozen() ? 1.f - back : 0.f;
-                SetPthLedFloat(5, sing_magenta[0] * back, sing_magenta[1] * back, sing_magenta[2] * back);
+                SetPthLedFloat(5, sing_red[0] * back, sing_red[1] * back, sing_red[2] * back);
                 SetPthLedFloat(6, sing_warm[0] * now_, sing_warm[1] * now_, sing_warm[2] * now_);
             }
 
@@ -185,9 +185,9 @@ namespace chompi
                 for (int w = 0; w < 15; w++)
                 {
                     if (w == peak_key)
-                        SetSmtLedFloat(24 - w, sing_gold[0], sing_gold[1], sing_gold[2]);
+                        SetSmtLedFloat(24 - w, sing_warm[0], sing_warm[1], sing_warm[2]);
                     else if (w / 15.f < avg)
-                        SetSmtLedFloat(24 - w, sing_coral[0] * .25f, sing_coral[1] * .25f, sing_coral[2] * .25f);
+                        SetSmtLedFloat(24 - w, sing_red[0] * .25f, sing_red[1] * .25f, sing_red[2] * .25f);
                     else
                         SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
                 }
