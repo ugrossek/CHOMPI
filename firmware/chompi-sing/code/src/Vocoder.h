@@ -84,6 +84,8 @@ namespace chompi
             }
             shift_ = 0.f;
             freeze_ = false;
+            for (int b = 0; b < kBands; b++)
+                smooth_[b] = 0.f;
             thaw_ = 0.f;
             att_ = 1.f - expf(-1.f / (.002f * sr_));
             rel_ = 1.f - expf(-1.f / (.020f * sr_));
@@ -105,7 +107,7 @@ namespace chompi
                 pos_ = target_ = 0.f; // at "now"
                 if (thaw_ <= 0.f)     // not still fading out of the last one
                     for (int b = 0; b < kBands; b++)
-                        held_[b] = env_[b];
+                        held_[b] = smooth_[b];
                 thaw_ = 0.f;
             }
             else if (!on && freeze_)
@@ -173,7 +175,12 @@ namespace chompi
                     lev_[b][i] = env;
                 }
                 env_[b] = env;
-                hist_[hist_w_][b] = env;
+                /* the levels the voice ripples around, for freeze and the
+                   time wheel: an instant of the follower catches each band
+                   somewhere on the ripple of the voice's cycle, and a frozen
+                   sound came out with a different balance */
+                smooth_[b] += (env - smooth_[b]) * kSmooth;
+                hist_[hist_w_][b] = smooth_[b];
             }
             if (!freeze_)
                 hist_w_ = (hist_w_ + 1) & (kHistFrames - 1);
@@ -270,6 +277,8 @@ namespace chompi
         int   hist_w_;
         float pos_, target_;      // frames back from the newest
         float held_[kBands];      // frozen levels at the end of the last block
+        float smooth_[kBands];    // band levels smoothed over ~25 ms
+        static constexpr float kSmooth = .04f; // per 1 ms block
         static constexpr float kScrubGlide = .08f; // per block, ~12 ms
         static constexpr float kThawTime   = .08f; // s, frozen -> live
         float thaw_;              // 1 -> 0 while fading back to the voice
