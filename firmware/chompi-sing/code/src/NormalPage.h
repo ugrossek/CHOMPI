@@ -143,10 +143,13 @@ namespace chompi
     }
 
     /** a level meter in palette A: dim warm white when quiet, brighter as it
-     *  gets louder, red when it's hot */
+     *  gets louder, red when it's hot. The knob LEDs have only 23 steps
+     *  (temp_led_stuff.h divides by 11): below ~.25 warm white rounds to
+     *  something like (2, 1, 1), which shows as a tinted glow, so the meter
+     *  never goes darker than that. */
     static inline void SingMeter(float v, float &r, float &g, float &b)
     {
-        const float lvl = .12f + .88f * fminf(v * 1.6f, 1.f);
+        const float lvl = .27f + .73f * fminf(v * 1.6f, 1.f);
         const float hot = v < .6f ? 0.f : fminf((v - .6f) / .3f, 1.f);
         r = (sing_warm[0] + (sing_red[0] - sing_warm[0]) * hot) * lvl;
         g = (sing_warm[1] + (sing_red[1] - sing_warm[1]) * hot) * lvl;
@@ -532,10 +535,13 @@ namespace chompi
                     {
                         float vu_sample = fx_->GetVUSample(VUTarget::VU_OUTPUT);
 
-                        SingMeter(vu_sample, r, g, b); // SING: output level
-                        r *= value;
-                        g *= value;
-                        b *= value;
+                        /* SING: output level; the volume scales it, but not
+                           below the meter's floor (see SingMeter) */
+                        SingMeter(vu_sample, r, g, b);
+                        const float k = .4f + .6f * value;
+                        r *= k;
+                        g *= k;
+                        b *= k;
 
                         fx_->SetMainGain(value);
                     }
