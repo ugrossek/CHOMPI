@@ -5,7 +5,6 @@
 #include "fatfs.h"
 #include "diskio.h"
 #include "DSPEngine.h"
-#include "RamBuffer.h"
 #include "InterpolatedDelayLine.h"
 #include "OptionsManager.h"
 #include <cerrno>
@@ -27,8 +26,6 @@ OptionsManager options;
 daisysp::Reverb DSY_DTCMRAM_BSS reverb;
 chompi::InterpolatedDelayLine::AudioSample DSY_SDRAM_BSS del_mem[kMaxDelayTime];
 
-RamBufferMemory loop_buff;
-int16_t DSY_SDRAM_BSS loop_mem[kMaxRamBuffSize]; 
 
 
 // pitch shifter delay lines, one per voice
@@ -359,9 +356,7 @@ int main(void)
     ZeroSDRAM();
 
 
-    loop_buff.Init(&loop_mem[0]);
-    engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 
-                &loop_buff, options.tape_slew_on,
+    engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0],
                 MonitorMode(options.monitor_position));
 
     osc.Init(hw.seed.AudioSampleRate());

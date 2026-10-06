@@ -319,12 +319,6 @@ namespace chompi
         {
             uint32_t now = System::GetNow();
 
-            if(fx_->CheckReset())
-            {
-                enc_values[0][4] = enc_defaults[0][4];
-                fx_->ResetLooperPitchQuant();
-            }
-
             // ignore the first 1500 ms of inputs. Hack to stop random button presses on boot for now.
             if (init_ignore)
             {
@@ -495,55 +489,6 @@ namespace chompi
                     }
                     break;
                 }
-                case 99: // TAPE's transport display, unused in SING
-                {                    
-                    if(fx_->GetLooperIsEmpty())
-                    {
-                        SetPthLedFloat(5, 0.f, 0.f, 0.f);
-                        SetPthLedFloat(6, 0.f, 0.f, 0.f);
-                    }
-                    else if(fx_->IsLooperPlaying())
-                    {
-                        float idx = value < .5f ? value * 2.f : (1.f - value) * 2.f; // 0 - 1 - 0
-                        int led_on = value > .5f ? 6 : 5;
-                        int led_off = value > .5f ? 5 : 6;
-
-                        r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                        g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                        b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-
-
-                        SetPthLedFloat(led_on, r, g, b);
-
-                        if (idx > .8f)
-                        {
-                            float dim = (idx - .8f) * 5.f;
-
-                            r = color_xfade(0.f, red[0], dim);
-                            g = color_xfade(0.f, red[1], dim);
-                            b = color_xfade(0.f, red[2], dim);
-
-
-                            SetPthLedFloat(led_off, r, g, b);
-                        }
-                        else
-                        {
-                            SetPthLedFloat(led_off, 0.f, 0.f, 0.f);
-                        }
-
-                        value = value * 4.f - 2.f; // -2 - 2
-                    }
-                    else
-                    {
-                        float scrub = fx_->GetLooperScrub() * .5f;
-                        int led = 5 + (scrub > 0.f);
-
-                        scrub = fabsf(scrub);
-                        SetPthLedFloat(led, scrub, scrub, scrub);
-                    }
-
-                    break;
-                }
                 case 5: // gain
                 {
                     if(batt_display && System::GetNow() - batt_hold > 2000)
@@ -691,17 +636,12 @@ namespace chompi
                 break;
             }
 
-            // reset the looper pitch
+            // SING: big wheel press
             case ENC_5_SW:
             {
-                if (!rising)
-                {
-                    enc_values[0][4] = enc_defaults[0][4];
-                    hw_->SendCC(midi_channel, cc_map[0][4], enc_values[0][4] * 127.f);
-                }
-
-                fx_->SetLooperPitch(1.f);
-                fx_->ResetLooperPitchQuant();
+                /* SING: pressing the big wheel lets a freeze go: back to live */
+                if (rising && fx_->Frozen())
+                    fx_->ToggleFreeze();
                 break;
             }
 
@@ -751,9 +691,6 @@ namespace chompi
                         fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::START, 
                             key_map[buttonID] - 60, buttonID, 127.f));
                     }
-
-                    if(fx_->GetLooperRecordArm())
-                        fx_->ToggleLooperRecord();
 
                     // this can take some time, so it must happen last
                     if(!isRetriggering)

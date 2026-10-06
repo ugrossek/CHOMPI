@@ -3,7 +3,6 @@
  */
 #pragma once
 #include "daisy.h"
-#include "LooperEngine.h"
 #include "daisysp.h"
 #include "DJFilter.h"
 #include "Warble.h"
@@ -15,7 +14,6 @@
 /* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
 #include "reverb.h"
-#include "RamBuffer.h"
 #include "limiter.h"
 #include "InterpolatedDelayLine.h"
 #include <algorithm>
@@ -111,8 +109,6 @@ namespace daisy
             float samplerate, 
             daisysp::Reverb* reverb, 
             chompi::InterpolatedDelayLine::AudioSample* del,
-            RamBufferMemory* loop_buff,
-            bool tape_slew,
             MonitorMode mon_mode)
         {
             monitor_mode = mon_mode;
@@ -163,15 +159,12 @@ namespace daisy
             dcblock_fx_r_.Init(samplerate);
 
 
-            fx_pre_loop = true;
             fx_env_ = fx_env_target_ = 1.f;
             final_lim_ = 0.f;
 
             resamp_env_ = resamp_env_target_ = 1.f;
 
 
-            /* looper */
-            looper.Init(samplerate, loop_buff, tape_slew);
 
             /** Final output compressors */
             lim_hp_l_.Init();
@@ -323,18 +316,6 @@ namespace daisy
             }
         }
 
-        bool looper_reset = false;
-        bool CheckReset()
-        {
-            if(looper_reset)
-            {
-                looper_reset = false;
-                return true;
-            }
-
-            return false;
-        }
-
         float old_fx_outl, old_fx_outr;
         void Process(const float *const *in, float **out, size_t size)
         {            
@@ -350,8 +331,7 @@ namespace daisy
             duck_ = duck;
 
             /* SING: the live input: its pitch is tracked all the time, and
-               held keys add harmony voices from it; FX and looper follow as
-               they did for TAPE's sample voices */
+               held keys add harmony voices from it; the effects follow */
             if(in_source == InputSource::MIC || in_source == InputSource::LINE_IN)
             {
                 float live[size];
@@ -406,25 +386,7 @@ namespace daisy
             }
 
 
-            /** looper read + write */
-            looper.CheckRecordReady();
-            if(looper.CheckReset())
-                looper_reset = true;
-
-            //fx_xfade_pre
-            if(fx_pre_loop)
-                ApplyFx(out[0], out[1], size);
-
-            looper.Process(out[0], out[1], size);
-
-            if(!fx_pre_loop)
-                ApplyFx(out[0], out[1], size);
-
-            if(fx_env_ < .01f)
-            {
-                fx_pre_loop = !fx_pre_loop;
-                fx_env_target_ = 1.f;
-            }
+            ApplyFx(out[0], out[1], size);
 
             //working space (HP) copy to line out
             std::copy(out[0], out[0] + size, out[2]);
@@ -627,111 +589,8 @@ namespace daisy
         
         }
 
-        inline bool GetLooperRecordArm() { return looper.GetRecordArm(); }
-        inline bool GetLooperIsEmpty() { return looper.GetIsEmpty(); }
-        inline float GetLooperPosition() { return looper.GetPosition(); }
-        inline float GetLooperPitch() { return looper.GetPitch(); }
-
-        inline void LooperRecordButton(bool rising) { looper.RecordButton(rising); }
-        inline void LooperPlayButton(bool rising) { looper.PlayButton(rising); }
-
-        inline void ToggleLooperRecord() { looper.ToggleRecord(); }
-        inline void ToggleLooperPlaying() { looper.TogglePlaying(); }
-        inline bool GetLooperReverse() { return looper.GetReverse(); }
-
-        void ResetLooperPitchQuant()
-        {
-            looper_fifth = false;
-            looper_encoder_chunk = 0.f;
-        }
-
-        float SetLooperPitchQuantized(int16_t turns, float enc_pos)
-        {
-            if (IsLooperPlaying())
-            {
-                looper_encoder_chunk += turns * .25f;
-                if(looper_encoder_chunk >= 1.f || looper_encoder_chunk <= -1.f)
-                {
-                    // get current semi
-                    looper_encoder_chunk = round(looper_encoder_chunk);
-
-                    float pitch = GetLooperPitch();
-                    float orig_pitch = pitch;
-
-                    // snap to fifths and octaves
-                    // calculate the consts via 2^(x/12) e.g. 2^(-5/12) for down 5 semis
-                    float mul;
-                    if(pitch > 0.f)
-                    {
-                        if(looper_fifth)
-                            mul = looper_encoder_chunk < 0 ? .667419927085f : 1.33483985417f;
-                        else
-                            mul = looper_encoder_chunk < 0 ? .749153538438f : 1.49830707688f;
-                    }
-                    else
-                    {
-                        if(looper_fifth)
-                            mul = looper_encoder_chunk < 0 ? 1.33483985417f : .667419927085f;
-                        else
-                            mul = looper_encoder_chunk < 0 ? 1.49830707688f : .749153538438f;                            
-                    }
-
-                    // snap to next note, return of out of bounds
-                    pitch *= mul;
-                    if(pitch > 2.f || pitch < -2.f)
-                        return enc_pos;
-
-                    looper_fifth = !looper_fifth;
-                    looper_encoder_chunk = 0.f;
-
-                    // handle reverse
-                    if(pitch < .0625 && pitch > -.0625)
-                    {
-                        // we weren't already in the turn-around zone
-                        if(orig_pitch > .0625 || orig_pitch < -.0625)
-                        {
-                            looper_fifth = !looper_fifth;
-                            pitch = orig_pitch;
-                            pitch *= -1.f;
-                        }
-                        // we were already in the zone, and we're headed over the middle
-                        else if((GetLooperReverse() && turns > 0) || (!GetLooperReverse() && turns < 0))
-                        {
-                            looper_fifth = !looper_fifth;
-                            pitch = orig_pitch;
-                            pitch *= -1.f;
-                        }
-                    }
-
-                    SetLooperPitch(pitch);
-
-                    return pitch * .25f + .5f;
-
-                }
-            }
-
-            return enc_pos;
-        }
-
-        inline void SetLooperPitchFree(float val)
-        {
-            SetLooperPitch(val * 4.f - 2.f); // -2 - 2            
-        }
-
-        inline void SetLooperPitch(float val) { looper.SetPitch(val); }
-        inline void SetLooperScrub(float scrub) { looper.SetScrub(scrub); }
-        inline float GetLooperScrub() { return looper.GetScrub(); }
-
-        inline bool IsLooperPlaying() { return looper.IsPlaying(); };
-        inline bool IsLooperRecording() { return looper.IsRecording(); };
-        inline bool IsLooperFirstRecording() { return looper.IsFirstRecording(); };
-        inline bool IsLooperRecordArmed() { return looper.GetRecordArm(); };
 
 
-        inline void IncrementLooperDubGain(float gain) { looper.IncrementDubGain(gain); }
-        inline float GetLooperDubGain() { return looper.GetDubGain(); }
-
-        inline void LooperOpenFile() { looper.OpenFile(); }
 
         daisy::FIFO<KeyRequest, 32> request_fifo;
 
@@ -748,17 +607,7 @@ namespace daisy
 
         void StopAllVoices(size_t = 100) { harmonizer.AllOff(); }
 
-        // otherwise, they are post looper
-        void SetFxPreLooper(bool pre)
-        {
-            if(pre != fx_pre_loop)
-            {
-                looper.FXEnvelope();
-                fx_env_target_ = 0.f;
-            }
-        }
 
-        inline bool GetFxPreLooper() { return fx_pre_loop; }
 
         inline InputSource GetInputSource() { return in_source; }
 
@@ -781,12 +630,6 @@ namespace daisy
     private:
  // .0833 = 1/12
 
-        /** the looper */
-        LooperEngine looper;
-
-        float encoder_chunk = 0.f; // chunk up the quantized pitch controls
-        float looper_encoder_chunk = 0.f;
-        bool looper_fifth;
         
         /** env followers for VU meters */
         EnvFollower input_env_follower;
@@ -840,7 +683,6 @@ namespace daisy
         float cutoff_, cutoff_target_;
         float res_, res_target_;
         
-        bool fx_pre_loop;
         float fx_env_, fx_env_target_;
 
 

@@ -181,14 +181,12 @@ namespace chompi
             else
                 SetSmtLedFloat(9, sing_rose[0] * .08f, sing_rose[1] * .08f, sing_rose[2] * .08f);
 
-            // FX pre / post looper
-            int led_sel = fx_->GetFxPreLooper() ? 5 : 6;
-            int led_off = fx_->GetFxPreLooper() ? 6 : 5;
-            SetSmtLedFloat(led_sel, yellow[0], yellow[1], yellow[2]);
-            SetSmtLedFloat(led_off, 0.f, 0.f, 0.f);
+            // SING: no looper, so no FX pre / post choice
+            SetSmtLedFloat(5, 0.f, 0.f, 0.f);
+            SetSmtLedFloat(6, 0.f, 0.f, 0.f);
         
             // Input select
-            led_sel = 2;
+            int led_sel = 2;
             led_sel += static_cast<int>(fx_->GetInputSource());
             SetSmtLedFloat(2, 0.f, 0.f, 0.f);
             SetSmtLedFloat(3, 0.f, 0.f, 0.f);
@@ -265,7 +263,6 @@ namespace chompi
             if(encoderID <= 2)
                 return true;
 
-            float r, g, b;
             {
                 if (encoderID == 3)
                 {
@@ -295,22 +292,6 @@ namespace chompi
                         fx_->ScrubTime(turns);
                     enc_values[0][4] = 1.f - fx_->ScrubPosition();
                     return true;
-
-                    if(quantized_pitch_)
-                        enc_values[0][4] = fx_->SetLooperPitchQuantized(turns, enc_values[0][4]);
-                    else
-                    {
-                        enc_values[0][4] += turns * kEncoderFineStep;
-                        enc_values[0][4] = fclamp(enc_values[0][4], 0.f, 1.f);
-                        fx_->SetLooperPitchFree(enc_values[0][4]);
-                    }
-
-                    float idx = enc_values[0][4] < .5f ? enc_values[0][4] * 2.f : (1.f - enc_values[0][4]) * 2.f; // 0 - 1 - 0
-                    r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                    g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                    b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-                    SetPthLedFloat(5, r, g, b);
-                    SetPthLedFloat(6, r, g, b);
                 }               
                 else if(encoderID == 5)
                 {
@@ -421,20 +402,16 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_17):
                 break;
 
+            case static_cast<uint16_t>(Hardware::SwId::KEY_20): // TAPE: resample, from the looper
+                return false; // SING: no looper; the key plays
+
             case static_cast<uint16_t>(Hardware::SwId::KEY_18): // mic in, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_19): // aux in, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_20): // resample
+            case static_cast<uint16_t>(Hardware::SwId::KEY_19): // aux in
             {
                 if(rising)
                 {
-                    InputSource source;
-                    if(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_18))
-                        source = InputSource::MIC;
-                    else if(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_19))
-                        source = InputSource::LINE_IN;
-                    else
-                        source = InputSource::RESAMPLE;
-
+                    const InputSource source = buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_18)
+                                               ? InputSource::MIC : InputSource::LINE_IN;
                     fx_->SetInputSource(source);
                 }
                 else if(!rising)
@@ -444,15 +421,10 @@ namespace chompi
             }
 
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_21): // fx pre looper, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_22): // fx post looper
+            case static_cast<uint16_t>(Hardware::SwId::KEY_21): // TAPE: fx pre looper
+            case static_cast<uint16_t>(Hardware::SwId::KEY_22): // TAPE: fx post looper
             {
-                if(rising)
-                {
-                    fx_->SetFxPreLooper(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_21));
-                }
-                else if(!rising)
-                    return false; // note off falls through
+                return false; // SING: no looper; the keys play
 
                 break;
             }
@@ -473,13 +445,10 @@ namespace chompi
                     fx_->ToggleVoiceGate();
                 break;
 
-            // white keys and play/pause
+            // white keys, play and loop
             default:
-                // play pause, overdub gain setting
-                // SING: play (mode) and loop (freeze) work as on the normal page
-                if(buttonID == 33 || buttonID == 34)
-                    return false;
-                // SING: the keys keep playing harmonies while the menu is open
+                // SING: the keys keep playing harmonies while the menu is open,
+                // and play (mode) and loop (freeze) work as on the normal page
                 return false;
             }
 
@@ -491,11 +460,6 @@ namespace chompi
             fx_reset = false;
             pitch_reset = false;
             chompi_key_pressed = true;
-
-            if(quantized_pitch_)
-            {
-                fx_->ResetLooperPitchQuant();
-            }
 
             input_toggled = false;
 
@@ -509,10 +473,6 @@ namespace chompi
         { 
             if(System::GetNow() - blink_startt > 1000 && !chompi_key_pressed)
             {
-                if(!quantized_pitch_)
-                {
-                    fx_->ResetLooperPitchQuant();
-                }
                 return true;
             }
             return false;

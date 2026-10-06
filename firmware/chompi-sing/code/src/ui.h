@@ -152,9 +152,6 @@ namespace chompi
                         if(!test_page_.IsActive()) {
                             fx_->request_fifo.PushBack(KeyRequest(KeyRequest::Type::START, 
                                 key - 36, midi2key[key], event.data[1] + 1));
-
-                            if(fx_->GetLooperRecordArm())
-                                fx_->ToggleLooperRecord();
                         }
                         else {
                             event_queue.AddButtonPressed(midi2key[key], 1, true);
@@ -187,9 +184,6 @@ namespace chompi
                         if(cc >= 20 && cc < 26)
                         {
                             uint8_t knob = cc - 20;
-
-                            if(knob == 4 && !fx_->IsLooperPlaying())
-                                break;
 
                             event_queue.AddEncoderTurned(knob, val, 1);
                         }
