@@ -46,7 +46,6 @@ namespace chompi
                 voices_[v].gate = false;
                 voices_[v].semis = 0.f;
                 voices_[v].shift = 0.f;
-                voices_[v].heard = 1.f;
                 voices_[v].pan   = 0.f;
             }
             dcblock_.Init(samplerate);
@@ -64,7 +63,6 @@ namespace chompi
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
-            top_      = 0.f;
             sung_     = 60.f;
             heard_any_ = false;
 
@@ -161,27 +159,21 @@ namespace chompi
         bool GateOn() const { return gate_on_; }
         void SetGateOpen(bool open) { gate_open_ = open; }
 
-        /** Top mode, "your voice is the top note": the highest held key stands for the sung note, and the other
-         *  keys sound at their distance below it, so a chord is played with
-         *  the melody note on top, as a pianist voices it: G-C-E puts the
-         *  voice on the third of C major. The top key itself is the voice and
-         *  adds nothing. Doesn't need to know what is sung. */
-        /** How keys turn into voices:
-         *  Robot:    a vocoder: each key plays a buzzy synth note that the
-         *            voice's words are imprinted on (Kraftwerk). Pitch of the
-         *            voice doesn't matter; talking works. No shifters run.
-         *  Keys:     each key sounds its own note, made from the voice,
-         *            whatever is sung (like a vocoder; needs the detector)
-         *  Top:      see above
-         *  Relative: each key shifts the voice by its distance from middle C */
-        enum class ChordMode { Robot, Keys, Top, Relative };
+        /** How keys turn into voices (the play button switches):
+         *  Robot: a vocoder: each key plays a buzzy synth note that the
+         *         voice's words are imprinted on (Kraftwerk). The voice's
+         *         pitch doesn't matter; talking works. No shifters run.
+         *  Keys:  "Human": each key sounds its own note, made from the real
+         *         voice, whatever is sung (needs the pitch detector). */
+        enum class ChordMode { Robot, Keys };
         void SetMode(ChordMode m)
         {
             /* a new character starts live */
             vocoder_.SetFreeze(false);
             vfreeze_.SetFreeze(false);
             mode_ = m;
-            UpdateTop(true);
+            for (size_t i = 0; i < kVoices; i++)
+                UpdateRatio(voices_[i], i);
         }
         ChordMode Mode() const { return mode_; }
 
@@ -264,7 +256,6 @@ namespace chompi
             {
                 v->gate    = false;     // latched: a second press lets it go
                 duck_hold_ = duck_len_;
-                UpdateTop(false);
                 return;
             }
             if (!v) v = FindFree();
@@ -274,7 +265,6 @@ namespace chompi
             v->key   = key;
             v->semis = semis;
             v->gate  = true;
-            UpdateTop(false);
             UpdateRatio(*v, size_t(v - voices_));
             duck_hold_ = duck_len_;
         }
@@ -287,7 +277,6 @@ namespace chompi
             if (Voice *v = Find(key))
             {
                 v->gate = false;
-                UpdateTop(false);
             }
         }
 
@@ -306,7 +295,6 @@ namespace chompi
         {
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].gate = false;
-            UpdateTop(false);
         }
 
         /** a key that is held down right now (not just ringing out) */
@@ -375,10 +363,6 @@ namespace chompi
                 const float gl = cosf(a) * 1.4142136f * level_;
                 const float gr = sinf(a) * 1.4142136f * level_;
 
-                /* in top mode the top key is the singer: silent, fading so a
-                   voice that stops or starts being the top doesn't click */
-                const float heard_target = IsTop(vo) ? 0.f : 1.f;
-                const float heard_step   = (heard_target - vo.heard) / float(size);
 
                 if (robot)
                 {
@@ -409,7 +393,6 @@ namespace chompi
                 else
                 for (size_t i = 0; i < size; i++)
                 {
-                    vo.heard += heard_step;
                     if (vo.gate)
                         vo.env = vo.env + attack_ < 1.f ? vo.env + attack_ : 1.f;
                     else
@@ -417,15 +400,16 @@ namespace chompi
 
                     float l = in_[i], r = in_[i];
                     vo.shifter.Process(vo.ratio, &l, &r);
-                    hl[i] += l * vo.env * vo.heard * gl;
-                    hr[i] += r * vo.env * vo.heard * gr;
+                    hl[i] += l * vo.env * gl;
+                    hr[i] += r * vo.env * gr;
                 }
                 if (!vo.gate && vo.env <= 0.f)
                     vo.key = -1;
             }
 
             if (robot)
-                vocoder_.Process(in_, car_l, car_r, hl, hr, size);
+                vocoder_.Process(in_, car_l, car_r, hl, hr, size,
+                                 spread_ > 0.f, Active());
 
             /* ring modulator: the harmonies times a sine */
             if (ring_mix_ > 0.f)
@@ -493,7 +477,6 @@ namespace chompi
             float              ratio;
             float              semis; // the key, from middle C
             float              shift; // semitones this voice shifts by, before transpose
-            float              heard; // 0 while it is the top key in top mode
             float              pan;
             float              env;
             bool               gate;
@@ -503,35 +486,10 @@ namespace chompi
          *  when the doubler is up, so stacked voices thicken */
         void UpdateRatio(Voice &v, size_t idx)
         {
-            v.shift = mode_ == ChordMode::Top  ? v.semis - top_
-                    : mode_ == ChordMode::Keys ? (60.f + v.semis) - sung_
-                                               : v.semis;
+            v.shift = (60.f + v.semis) - sung_; // keys: from the sung note to the key's
             const float cents = (idx & 1 ? 1.f : -1.f) * doubler_ * 12.f;
             v.ratio = powf(2.f, (v.shift + transpose_ + cents / 100.f) / 12.f);
             v.hz    = 261.62557f * powf(2.f, (v.semis + transpose_ + cents / 100.f) / 12.f);
-        }
-
-        /** the highest held key, in top mode; held voices follow it when it
-         *  changes (ringing-out ones keep their pitch). all: update every
-         *  held voice anyway (the mode changed). */
-        void UpdateTop(bool all)
-        {
-            float top = -1000.f;
-            for (size_t i = 0; i < kVoices; i++)
-                if (voices_[i].gate && voices_[i].semis > top)
-                    top = voices_[i].semis;
-            const bool moved = top > -1000.f && top != top_;
-            if (moved)
-                top_ = top;
-            if (moved || all)
-                for (size_t i = 0; i < kVoices; i++)
-                    if (voices_[i].gate)
-                        UpdateRatio(voices_[i], i);
-        }
-
-        bool IsTop(const Voice &v) const
-        {
-            return mode_ == ChordMode::Top && v.gate && v.semis == top_;
         }
 
         /** -1..1 for voice v: its rank by pitch among the sounding voices,
@@ -604,7 +562,6 @@ namespace chompi
         float            attack_, release_;
         bool             latch_;
         ChordMode        mode_;
-        float            top_;  // semis of the top key, top mode
         float            sung_; // smoothed sung note, keys mode
         bool             heard_any_;
         static constexpr float kSungSmooth = .12f; // per 1 ms block: ~8 ms

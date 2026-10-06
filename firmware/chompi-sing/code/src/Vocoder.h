@@ -123,9 +123,13 @@ namespace chompi
         float ScrubPosition() const { return target_ / float(kHistFrames - 2); }
 
         /** mod: the voice; car_l/car_r: the synth carriers; adds the result
-         *  into out_l/out_r */
+         *  into out_l/out_r. stereo: false when both carriers are the same
+         *  (no spread), so one synthesis bank does for both sides; synth:
+         *  false when nothing plays, then only the voice is analysed (for
+         *  the time wheel). */
         void Process(const float *mod, const float *car_l, const float *car_r,
-                     float *out_l, float *out_r, size_t size)
+                     float *out_l, float *out_r, size_t size,
+                     bool stereo = true, bool synth = true)
         {
             if (size > kMaxBlock)
                 size = kMaxBlock;
@@ -173,7 +177,7 @@ namespace chompi
                part of the voice falls off the ends, so make up a little */
             float cl[kMaxBlock], cr[kMaxBlock];
             const float gain = kGain * (1.f + .12f * fabsf(shift_));
-            for (int b = 0; b < kBands; b++)
+            for (int b = 0; b < kBands && synth; b++)
             {
                 const float src = b + shift_;
                 const int   s0  = int(floorf(src));
@@ -186,15 +190,16 @@ namespace chompi
                 const float *l1 = lev_[s0 + 1 >= 0 && s0 + 1 < kBands ? s0 + 1 : 0];
 
                 for (size_t i = 0; i < size; i++)
-                {
                     cl[i] = Run(syn_[0][b][1], Run(syn_[0][b][0], car_l[i]));
-                    cr[i] = Run(syn_[1][b][1], Run(syn_[1][b][0], car_r[i]));
-                }
+                if (stereo)
+                    for (size_t i = 0; i < size; i++)
+                        cr[i] = Run(syn_[1][b][1], Run(syn_[1][b][0], car_r[i]));
+                const float *rr = stereo ? cr : cl;
                 for (size_t i = 0; i < size; i++)
                 {
                     const float e = (l0[i] * w0 + l1[i] * w1) * gain;
                     out_l[i] += cl[i] * e;
-                    out_r[i] += cr[i] * e;
+                    out_r[i] += rr[i] * e;
                 }
             }
         }
