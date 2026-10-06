@@ -396,17 +396,24 @@ namespace chompi
             }
             else
                 vfreeze_.Record(in_, size, rec_note_);
+            in_now_ = in_;
 
             float hl[size], hr[size];
             for (size_t i = 0; i < size; i++)
                 hl[i] = hr[i] = 0.f;
 
-            /* robot: the voices build the vocoder's carriers instead */
-            const bool robot = Vocoded();
-            float car_l[size], car_r[size];
+            /* robot: the voices build the vocoder's carriers instead; Human
+               with character right of centre also uses the vocoder, on
+               noise, for the whisper (wsum: the held voices' weights) */
+            const bool robot   = Vocoded();
+            const float whisper = !robot && character_ > .51f ? (character_ - .5f) * 2.f : 0.f;
+            float car_l[size], car_r[size], wsum_l[size], wsum_r[size];
             if (robot)
                 for (size_t i = 0; i < size; i++)
                     car_l[i] = car_r[i] = 0.f;
+            if (whisper > 0.f)
+                for (size_t i = 0; i < size; i++)
+                    wsum_l[i] = wsum_r[i] = 0.f;
 
             for (size_t v = 0; v < kVoices; v++)
             {
@@ -461,6 +468,11 @@ namespace chompi
                     vo.shifter.Process(vo.ratio, &l, &r);
                     hl[i] += l * vo.env * gl;
                     hr[i] += r * vo.env * gr;
+                    if (whisper > 0.f)
+                    {
+                        wsum_l[i] += vo.env * gl;
+                        wsum_r[i] += vo.env * gr;
+                    }
                 }
                 if (!vo.gate && vo.env <= 0.f)
                     vo.key = -1;
@@ -469,6 +481,8 @@ namespace chompi
             if (robot)
                 vocoder_.Process(in_, car_l, car_r, hl, hr, size,
                                  spread_ > 0.f, Active());
+            else
+                HumanCharacter(hl, hr, car_l, car_r, wsum_l, wsum_r, whisper, size);
 
             /* ring modulator: the harmonies times a sine */
             if (ring_mix_ > 0.f)
@@ -621,6 +635,63 @@ namespace chompi
         static constexpr float kDuckFloor = .03f;  /* -30 dB while a key clicks */
 
         Voice            voices_[kVoices];
+        /** Human's size and character (the robot's are in the vocoder):
+         *  character left of centre softens (a lowpass, 12 kHz down to
+         *  800 Hz); right of centre blends in a whisper, the vocoder on
+         *  noise for the held keys; size tilts the tone, left darker and
+         *  fuller (bigger), right brighter and thinner (smaller). */
+        void HumanCharacter(float *hl, float *hr, float *car_l, float *car_r,
+                            const float *wsum_l, const float *wsum_r, float whisper, size_t size)
+        {
+            if (character_ < .49f)
+            {
+                const float fc   = 800.f * powf(15.f, character_ * 2.f);
+                const float coef = 1.f - expf(-6.2831853f * fc / sr_);
+                for (size_t i = 0; i < size; i++)
+                {
+                    soft_l_ += coef * (hl[i] - soft_l_);
+                    soft_r_ += coef * (hr[i] - soft_r_);
+                    hl[i] = soft_l_;
+                    hr[i] = soft_r_;
+                }
+            }
+            else if (whisper > 0.f)
+            {
+                float wl[size], wr[size];
+                for (size_t i = 0; i < size; i++)
+                {
+                    const float n = Noise() * kVocodedLevel;
+                    car_l[i] = n * wsum_l[i];
+                    car_r[i] = n * wsum_r[i];
+                    wl[i] = wr[i] = 0.f;
+                }
+                vocoder_.Process(in_now_, car_l, car_r, wl, wr, size, spread_ > 0.f, true);
+                for (size_t i = 0; i < size; i++)
+                {
+                    hl[i] = hl[i] * (1.f - whisper) + wl[i] * whisper;
+                    hr[i] = hr[i] * (1.f - whisper) + wr[i] * whisper;
+                }
+            }
+
+            const float t = (.5f - size_) * 2.f; // + bigger, - smaller
+            if (fabsf(t) > .01f)
+            {
+                const float lo = 1.f + .7f * t, hi = 1.f - .7f * t;
+                const float norm = 1.f / (1.f + .25f * fabsf(t));
+                for (size_t i = 0; i < size; i++)
+                {
+                    tilt_l_ += kTiltCoef * (hl[i] - tilt_l_);
+                    tilt_r_ += kTiltCoef * (hr[i] - tilt_r_);
+                    hl[i] = (tilt_l_ * lo + (hl[i] - tilt_l_) * hi) * norm;
+                    hr[i] = (tilt_r_ * lo + (hr[i] - tilt_r_) * hi) * norm;
+                }
+            }
+        }
+
+        static constexpr float kTiltCoef = .123f; // one pole, ~1 kHz at 48 kHz
+        float soft_l_ = 0.f, soft_r_ = 0.f, tilt_l_ = 0.f, tilt_r_ = 0.f;
+        const float *in_now_ = nullptr; // this block's voice, for the whisper
+
         /** white noise, -1..1 (xorshift) */
         float Noise()
         {

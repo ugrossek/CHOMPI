@@ -44,14 +44,23 @@ Press a knob to switch its page.
 | Knob | Page 1 | Page 2 | Page 3 |
 |---|---|---|---|
 | **1** | **transpose**, ±12 semitones, continuous | **harmony volume** | **metal**: ring modulator (Dalek), off fully left |
-| **2** | Robot: **size**, monster ← → mouse · Human: **spread** | **attack** | Robot: **spread** |
-| **3** | Robot: **character**, soft ← buzz → whisper · Human: **doubler** | **release** | Robot: **doubler** |
+| **2** | **size**: left big, right small | **spread** | **attack** |
+| **3** | **character**: left soft, right whisper | **doubler** | **release** |
 | **4** | **space**: reverb and delay | **Speak & Spell**: fewer samples and bits | **filter** |
 | **5** | the big wheel: time wheel, above | | |
 | **6** | **output volume** | **input gain** | |
 
-Size and character start in the middle, the classic robot. Spread places the voices left and
-right; doubler thickens them with a chorus. Hold knob 6 for two seconds to see the battery.
+The knobs are the same in both characters, latched or not. Page 2 is the ensemble (harmony
+volume, spread, doubler), page 3 the shape (metal, attack, release). Size and character start in
+the middle:
+
+- **Size:** Robot moves its mouth (formants), from monster to mouse. Human tilts the tone,
+  darker and fuller to the left, brighter and thinner to the right.
+- **Character:** Robot's synth goes from a soft sine through the Kraftwerk buzz to noise. Human
+  gets softer to the left and turns into a whisper to the right (the vocoder on noise).
+
+Spread places the voices left and right; doubler thickens them with a chorus. Hold knob 6 for
+two seconds to see the battery.
 
 ## Menu (hold the chompi key)
 

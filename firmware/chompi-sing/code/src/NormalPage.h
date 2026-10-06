@@ -199,10 +199,9 @@ namespace chompi
          *    knob 1: transpose (row 0) | harmony volume (row 1) | metal (row 2)
          *    knob 2: spread (row 0)    | attack (row 1)  | size (row 2)
          *    knob 3: doubler (row 0)   | release (row 1) | character (row 2)
-         *  Robot mode shows knobs 2 and 3 as size/character, attack/release,
-         *  spread/doubler (three pages); the other modes as spread/doubler,
-         *  attack/release. The defaults in ui.h and Harmonizer::Init must
-         *  match. */
+         *  Knobs 2 and 3 show size/character, spread/doubler, attack/release
+         *  (three pages) in both characters. The defaults in ui.h and
+         *  Harmonizer::Init must match. */
         void SingKnob(int knob, int row, float v)
         {
             switch(knob * 3 + row)
@@ -220,20 +219,24 @@ namespace chompi
             }
         }
 
-        /** the row of enc_values that knob's page shows */
+        /** the row of enc_values that knob's page shows: knobs 2 and 3 show
+         *  size/character, spread/doubler, attack/release, the same in both
+         *  characters and with or without latch. Page 2 of knobs 1-3 is then
+         *  the ensemble (harmony volume, spread, doubler), page 3 the shape
+         *  (metal, attack, release). */
         uint8_t Row(int knob, uint8_t page) const
         {
-            if ((knob == 1 || knob == 2) && fx_->RobotMode())
+            if (knob == 1 || knob == 2)
             {
-                static const uint8_t kRobotRows[3] = {2, 1, 0};
-                return kRobotRows[page % 3];
+                static const uint8_t kRows[3] = {2, 0, 1};
+                return kRows[page % 3];
             }
             return page;
         }
 
         uint8_t Pages(int knob) const
         {
-            return (knob == 1 || knob == 2) && fx_->RobotMode() ? 3 : knob_num_pages[knob];
+            return knob == 1 || knob == 2 ? 3 : knob_num_pages[knob];
         }
 
         /** white key 0..14 left to right for a MIDI note of the keyboard
