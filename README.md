@@ -1,14 +1,15 @@
 # CHOMPI — Open Source
 
-> ### This branch: SING — a live harmonizer for CHOMPI
+> ### This branch: SING — an instrument led by your voice
 >
-> Sing into the mic and hold keys: each key adds your voice, pitch-shifted by its distance
-> from the middle C. Hold C and E and you sing a third. Transpose, spread, doubler and latch
-> on the knobs and the toggle; looper and effects work as in TAPE. Built on TAPE and its
-> [pitch-shift experiment](https://github.com/ugrossek/CHOMPI/tree/true-pitch-shift). Controls, install and known limits are in
-> [`firmware/chompi-sing`](firmware/chompi-sing/).
+> Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice.
+> Three characters on the play button: **Robot** (a Kraftwerk-style vocoder), **Human** (your
+> real voice on the keys' notes) and **Toy** (Speak & Spell and Dalek metal). Freeze on the
+> loop button, a time wheel on the big wheel, latch on the toggle. Built on TAPE. Controls,
+> install and known limits are in [`firmware/chompi-sing`](firmware/chompi-sing/).
 >
-> **[Download the firmware](../../releases/tag/sing-beta)** — a ready-to-flash `.bin` (beta).
+> **[Download SING 2](../../releases/tag/sing-2-beta)** — a ready-to-flash `.bin` (beta).
+> The first SING is still [here](../../releases/tag/sing-beta).
 >
 > **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
 > tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
