@@ -8,8 +8,8 @@
 > loop button, a time wheel on the big wheel, latch on the toggle. Built on TAPE. Controls,
 > install and known limits are in [`firmware/chompi-sing`](firmware/chompi-sing/).
 >
-> **[Download SING 2](../../releases/tag/sing-2-beta)** — a ready-to-flash `.bin` (beta).
-> The first SING is still [here](../../releases/tag/sing-beta).
+> **[Download SING](../../releases/tag/sing-beta-2)** — a ready-to-flash `.bin` (beta 2).
+> The first beta is still [here](../../releases/tag/sing-beta).
 >
 > **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
 > tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their

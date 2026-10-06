@@ -1,10 +1,10 @@
-<!-- Draft for the SING 2 beta release on GitHub. Not published yet. -->
+<!-- Draft for the SING beta 2 release on GitHub. Not published yet. -->
 
 SING turns CHOMPI into an instrument led by your voice. Press keys and sing, talk or make any sound: CHOMPI plays the keys' notes with your voice. Simple enough for children: press a key, say "hello", and it sings.
 
 ![SING cheat sheet](https://raw.githubusercontent.com/ugrossek/CHOMPI/sing/firmware/chompi-sing/docs/cheatsheet.png)
 
-**New in SING 2**
+**New in beta 2**
 
 - **Three characters on the play button.** **Robot** (red): a vocoder, the Kraftwerk kind; the pitch you sing doesn't matter, and talking, whispering and noises all work. **Human** (warm white): your real voice, moved onto the keys' notes, whatever you sing. **Toy** (yellow): an 80s talking toy, Speak & Spell and Dalek metal.
 - **The keys play their own notes.** Press C-E-G, hear C-E-G. Key 8 is middle C.
@@ -20,7 +20,7 @@ SING turns CHOMPI into an instrument led by your voice. Press keys and sing, tal
 
 Full controls: the cheat sheet above and the [README](https://github.com/ugrossek/CHOMPI/tree/sing/firmware/chompi-sing).
 
-**Install:** with the [multi-firmware launcher](https://github.com/sfaber02/CHOMPI/releases/latest) v1.1 or later, send `CHOMPI_SING_2_beta.bin` to a free slot from <https://ugrossek.github.io/CHOMPI/>. On a stock card, put it in the card root as the only `.bin`.
+**Install:** with the [multi-firmware launcher](https://github.com/sfaber02/CHOMPI/releases/latest) v1.1 or later, send `CHOMPI_SING_beta_2.bin` to a free slot from <https://ugrossek.github.io/CHOMPI/>. On a stock card, put it in the card root as the only `.bin`.
 
 **Use headphones**, and an **external mic on the input jack** if you can: the built-in mic picks up key clicks.
 
