@@ -152,14 +152,14 @@ namespace chompi
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
 
-    static const uint8_t knob_num_pages[6] = {2, 2, 2, 3, 1, 2};
+    static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 1, 2}; // SING: knob 1 page 3 = metal
 
     class NormalPage : public daisy::UiPage
     {
       private:
         /* SING: knobs 1-3, laid out like TAPE (page 1 = sound, page 2 =
          * level and envelope). Each value lives in a row of enc_values:
-         *    knob 1: transpose (row 0) | harmony volume (row 1)
+         *    knob 1: transpose (row 0) | harmony volume (row 1) | metal (row 2)
          *    knob 2: spread (row 0)    | attack (row 1)  | size (row 2)
          *    knob 3: doubler (row 0)   | release (row 1) | character (row 2)
          *  Robot mode shows knobs 2 and 3 as size/character, attack/release,
@@ -172,6 +172,7 @@ namespace chompi
             {
                 case 0: fx_->SetTranspose(v); break;
                 case 1: fx_->SetGain(v); break;
+                case 2: fx_->SetRing(v); break;
                 case 3: fx_->SetSpread(v); break;
                 case 4: fx_->SetAttack(v); break;
                 case 5: fx_->SetSize(v); break;
@@ -217,6 +218,7 @@ namespace chompi
             {
                 case 0: SingTransposeColour(v, r, g, b); return;
                 case 5: SingTransposeColour(v, r, g, b); return;                                    // size: centre = as sung
+                case 2: SingMix(sing_warm, sing_rose, v, r, g, b); lvl = .1f + .9f * v; break;      // metal
                 case 3: SingMix(sing_amber, sing_coral, v, r, g, b); lvl = .15f + .85f * v; break;  // spread
                 case 6: SingMix(sing_rose, sing_magenta, v, r, g, b); lvl = .15f + .85f * v; break; // doubler
                 case 8: SingMix(sing_warm, sing_magenta, v, r, g, b); lvl = .4f + .6f * v; break;   // character
@@ -463,8 +465,8 @@ namespace chompi
                     }
                     else if (page == 1) // lofi
                     {
-                        fx_->SetSaturate(value);
-                        SingMix(sing_amber, red, value, r, g, b); // SING: lofi
+                        fx_->SetCrush(value);
+                        SingMix(sing_amber, red, value, r, g, b); // SING: Speak & Spell
                     }
                     else // filter
                     {

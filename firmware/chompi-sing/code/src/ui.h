@@ -17,7 +17,7 @@ namespace chompi
            harmony volume, attack, release -- must match Harmonizer::Init */
         {.5f, 0.f, 0.f, 0.f, .75f, .84f},  // page 1
         {.75f, .1f, .5f, 0.f, 0.f, .75f},  // page 2
-        {0.f, .5f, .5f, .5f, 0.f, 0.f},   // page 3; SING robot: size, character (.5 = as sung, sawtooth)
+        {0.f, .5f, .5f, .5f, 0.f, 0.f},   // page 3; SING: metal off; robot size, character (.5 = as sung, sawtooth)
     };
 
     static const uint8_t midi2key[49] = {

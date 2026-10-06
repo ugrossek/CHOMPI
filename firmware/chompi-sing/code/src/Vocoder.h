@@ -72,6 +72,7 @@ namespace chompi
                 env_[b] = 0.f;
             }
             shift_ = 0.f;
+            freeze_ = false;
             att_ = 1.f - expf(-1.f / (.002f * sr_));
             rel_ = 1.f - expf(-1.f / (.020f * sr_));
         }
@@ -82,6 +83,12 @@ namespace chompi
          *  One band is about a third of an octave. */
         void SetShift(float bands) { shift_ = bands; }
 
+        /** Freeze: hold the voice's band levels as they are now, so the
+         *  synth keeps saying the current sound ("aaa") while the voice is
+         *  free to stop. Off: follow the voice again. */
+        void SetFreeze(bool on) { freeze_ = on; }
+        bool Frozen() const { return freeze_; }
+
         /** mod: the voice; car_l/car_r: the synth carriers; adds the result
          *  into out_l/out_r */
         void Process(const float *mod, const float *car_l, const float *car_r,
@@ -90,10 +97,16 @@ namespace chompi
             if (size > kMaxBlock)
                 size = kMaxBlock;
 
-            /* the voice's level in every band */
+            /* the voice's level in every band (frozen: as it was) */
             float band[kMaxBlock];
             for (int b = 0; b < kBands; b++)
             {
+                if (freeze_)
+                {
+                    for (size_t i = 0; i < size; i++)
+                        lev_[b][i] = env_[b];
+                    continue;
+                }
                 for (size_t i = 0; i < size; i++)
                     band[i] = Run(ana_[b][1], Run(ana_[b][0], mod[i]));
                 float env = env_[b];
@@ -175,6 +188,7 @@ namespace chompi
         float lev_[kBands][kMaxBlock];
         float att_, rel_;
         float shift_;
+        bool  freeze_;
     };
 
 } // namespace chompi

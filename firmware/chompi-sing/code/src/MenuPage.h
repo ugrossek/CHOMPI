@@ -173,7 +173,14 @@ namespace chompi
             }
 
             // SING: no preset keys (TAPE: save / copy / erase)
-            SetSmtLedFloat(7, 0.f, 0.f, 0.f);
+            // KEY_23: robot freeze, bright white while frozen; dark outside robot mode
+            if(fx_->RobotMode())
+            {
+                const float f = fx_->Frozen() ? 1.f : .08f;
+                SetSmtLedFloat(7, sing_warm[0] * f, sing_warm[1] * f, sing_warm[2] * f);
+            }
+            else
+                SetSmtLedFloat(7, 0.f, 0.f, 0.f);
             // KEY_24: chord mode, robot magenta, keys gold, top note coral, relative dim
             switch(fx_->ChordModeIndex())
             {
@@ -354,10 +361,15 @@ namespace chompi
                         enc_values[0][0] = .5f;
                         fx_->SetTranspose(.5f);
                     }
-                    else
+                    else if(knob_page[0] == 1)
                     {
                         enc_values[1][0] = enc_defaults[1][0];
                         fx_->SetGain(enc_values[1][0]);
+                    }
+                    else // metal off
+                    {
+                        enc_values[2][0] = 0.f;
+                        fx_->SetRing(0.f);
                     }
                 }
                 break;
@@ -389,7 +401,7 @@ namespace chompi
 
                     fx_->SetReverb(enc_values[0][3]);
                     fx_->SetDelayFeedback(enc_values[0][3]);
-                    fx_->SetSaturate(enc_values[1][3]);
+                    fx_->SetCrush(enc_values[1][3]); // SING: Speak & Spell
                     fx_->SetFilter(enc_values[2][3]);
 
                     delay_time = .5f;
@@ -454,7 +466,9 @@ namespace chompi
             }
 
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase
+            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // SING: robot freeze
+                if(rising && fx_->RobotMode())
+                    fx_->ToggleFreeze();
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_24): // SING: chord mode

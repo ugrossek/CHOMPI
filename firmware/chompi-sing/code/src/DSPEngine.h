@@ -136,6 +136,12 @@ namespace daisy
 
             mic_filter_.Init(samplerate);
             harmonizer.Init(samplerate);
+
+            /* SING: TAPE's saturation stays neutral (factor 1); the lo-fi page
+               drives Speak & Spell instead. Set here: until now only the
+               knob display set it, and at 0 SoftClip(0 * x) would mute all */
+            SetSaturate(0.f);
+            saturate_amt_ = saturate_amt_target_;
             pitch_.Init();
 
             filter_.Init(samplerate);
@@ -201,6 +207,23 @@ namespace daisy
                 // then clip
                 outl[i] = daisysp::SoftClip(saturate_amt_ * outl[i]); 
                 outr[i] = daisysp::SoftClip(saturate_amt_ * outr[i]); 
+
+                /* SING: Speak & Spell, fewer samples and fewer bits as the
+                   lo-fi knob turns up: 48 kHz -> ~4 kHz, 16 -> 4 bits */
+                fonepole(crush_, crush_target_, .001f);
+                if (crush_ > .002f)
+                {
+                    crush_acc_ += exp2f(-crush_ * 3.6f);
+                    if (crush_acc_ >= 1.f)
+                    {
+                        crush_acc_ -= 1.f;
+                        const float q = exp2f(15.f - crush_ * 12.f);
+                        crush_l_ = roundf(outl[i] * q) / q;
+                        crush_r_ = roundf(outr[i] * q) / q;
+                    }
+                    outl[i] = crush_l_;
+                    outr[i] = crush_r_;
+                }
 
                 // reduce amplitude to prevent LUFs from blowing up
                 const float gain = 1.f - daisysp::SoftClip(.4f * (saturate_amt_ - 1.f)) * .7f;
@@ -585,6 +608,11 @@ namespace daisy
         inline void SetWarble(float val) { warble_.SetFreq(val); }
 
         inline void SetFilter(float val) { cutoff_target_ = val; }
+        /* SING: the lo-fi page is Speak & Spell, not TAPE's saturation */
+        inline void SetCrush(float val) { crush_target_ = val; }
+        void ToggleFreeze() { harmonizer.SetFreeze(!harmonizer.Frozen()); }
+        bool Frozen() const { return harmonizer.Frozen(); }
+        void SetRing(float v) { harmonizer.SetRing(v); }
         inline void SetFilterResonance(float val) { res_target_ = val; }
         inline void SetSaturate(float val) 
         { 
@@ -803,6 +831,7 @@ namespace daisy
         float reverb_time_, reverb_time_target_;
         float dly_amt_, dly_amt_target_;
         float saturate_amt_, saturate_amt_target_;
+        float crush_ = 0.f, crush_target_ = 0.f, crush_acc_ = 0.f, crush_l_ = 0.f, crush_r_ = 0.f;
         float cutoff_, cutoff_target_;
         float res_, res_target_;
         

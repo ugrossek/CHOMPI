@@ -138,6 +138,37 @@ int main()
         Check(r.out_rms > .2f * r.in_rms, "a whisper is heard");
     }
 
+    /* freeze: sing, freeze, stop singing: the sound stays; unfreeze: gone */
+    {
+        Vocoder v;
+        v.Init(kSr);
+        SawOsc osc;
+        osc.SetFreq(220.f, kSr);
+        float mod[kBlock], car[kBlock], ol[kBlock], orr[kBlock];
+        auto block = [&](int s, bool voice) {
+            double e = 0;
+            for (int i = 0; i < kBlock; i++)
+            {
+                mod[i] = voice ? Vowel((s + i) / kSr, 196.f, .05f) : 0.f;
+                car[i] = osc.Process();
+                ol[i] = orr[i] = 0.f;
+            }
+            v.Process(mod, car, car, ol, orr, kBlock);
+            for (int i = 0; i < kBlock; i++) e += ol[i] * ol[i];
+            return sqrt(e / kBlock);
+        };
+        int s = 0;
+        double sung = 0, frozen = 0, after = 0;
+        for (int b = 0; b < 300; b++, s += kBlock) sung = block(s, true);       // 300 ms singing
+        v.SetFreeze(true);
+        for (int b = 0; b < 500; b++, s += kBlock) frozen = block(s, false);    // 500 ms silent, frozen
+        v.SetFreeze(false);
+        for (int b = 0; b < 300; b++, s += kBlock) after = block(s, false);     // 300 ms silent, live
+        printf("freeze: singing %.4f, frozen in silence %.4f, unfrozen %.6f\n", sung, frozen, after);
+        Check(frozen > .5 * sung, "a freeze keeps the sound while the voice is silent");
+        Check(after < 1e-4, "unfreezing lets it go");
+    }
+
     /* silence in, silence out */
     {
         Result r = Run([](float) { return 0.f; }, 220.f, .5f);

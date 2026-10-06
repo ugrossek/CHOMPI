@@ -50,6 +50,8 @@ namespace chompi
             vocoder_.Init(samplerate);
             SetSize(.5f);
             SetCharacter(.5f);
+            ring_phase_ = 0.f;
+            SetRing(0.f);
             noise_    = 22222u;
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].osc.phase = float(v) / kVoices; // not all in step
@@ -178,6 +180,18 @@ namespace chompi
         /** robot: "character" of the synth note, 0 soft (sine) .. .5
          *  Kraftwerk buzz (sawtooth) .. 1 whisper (noise) */
         void SetCharacter(float v) { character_ = v; }
+
+        /** robot: freeze the voice's sound, see Vocoder::SetFreeze */
+        void SetFreeze(bool on) { vocoder_.SetFreeze(on); }
+        bool Frozen() const { return vocoder_.Frozen(); }
+
+        /** "metal": a ring modulator on the harmonies (Dalek). 0 off; up,
+         *  more of it and a higher modulator, 30 Hz .. ~480 Hz */
+        void SetRing(float v)
+        {
+            ring_mix_ = v * 2.f < 1.f ? v * 2.f : 1.f;
+            ring_inc_ = 30.f * powf(2.f, v * 4.f) / sr_;
+        }
 
         /** keys mode: the detected sung pitch (MIDI note, fractional), once
          *  per block. Smoothed a little; kept through unvoiced gaps. */
@@ -358,6 +372,20 @@ namespace chompi
             if (robot)
                 vocoder_.Process(in_, car_l, car_r, hl, hr, size);
 
+            /* ring modulator: the harmonies times a sine */
+            if (ring_mix_ > 0.f)
+                for (size_t i = 0; i < size; i++)
+                {
+                    const float u = 2.f * ring_phase_ - 1.f;
+                    const float m = -4.f * u * (1.f - fabsf(u)); // ~ sin(2 pi phase)
+                    const float g = 1.f - ring_mix_ + ring_mix_ * m;
+                    hl[i] *= g;
+                    hr[i] *= g;
+                    ring_phase_ += ring_inc_;
+                    if (ring_phase_ >= 1.f)
+                        ring_phase_ -= 1.f;
+                }
+
             const float gate_target = !gate_on_ || gate_open_ ? 1.f : 0.f;
             for (size_t i = 0; i < size; i++)
             {
@@ -511,6 +539,7 @@ namespace chompi
 
         Vocoder          vocoder_;
         float            character_;
+        float            ring_mix_, ring_inc_, ring_phase_;
         uint32_t         noise_;
         daisysp::DcBlock dcblock_;
         MicFilter        mic_filter_;
