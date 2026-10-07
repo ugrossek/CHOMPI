@@ -98,45 +98,18 @@ namespace daisy
 
             {
                 /* TEHP: the pitch setting no longer moves the tape. Playing runs
-                 * at 1x (or -1x reversed), the pitch goes to the shifters,
-                 * gliding like the tape speed would. Scrubbing still speeds up
-                 * and slows down like tape. */
+                 * at 1x (or -1x reversed); stopping, scrubbing and reset still
+                 * slow down and speed up like tape. The pitch goes to the
+                 * shifters, gliding like the tape speed would. */
                 const float slew = tape_slew_ ? .0001f : .01f;
                 daisysp::fonepole(pitch_, fmaxf(fabsf(varispeed_factor), kMinPitch), slew);
 
-                /* no spin up or down: play, stop and reset are instant, with a
-                 * short fade. A stop keeps moving until it has faded out. */
-                const float dir = varispeed_factor < 0.f ? -1.f : 1.f;
-                if(was_playing_ && !playing)
-                    stopping_ = true;
-                was_playing_ = playing;
+                float target = playing ? (varispeed_factor < 0.f ? -1.f : 1.f) : scrub_target_;
+                if(reset)
+                    target = 0.f;
 
-                float target;
-                if(playing && !reset)
-                {
-                    stopping_ = false;
-                    target = scrub_ = dir;
-                    transport_env_ = fminf(transport_env_ + kTransportStep, 1.f);
-                }
-                else if(stopping_)
-                {
-                    target = scrub_;
-                    transport_env_ -= kTransportStep;
-                    if(transport_env_ <= 0.f)
-                    {
-                        transport_env_ = 0.f;
-                        stopping_ = false;
-                        target = scrub_ = scrub_target_ = turn_count_ = 0.f;
-                    }
-                }
-                else
-                {
-                    // stopped: the wheel scrubs; silent while the tape stands
-                    target = reset ? 0.f : scrub_target_;
-                    daisysp::fonepole(scrub_, target, slew);
-                    const float t = fabsf(scrub_) > .02f ? 1.f : 0.f;
-                    transport_env_ += daisysp::fclamp(t - transport_env_, -kTransportStep, kTransportStep);
-                }
+                
+                daisysp::fonepole(scrub_, target, slew);
                 scrub_ = daisysp::fclamp(scrub_, -2.f, 2.f);
 
                 if((scrub_ < 0.f && target < 0.f) || (scrub_ > 0.f && target > 0.f))
@@ -304,7 +277,7 @@ namespace daisy
                 old_inr = inr;
 
                 // Amp env, then the pitch
-                const float env = loop_env * rev_env * reset_env * transport_env_;
+                const float env = loop_env * rev_env * reset_env;
                 float sl = s162f(int16_t(tl)) * env;
                 float sr = s162f(int16_t(tr)) * env;
                 out_shifter_.Process(pitch_, &sl, &sr);
@@ -389,11 +362,6 @@ namespace daisy
         float varispeed_factor;
         float pitch_;
         static constexpr float kMinPitch = .0625f;
-
-        /** play/stop fade, instead of tape spin up/down */
-        float transport_env_ = 0.f;
-        bool  was_playing_ = false, stopping_ = false;
-        static constexpr float kTransportStep = 1.f / 240.f; // 5 ms
         chompi::StereoPitchShifter out_shifter_, in_shifter_;
         float rpos_frac_;
 
