@@ -33,7 +33,7 @@ namespace daisy
     class FileSampleReader
     {
     public:
-        void Init(FileStreamingManager &manager, float sr, RamBufferMemory* buff, float* shift_buff, int16_t* shift_ana)
+        void Init(FileStreamingManager &manager, float sr, RamBufferMemory* buff, int16_t* shift_buff, int16_t* shift_ana)
         {
             manager_ = &manager;
             shifter_.Init(shift_buff, shift_ana);

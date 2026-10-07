@@ -13,8 +13,8 @@ namespace daisy
     {
     public:
         void Init(float sr, RamBufferMemory* buff, bool tape_slew,
-                  float* out_shift_buff, int16_t* out_shift_ana,
-                  float* in_shift_buff, int16_t* in_shift_ana)
+                  int16_t* out_shift_buff, int16_t* out_shift_ana,
+                  int16_t* in_shift_buff, int16_t* in_shift_ana)
         {
             ram_buff.Init(buff);
             sr_ = sr;

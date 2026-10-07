@@ -4,6 +4,10 @@
 #include "DSPEngine.h"
 #include "temp_led_stuff.h"
 #include "FileCopier.h"
+#include "util/CpuLoadMeter.h"
+#ifdef TEHP_CPU_METER
+extern daisy::CpuLoadMeter cpu_meter; // chompi_main.cpp
+#endif
 
 namespace chompi
 {
@@ -665,6 +669,35 @@ namespace chompi
             } 
 
             SetPthLedFloat(led_map[5], r, g, b);
+
+#ifdef TEHP_CPU_METER
+            /* test builds: audio CPU load on the white keys, low C = 0, high
+               C = 100%: dim white for the average, one red key for the peak
+               of the last 2 s. White key w (0 = low C) is LED 24 - w. */
+            {
+                static float    peak_hold = 0.f;
+                static uint32_t peak_t    = 0;
+                const uint32_t now = System::GetNow();
+                if(now - peak_t > 2000)
+                {
+                    peak_hold = ::cpu_meter.GetMaxCpuLoad();
+                    peak_t    = now;
+                    ::cpu_meter.Reset();
+                }
+                const float avg  = ::cpu_meter.GetAvgCpuLoad();
+                const float peak = fmaxf(peak_hold, ::cpu_meter.GetMaxCpuLoad());
+                const int   peak_key = int(fminf(peak, .9999f) * 15.f);
+                for(int w = 0; w < 15; w++)
+                {
+                    if(w == peak_key)
+                        SetSmtLedFloat(24 - w, 1.f, 0.f, 0.f);
+                    else if(w / 15.f < avg)
+                        SetSmtLedFloat(24 - w, .2f, .2f, .2f);
+                    else
+                        SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
+                }
+            }
+#endif
 
             // ========   send the data   =========
             fill_led_data();

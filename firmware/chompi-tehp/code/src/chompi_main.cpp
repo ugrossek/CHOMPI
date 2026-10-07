@@ -35,8 +35,9 @@ int16_t DSY_SDRAM_BSS loop_mem[kMaxRamBuffSize];
 RamBufferMemory chompi_buff;
 int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 
-// pitch shifter delay lines, one per voice
-float DSY_SDRAM_BSS chompi::shift_mem[kNumShifters][chompi::kShiftBufFrames * 2];
+// pitch shifter delay lines, one per voice and two for the looper; D2 RAM is
+// not zeroed at start-up, but a shifter never reads what it hasn't written
+int16_t __attribute__((section(".d2_bss"), aligned(32))) chompi::shift_mem[kNumShifters][chompi::kShiftBufFrames * 2];
 int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kNumShifters][chompi::kShiftAnaLen];
 
 /* The heap, for the few things that malloc -- chiefly the USB serial port,
@@ -69,7 +70,9 @@ extern "C" void *_sbrk(ptrdiff_t incr)
 
 daisysp::Oscillator osc;
 
-// CpuLoadMeter meter;
+#ifdef TEHP_CPU_METER
+CpuLoadMeter cpu_meter;
+#endif
 uint32_t pret, sd_checkt;
 // bool log_batt;
 bool booting = true;
@@ -93,7 +96,9 @@ FileCopier copier;
 bool line_in_state;
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
-    // meter.OnBlockStart();
+#ifdef TEHP_CPU_METER
+    cpu_meter.OnBlockStart();
+#endif
 
     if(booting && !ui.InTestMode())
     {
@@ -133,7 +138,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     else
         engine.Process(in, out, size);
 
-    // meter.OnBlockEnd();
+#ifdef TEHP_CPU_METER
+    cpu_meter.OnBlockEnd();
+#endif
 }
 
 void ZeroSDRAM()
@@ -403,7 +410,9 @@ int main(void)
 
     ZeroSDRAM();
 
-    // meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
+#ifdef TEHP_CPU_METER
+    cpu_meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
+#endif
 
     loop_buff.Init(&loop_mem[0]);
     chompi_buff.Init(&chompi_mem[0]);

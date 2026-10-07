@@ -10,8 +10,9 @@ namespace chompi
     static constexpr size_t kAnaDecim       = 4;
     static constexpr size_t kShiftAnaLen    = kShiftBufFrames / kAnaDecim;
 
-    /** per-voice interleaved stereo delay lines, lives in SDRAM (chompi_main.cpp) */
-    extern float shift_mem[][kShiftBufFrames * 2];
+    /** per-shifter interleaved stereo delay lines, 16 bit, in D2 RAM
+     *  (chompi_main.cpp): much faster than SDRAM, where they started */
+    extern int16_t shift_mem[][kShiftBufFrames * 2];
     /** per-voice decimated mono copy for the splice search, lives in DTCM so the
      *  search never touches SDRAM (and the cache) */
     extern int16_t shift_ana[][kShiftAnaLen];
@@ -28,7 +29,7 @@ namespace chompi
     class StereoPitchShifter
     {
     public:
-        void Init(float *buff, int16_t *ana)
+        void Init(int16_t *buff, int16_t *ana)
         {
             buf_ = buff;
             ana_ = ana;
@@ -53,8 +54,8 @@ namespace chompi
         /** @param ratio pitch ratio, 1.0 = unchanged, 2.0 = octave up */
         void Process(float ratio, float *l, float *r)
         {
-            buf_[2 * w_]     = *l;
-            buf_[2 * w_ + 1] = *r;
+            buf_[2 * w_]     = ToS16(*l);
+            buf_[2 * w_ + 1] = ToS16(*r);
 
             // every kAnaDecim frames, store their average (mono) for the search
             acc_ += *l + *r;
@@ -256,8 +257,14 @@ namespace chompi
 
             const size_t a = (w_ - back) & kMask;
             const size_t b = (a - 1) & kMask;
-            *l = buf_[2 * a] + (buf_[2 * b] - buf_[2 * a]) * frac;
-            *r = buf_[2 * a + 1] + (buf_[2 * b + 1] - buf_[2 * a + 1]) * frac;
+            const float la = buf_[2 * a], ra = buf_[2 * a + 1];
+            *l = (la + (buf_[2 * b] - la) * frac) * (1.f / 32767.f);
+            *r = (ra + (buf_[2 * b + 1] - ra) * frac) * (1.f / 32767.f);
+        }
+
+        static inline int16_t ToS16(float x)
+        {
+            return int16_t(daisysp::fclamp(x, -1.f, 1.f) * 32767.f);
         }
 
         /** search candidates left in this audio block, shared by all voices */
@@ -267,7 +274,7 @@ namespace chompi
             return budget;
         }
 
-        float   *buf_;
+        int16_t *buf_;
         int16_t *ana_;
         float    acc_;
         size_t   w_;
