@@ -1309,7 +1309,7 @@ namespace daisy
          *  name must be a buffer of at least 16 bytes to fit the name:
          *  - "chompi_xy.wav" where xy is a letter-number combo indicating bank/slot
          */
-        static void GetFileNameForSlot(int slot, int b, VoiceMode m, char *name, bool dbl = false)
+        static void GetFileNameForSlot(int slot, int b, VoiceMode m, char *name)
         {
             char bankchar;
             switch(b)
@@ -1337,34 +1337,23 @@ namespace daisy
             else if(m == VoiceMode::CUBBI)
                 strcpy(mode, "cubbi");
 
-            char dbl_suffix[10];
-            if(dbl)
-                strcpy(dbl_suffix, "_double");
-            else
-                dbl_suffix[0] = '\0';
-
             if (name)
             {
-                sprintf(name, "%s_%c%1d%s.wav", mode, bankchar, slot, dbl_suffix);
+                sprintf(name, "%s_%c%1d.wav", mode, bankchar, slot);
             }
         }
 
         char fname[32];
-        char fname_double[32];
         uint8_t erasing = 0;
         void EraseStart(uint8_t target, int b, VoiceMode m)
         {
             SetFileExists(target - 1, b, m, false);
 
             GetFileNameForSlot(target, b, m, fname);
-            GetFileNameForSlot(target, b, m, fname_double, true);
 
             FileRequest req(FileRequest::Type::UNLINK, nullptr, fname, 0, nullptr, this);
             file_manager.request_fifo.PushBack(req);
-
-            FileRequest double_req(FileRequest::Type::UNLINK, nullptr, fname_double, 0, nullptr, this);
-            file_manager.request_fifo.PushBack(double_req);
-            erasing += 2;
+            erasing++;
         }
 
         inline void EraseFinished()
