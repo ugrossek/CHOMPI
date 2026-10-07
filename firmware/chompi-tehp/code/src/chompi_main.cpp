@@ -377,7 +377,10 @@ int main(void)
     fsi.Init(FatFSInterface::Config::MEDIA_SD);
     f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
 
-    /* TEHP shares TAPE's files in the card root: samples, presets, options */
+    /* TEHP shares TAPE's files: samples, options.json, presets.json and the
+     *  files it writes while sampling. Like the launcher's TAPE, they live in
+     *  /TAPE (every path is relative), or in the card root when /TAPE is absent. */
+    f_chdir("/TAPE");
 
     // delete the battery log if it exists
     char filename[32];
