@@ -5,6 +5,7 @@
 #include "FileStreamingManager.h"
 #include "Control/adsr.h"
 #include "RamBuffer.h"
+#include "PitchShifter.h"
 
 namespace daisy
 {
@@ -32,9 +33,10 @@ namespace daisy
     class FileSampleReader
     {
     public:
-        void Init(FileStreamingManager &manager, float sr, RamBufferMemory* buff)
+        void Init(FileStreamingManager &manager, float sr, RamBufferMemory* buff, float* shift_buff, int16_t* shift_ana)
         {
             manager_ = &manager;
+            shifter_.Init(shift_buff, shift_ana);
             read_requests_ = 0;
             sr_ = sr;
 
@@ -72,8 +74,6 @@ namespace daisy
                 CalculateClickSamps();
                 deferred_trig = env_gate_ || cubbi_mode;
             }
-
-            note_changed = true;
 
             if(!env_.IsRunning())
             {
@@ -322,15 +322,10 @@ namespace daisy
             }
         }
 
-        void OpenFile(const char* filename, const char* filename_dbl, bool reset)
+        void OpenFile(const char* filename, bool reset)
         {
             if(fname_rx != filename)
                 strcpy(fname_rx, filename);
-            if(fname_rx_dbl != filename_dbl)
-                strcpy(fname_rx_dbl, filename_dbl);
-
-            bool open_double = varispeed_target * global_pitch > 1.5f;
-            double_speed = open_double;
 
             if(f_size(&fptr_read) != 0)
             {
@@ -338,16 +333,8 @@ namespace daisy
                 manager_->request_fifo.PushBack(new_close);
             }
 
-            if(open_double)
-            {
-                FileRequest new_req_rx(FileRequest::Type::OPEN, &fptr_read, fname_rx_dbl, 0, nullptr, this);
-                manager_->request_fifo.PushBack(new_req_rx);
-            }
-            else
-            {
-                FileRequest new_req_rx(FileRequest::Type::OPEN, &fptr_read, fname_rx, 0, nullptr, this);
-                manager_->request_fifo.PushBack(new_req_rx);
-            }
+            FileRequest new_req_rx(FileRequest::Type::OPEN, &fptr_read, fname_rx, 0, nullptr, this);
+            manager_->request_fifo.PushBack(new_req_rx);
 
 
             if(reset)
@@ -410,12 +397,6 @@ namespace daisy
                 env_gate_ = false;
             }
 
-            if(note_changed || pitch_changed)
-            {
-                CheckDoubleSpeed(pitch_changed);
-                note_changed = pitch_changed = false;
-            }
-
             daisysp::fonepole(gain_, gain_target_, .001f);
             daisysp::fonepole(pan_l_, pan_l_target_, .001f);
             daisysp::fonepole(pan_r_, pan_r_target_, .001f);
@@ -436,24 +417,8 @@ namespace daisy
             }
             else
             {
-                /** handle with varispeed (positive only) */
-                float inc = varispeed_factor * global_pitch;
-
-                if(double_speed_ctr > 0 && click_clear > 0)
-                    inc = old_speed;
-                
-                if(double_speed_ctr == 1 && double_speed)
-                    inc = (inc - (1.f - rpos_frac_)) / 2.f + (1.f - rpos_frac_);
-                else if(double_speed_ctr == 1 && !double_speed)
-                {
-                    const float rem = (1.f - rpos_frac_);
-                    const float over = std::fmaxf(0.f, (inc * .5f)  - rem);
-                    inc = rem + over * 2.f;
-                }
-                else if((double_speed_ctr > 1 && !double_speed) || (double_speed_ctr == 0 && double_speed))
-                    inc *= 0.5f;
-
-                rpos_frac_ += inc;
+                /** always read at original speed, pitch is handled by shifter_ */
+                rpos_frac_ += 1.f;
                 if (rpos_frac_ >= 1.f)
                 {
                     /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
@@ -544,7 +509,6 @@ namespace daisy
                             read_left_b_ = read_samps.PopFront();
                             read_right_b_ = read_samps.PopFront();
                         }
-                        double_speed_ctr = double_speed_ctr == 0 ? 0 : double_speed_ctr - 1;
                     }
                 }
 
@@ -554,8 +518,15 @@ namespace daisy
                     float tl = read_left_a_ + (read_left_b_ - read_left_a_) * rpos_frac_;
                     float tr = read_right_a_ + (read_right_b_ - read_right_a_) * rpos_frac_;                
 
-                    *l = s162f(tl) * env_sig * click_env * loop_env * rev_env * velocity * gain_ * pan_l_;
-                    *r = s162f(tr) * env_sig * click_env * loop_env * rev_env * velocity * gain_ * pan_r_;
+                    // click/loop/rev envs mask jumps in the source, so they go before the shifter
+                    const float pre = click_env * loop_env * rev_env;
+                    float sl = s162f(tl) * pre;
+                    float sr = s162f(tr) * pre;
+                    shifter_.Process(varispeed_factor * global_pitch, &sl, &sr);
+
+                    const float post = env_sig * velocity * gain_;
+                    *l = sl * post * pan_l_;
+                    *r = sr * post * pan_r_;
                     last_l = *l;
                     last_r = *r;
                 }
@@ -719,82 +690,6 @@ namespace daisy
         }
 
 
-        /** is_knob tells us whether the knob is being turned, or a new key is pressed */
-        void CheckDoubleSpeed(bool is_knob)
-        {
-            if(using_ram && using_ram_target)
-            {
-                double_speed = false;
-                return;
-            }
-
-            if(is_knob && double_speed_ctr > 0)
-                return;
-
-            bool to_double = varispeed_target * global_pitch > 1.5f && !double_speed;
-            bool to_normal = varispeed_target * global_pitch <= 1.5f && double_speed;
-            if(to_double || to_normal)
-            {
-                int pos = sizeof(WAV_FormatTypeDef);
-
-                if(is_knob)
-                {
-                    if(f_tell(&fptr_read) > sizeof(WAV_FormatTypeDef))
-                    {
-                        pos = (f_tell(&fptr_read) - sizeof(WAV_FormatTypeDef));
-
-                        if(reverse_)
-                        {
-                            pos -= last_read_size_;
-                            if(pos < 0)
-                                pos += (f_size(&fptr_read) - sizeof(WAV_FormatTypeDef));
-                        }
-
-                        if(to_double)
-                        {
-                            if(pos % 8 == 0)
-                            {
-                                if(!reverse_)
-                                {
-                                    // drop last sample
-                                    read_samps.Remove(read_samps.GetNumElements() - 1);
-                                    read_samps.Remove(read_samps.GetNumElements() - 1);
-                                }
-                            }
-                            else
-                                pos += pos % 8;
-                        }
-
-                        pos = to_double ? pos / 2 : pos * 2;
-
-                        if(!reverse_ && !to_double)
-                            pos -= 4;
-
-                        pos += sizeof(WAV_FormatTypeDef);
-
-                        // last_read_size_ = to_double ? last_read_size_ / 2 : last_read_size_ * 2;
-                        // last_read_size_ -= last_read_size_ % 4;
-                        last_read_size_ = 0;
-                    }
-                }
-
-                CloseFile();
-                OpenFile(fname_rx, fname_rx_dbl, !is_knob);
-                JumpTo(pos);
-
-                if(click_clear > 0)
-                    double_speed_ctr = click_clear < kMaxClickSamps ? click_clear / 2 : kMaxClickSamps / 2;
-                else
-                    double_speed_ctr = read_samps.GetNumElements() / 2 + 1;
-
-                if(reverse_ && to_double && 
-                    f_size(&fptr_read) - sizeof(WAV_FormatTypeDef) % 8 != 0) // not on 2x grid
-                {
-                    double_speed_ctr++;                    
-                }
-            }
-        }
-
         /** Quick hacks to fix a wrong voice bug*/
         bool cubbi_mode = false;
         void SetCubbiMode(bool mode) { cubbi_mode = mode; }
@@ -818,9 +713,6 @@ namespace daisy
          */
         inline void SetVarispeed(float speed)
         {
-            if(double_speed_ctr == 0)
-                old_speed = varispeed_factor * global_pitch;
-    
             if(varispeed_factor == 0.f || !env_.IsRunning())
             {
                 varispeed_factor = speed;
@@ -832,18 +724,9 @@ namespace daisy
                 varispeed_target = speed;
                 varispeed_counter = read_samps.GetNumElements() / 2;
             }
-
-            note_changed = true;
         }
 
-        inline void SetGlobalPitch(float speed)
-        {
-            if(double_speed_ctr == 0)
-                old_speed = varispeed_factor * global_pitch;
-        
-            global_pitch = speed;
-            pitch_changed = true;
-        }
+        inline void SetGlobalPitch(float speed) { global_pitch = speed; }
         inline float GetGlobalPitch() { return global_pitch; }
 
         void SetReverse(bool rev) 
@@ -937,6 +820,7 @@ namespace daisy
                 last_l = last_r = 0.f;
 
                 env_.Retrigger(false);
+                shifter_.Reset();
 
                 if(!is_buffered)
                 {
@@ -985,7 +869,6 @@ namespace daisy
                 last_cache = now;
                 read_samps.Clear();
 
-                // TODO: this can get bad if we have the wrong double/not double file loaded
                 FileRequest::Type type;
                 if(reverse_)
                 {
@@ -1023,17 +906,10 @@ namespace daisy
 
         FIL fptr_read;
         char fname_rx[32];
-        char fname_rx_dbl[32];
         size_t read_requests_;
         size_t seek_requests_;
         size_t open_requests_;
         size_t last_read_size_;
-
-        /** 2x speed file */
-        bool double_speed;
-        uint32_t double_speed_ctr;
-        float old_speed;
-        bool note_changed, pitch_changed;
 
         /** Varispeed handling */
         float varispeed_factor, varispeed_target;
@@ -1049,6 +925,8 @@ namespace daisy
         float pan_raw_, pan_l_, pan_l_target_, pan_r_, pan_r_target_;
 
         float rpos_frac_;
+
+        chompi::StereoPitchShifter shifter_;
 
         /** audio-cache for varispeed playback */
         int16_t read_left_a_, read_left_b_;

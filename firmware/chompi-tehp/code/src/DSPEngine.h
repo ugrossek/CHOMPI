@@ -14,7 +14,7 @@
 #include "MicFilter.h"
 #include "reverb.h"
 #include "RamBuffer.h"
-#include "Limiter.h"
+#include "limiter.h"
 #include "InterpolatedDelayLine.h"
 #include <algorithm>
 
@@ -203,7 +203,7 @@ namespace daisy
             /* voices */
             for (size_t i = 0; i < kMaxPoly; i++)
             {
-                chompi_voice[i].Init(file_manager, samplerate, chompi_buff);
+                chompi_voice[i].Init(file_manager, samplerate, chompi_buff, chompi::shift_mem[i], chompi::shift_ana[i]);
             }
             chompi_writer.Init(chompi_buff);
             record = false;
@@ -421,6 +421,7 @@ namespace daisy
 
 
             /** voice read*/
+            chompi::StereoPitchShifter::NewBlock(size);
             for (size_t voice = 0; voice < kMaxPoly; voice++)
             {
                 if (chompi_voice[voice].IsPlaying() || chompi_voice[voice].deferred_trig)
@@ -711,7 +712,6 @@ namespace daisy
             if(voice_mode == VoiceMode::CUBBI)
             {
                 char name_buffer[32];
-                char name_buffer_dbl[32];
                 size_t slot = KeyToSlot(key);
                 if(slot == kSlotNone)
                     return;
@@ -728,8 +728,7 @@ namespace daisy
                     ))
                 {
                     GetFileNameForSlot(slot, bank[int(voice_mode)], voice_mode, name_buffer);
-                    GetFileNameForSlot(slot, bank[int(voice_mode)], voice_mode, name_buffer_dbl, true);
-                    chompi_voice[free_idx].OpenFile(name_buffer, name_buffer_dbl, true); 
+                    chompi_voice[free_idx].OpenFile(name_buffer, true); 
                     chompi_voice[free_idx].SetSlot(slot); 
                     chompi_voice[free_idx].SetUsingRam(false, true); 
                 }
@@ -1458,14 +1457,11 @@ namespace daisy
             char name_buffer[32];
             GetFileNameForSlot(idx, bank[int(voice_mode)], voice_mode, name_buffer);
 
-            char name_buffer_dbl[32];
-            GetFileNameForSlot(idx, bank[int(voice_mode)], voice_mode, name_buffer_dbl, true);
-
             for(size_t i = 0; i < kMaxPoly; i++)
             {
                 if(idx != 15)
                 {
-                    chompi_voice[i].OpenFile(name_buffer, name_buffer_dbl, true);
+                    chompi_voice[i].OpenFile(name_buffer, true);
                 }
 
                 chompi_voice[i].SetSlot(idx); 

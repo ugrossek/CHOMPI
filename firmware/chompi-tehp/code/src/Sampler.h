@@ -3,7 +3,7 @@
 #include "daisysp.h"
 #include "fatfs.h"
 #include "RamBuffer.h"
-#include "Limiter.h"
+#include "limiter.h"
 
 namespace daisy
 {
