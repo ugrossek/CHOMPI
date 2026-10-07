@@ -29,11 +29,6 @@ USE_FATFS = 1
 LIBDAISY_DIR = $(CHOMPI_LIBS)/libDaisy
 DAISYSP_DIR = $(CHOMPI_LIBS)/DaisySP
 
-# test builds: `make CPU_METER=1` shows the audio load on the white keys
-ifeq ($(CPU_METER),1)
-C_DEFS += -DTEHP_CPU_METER
-endif
-
 # Core location, and generic Makefile
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile

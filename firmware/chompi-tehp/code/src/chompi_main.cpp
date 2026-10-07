@@ -70,9 +70,7 @@ extern "C" void *_sbrk(ptrdiff_t incr)
 
 daisysp::Oscillator osc;
 
-#ifdef TEHP_CPU_METER
-CpuLoadMeter cpu_meter;
-#endif
+// CpuLoadMeter meter;
 uint32_t pret, sd_checkt;
 // bool log_batt;
 bool booting = true;
@@ -96,9 +94,7 @@ FileCopier copier;
 bool line_in_state;
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
-#ifdef TEHP_CPU_METER
-    cpu_meter.OnBlockStart();
-#endif
+    // meter.OnBlockStart();
 
     if(booting && !ui.InTestMode())
     {
@@ -138,9 +134,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     else
         engine.Process(in, out, size);
 
-#ifdef TEHP_CPU_METER
-    cpu_meter.OnBlockEnd();
-#endif
+    // meter.OnBlockEnd();
 }
 
 void ZeroSDRAM()
@@ -410,9 +404,7 @@ int main(void)
 
     ZeroSDRAM();
 
-#ifdef TEHP_CPU_METER
-    cpu_meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
-#endif
+    // meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
 
     loop_buff.Init(&loop_mem[0]);
     chompi_buff.Init(&chompi_mem[0]);
