@@ -377,10 +377,7 @@ int main(void)
     fsi.Init(FatFSInterface::Config::MEDIA_SD);
     f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
 
-    /* TEHP keeps its files (samples, presets, options, looper recordings) in
-     *  /TEHP, apart from TAPE's. Every path it opens is relative. Without the
-     *  folder it stays in the card root. */
-    f_chdir("/TEHP");
+    /* TEHP shares TAPE's files in the card root: samples, presets, options */
 
     // delete the battery log if it exists
     char filename[32];

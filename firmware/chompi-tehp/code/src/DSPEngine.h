@@ -1346,6 +1346,7 @@ namespace daisy
         }
 
         char fname[32];
+        char fname_double[32];
         uint8_t erasing = 0;
         void EraseStart(uint8_t target, int b, VoiceMode m)
         {
@@ -1355,7 +1356,14 @@ namespace daisy
 
             FileRequest req(FileRequest::Type::UNLINK, nullptr, fname, 0, nullptr, this);
             file_manager.request_fifo.PushBack(req);
-            erasing++;
+
+            /* TEHP doesn't use TAPE's 2x copy, but shares TAPE's files: delete
+             * it too (TAPE rebuilds missing or outdated ones at start) */
+            strcpy(fname_double, fname);
+            strcpy(fname_double + strlen(fname_double) - 4, "_double.wav");
+            FileRequest double_req(FileRequest::Type::UNLINK, nullptr, fname_double, 0, nullptr, this);
+            file_manager.request_fifo.PushBack(double_req);
+            erasing += 2;
         }
 
         inline void EraseFinished()
