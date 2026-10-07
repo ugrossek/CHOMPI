@@ -26,6 +26,7 @@ static constexpr float kHpGain = .2f;
 static constexpr float kMicGain = 5.f;
 static constexpr float kLineInGain = 3.f;
 static constexpr size_t kMaxPoly = 7;
+static_assert(kMaxPoly == kLooperOutShifter, "the looper's shifters follow the voices'");
 
 namespace daisy
 {
@@ -470,6 +471,7 @@ namespace daisy
             if(fx_pre_loop)
                 ApplyFx(out[0], out[1], size);
 
+            chompi::StereoPitchShifter::NewBlock(size); // the looper's own search budget
             looper.Process(out[0], out[1], size);
 
             if(!fx_pre_loop)

@@ -36,8 +36,8 @@ RamBufferMemory chompi_buff;
 int16_t DSY_SDRAM_BSS chompi_mem[kMaxRamBuffSize];
 
 // pitch shifter delay lines, one per voice
-float DSY_SDRAM_BSS chompi::shift_mem[kMaxPoly][chompi::kShiftBufFrames * 2];
-int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kMaxPoly][chompi::kShiftAnaLen];
+float DSY_SDRAM_BSS chompi::shift_mem[kNumShifters][chompi::kShiftBufFrames * 2];
+int16_t DSY_DTCMRAM_BSS chompi::shift_ana[kNumShifters][chompi::kShiftAnaLen];
 
 /* The heap, for the few things that malloc -- chiefly the USB serial port,
  *  which calloc's ~550 bytes when a computer configures the device.

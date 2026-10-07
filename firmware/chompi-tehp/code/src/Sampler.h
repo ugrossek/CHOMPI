@@ -4,6 +4,7 @@
 #include "fatfs.h"
 #include "RamBuffer.h"
 #include "limiter.h"
+#include "PitchShifter.h"
 
 namespace daisy
 {
@@ -11,11 +12,16 @@ namespace daisy
     class FileSampler
     {
     public:
-        void Init(float sr, RamBufferMemory* buff, bool tape_slew)
+        void Init(float sr, RamBufferMemory* buff, bool tape_slew,
+                  float* out_shift_buff, int16_t* out_shift_ana,
+                  float* in_shift_buff, int16_t* in_shift_ana)
         {
             ram_buff.Init(buff);
             sr_ = sr;
             varispeed_factor = 1.f;
+            pitch_ = 1.f;
+            out_shifter_.Init(out_shift_buff, out_shift_ana);
+            in_shifter_.Init(in_shift_buff, in_shift_ana);
             scrub_ =  1.f;
             reverse_ = false;
             
@@ -80,6 +86,8 @@ namespace daisy
                 old_samps_r.Clear();
                 rev_pushback = true; // poorly named var imo
                 ram_buff.SetWriteHead(ram_buff.GetReadHead());
+                if(input_env <= .01f)
+                    in_shifter_.Reset(); // its history is from the last overdub
             }
             else if(!recording) // falling edge
             {
@@ -89,12 +97,19 @@ namespace daisy
             old_rec = recording;
 
             {
-                float target = playing ? varispeed_factor : scrub_target_;
+                /* TEHP: the pitch setting no longer moves the tape. Playing runs
+                 * at 1x (or -1x reversed); stopping, scrubbing and reset still
+                 * slow down and speed up like tape. The pitch goes to the
+                 * shifters, gliding like the tape speed would. */
+                const float slew = tape_slew_ ? .0001f : .01f;
+                daisysp::fonepole(pitch_, fmaxf(fabsf(varispeed_factor), kMinPitch), slew);
+
+                float target = playing ? (varispeed_factor < 0.f ? -1.f : 1.f) : scrub_target_;
                 if(reset)
                     target = 0.f;
 
                 
-                daisysp::fonepole(scrub_, target, tape_slew_ ? .0001f : .01f);
+                daisysp::fonepole(scrub_, target, slew);
                 scrub_ = daisysp::fclamp(scrub_, -2.f, 2.f);
 
                 if((scrub_ < 0.f && target < 0.f) || (scrub_ > 0.f && target > 0.f))
@@ -144,6 +159,17 @@ namespace daisy
                         reset_env = 1.f;
                 }
 
+                /* what you hear is what you record: the input is shifted the
+                 * other way before it's written, so on the next pass the output
+                 * shifter brings it back to the pitch you played */
+                if(recording || input_env > .01f)
+                {
+                    float il = s162f(inl), ir = s162f(inr);
+                    in_shifter_.Process(1.f / pitch_, &il, &ir);
+                    inl = f2s16(il);
+                    inr = f2s16(ir);
+                }
+
                 old_rpos_frac = rpos_frac_;
                 rpos_frac_ += abs_scrub;
                 if(turn_period_count_ > kTurnPeriodTimeout)
@@ -151,9 +177,9 @@ namespace daisy
                     if(!tape_slew_)
                     {
                         if(turn_count_ > 0.f)
-                            turn_count_ = 5.f * varispeed_factor;
+                            turn_count_ = 5.f;
                         else if(turn_count_ < 0.f)
-                            turn_count_ = -5.f * varispeed_factor;
+                            turn_count_ = -5.f;
                     }
                     
                     scrub_target_ = turn_count_ * .2f;
@@ -250,10 +276,14 @@ namespace daisy
                 old_inl = inl;
                 old_inr = inr;
 
-                // Amp env
-                *out_l = static_cast<int16_t>(tl * loop_env * rev_env * reset_env);
+                // Amp env, then the pitch
+                const float env = loop_env * rev_env * reset_env;
+                float sl = s162f(int16_t(tl)) * env;
+                float sr = s162f(int16_t(tr)) * env;
+                out_shifter_.Process(pitch_, &sl, &sr);
+                *out_l = f2s16(sl);
                 last_l = *out_l;
-                *out_r = static_cast<int16_t>(tr * loop_env * rev_env * reset_env);
+                *out_r = f2s16(sr);
                 last_r = *out_r;
             }
         }
@@ -327,8 +357,12 @@ namespace daisy
         chompi::Limiter lim_l_;
         chompi::Limiter lim_r_;
 
-        /** Varispeed handling */
+        /** Varispeed handling: in TEHP varispeed_factor is the pitch (and its
+         *  sign the direction), pitch_ its slewed size for the shifters */
         float varispeed_factor;
+        float pitch_;
+        static constexpr float kMinPitch = .0625f;
+        chompi::StereoPitchShifter out_shifter_, in_shifter_;
         float rpos_frac_;
 
         /** reverse handling */

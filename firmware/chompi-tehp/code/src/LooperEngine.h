@@ -8,6 +8,10 @@ using namespace daisy;
 
 static const uint32_t kRecordClearTimeout = 2000;
 static const uint32_t kButtonTimeout = 10;
+/** the looper's pitch shifters use the slots after the voices' */
+static constexpr size_t kLooperOutShifter = 7;
+static constexpr size_t kLooperInShifter  = 8;
+static constexpr size_t kNumShifters      = 9;
 namespace daisy
 {
 
@@ -20,7 +24,9 @@ namespace daisy
 
         void Init(float sr, RamBufferMemory* loop_buff, bool tape_slew)
         {
-            looper.Init(sr, loop_buff, tape_slew);
+            looper.Init(sr, loop_buff, tape_slew,
+                        chompi::shift_mem[kLooperOutShifter], chompi::shift_ana[kLooperOutShifter],
+                        chompi::shift_mem[kLooperInShifter], chompi::shift_ana[kLooperInShifter]);
 
             record = false;
             first_record = true;
