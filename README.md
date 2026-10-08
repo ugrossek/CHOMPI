@@ -1,18 +1,21 @@
 # CHOMPI — Open Source
 
-> ### This fork: TAPE with speed-independent pitch
+> ### This branch: TEHP — TAPE, with pitch that keeps its time
 >
-> An experimental **TAPE** build where changing a voice's pitch no longer changes its
-> playback speed. Details, build notes and known limits are in
-> [`firmware/chompi-tape`](firmware/chompi-tape/#pitch-shift-experiment-this-fork).
+> CHOMPI's TAPE firmware, with one change: changing pitch no longer changes speed. Keys keep
+> the sample's length, and the looper keeps its tempo when you pitch it. It uses TAPE's
+> samples and settings. Details, install and known limits are in
+> [`firmware/chompi-tehp`](firmware/chompi-tehp/).
 >
-> **[Download the firmware](../../releases/latest)** — a ready-to-flash `.bin`, with install steps.
+> **[Download TEHP](../../releases/tag/tehp-alpha)** — a ready-to-flash `.bin` (alpha).
 >
-> This is not an official CHOMPI Club release. Everything below is their original README.
+> **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
+> tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
+> original README.
 >
-> **Use at your own risk.** This is unofficial software provided as-is, with no warranty,
-> and it has only been tested on one unit. It is loaded from the SD card like any firmware
-> update and never touches the bootloader.
+> **Use at your own risk.** Unofficial, experimental software, provided as-is with no
+> warranty. It is loaded from the SD card like any firmware update and never touches the
+> bootloader.
 
 ---
 
