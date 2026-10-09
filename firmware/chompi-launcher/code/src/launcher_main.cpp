@@ -519,9 +519,10 @@ static MidiUpload::Status StoreUpload(Slot *out)
     res = f_open(&file, kTemp, FA_CREATE_ALWAYS | FA_WRITE);
     Log("store: f_open(\"%s\") -> %d", kTemp, (int)res);
     if (res != FR_OK)
-        return MidiUpload::WRITE_FAILED;
+        return res == FR_DENIED ? MidiUpload::CARD_FULL : MidiUpload::WRITE_FAILED;
 
-    bool ok = true;
+    bool ok   = true;
+    bool full = false;
     for (uint32_t off = 0; ok && off < len; off += kChunkSize)
     {
         const UINT want = len - off < kChunkSize ? len - off : kChunkSize;
@@ -533,7 +534,8 @@ static MidiUpload::Status StoreUpload(Slot *out)
             Log("store: f_write at %lu -> %d, put %lu of %lu",
                 (unsigned long)off, (int)res, (unsigned long)put,
                 (unsigned long)want);
-            ok = false;
+            ok   = false;
+            full = (res == FR_OK); /* FatFs's way of saying "no room" */
         }
         DrawWriteProgress(off + want, len);
     }
@@ -541,7 +543,11 @@ static MidiUpload::Status StoreUpload(Slot *out)
     if (res != FR_OK)
         Log("store: f_close -> %d", (int)res);
     if (!ok || res != FR_OK)
-        return MidiUpload::WRITE_FAILED;
+    {
+        /* Don't leave a half-written temp file taking up the room. */
+        Log("store: f_unlink(\"%s\") -> %d", kTemp, (int)f_unlink(kTemp));
+        return full ? MidiUpload::CARD_FULL : MidiUpload::WRITE_FAILED;
+    }
 
     /* Read back and compare: a card that silently drops writes would
        otherwise leave a slot that fails only the next time it is chosen. */
@@ -560,7 +566,10 @@ static MidiUpload::Status StoreUpload(Slot *out)
     }
     f_close(&file);
     if (!ok || res != FR_OK)
+    {
+        Log("store: f_unlink(\"%s\") -> %d", kTemp, (int)f_unlink(kTemp));
         return MidiUpload::WRITE_FAILED;
+    }
     Log("store: %lu bytes written and verified in %lu ms", (unsigned long)len,
         (unsigned long)(System::GetNow() - started));
 
@@ -1012,17 +1021,24 @@ static void ServiceUsb(uint32_t now)
             const int s = upload.Slot() - 1;
             if (!EnsureCard())
             {
-                upload.FinishClear(MidiUpload::NO_CARD);
+                upload.FinishClear(MidiUpload::NO_CARD, false);
                 break;
             }
             /* Whatever is on that key goes, numbered or not: the host saw it
-               there in a LIST. */
-            const bool ok
-                = RemoveSlotFiles(upload.Slot(), slots[s].size ? slots[s].name : nullptr);
+               there in a LIST. If the host named the file, only that one: a
+               key holding something else is left alone. */
+            const char *on_key = slots[s].size ? slots[s].name : nullptr;
+            if (!on_key || !upload.ClearMatches(on_key))
+            {
+                Log("usb: clear key %d -> nothing to remove", s + 1);
+                upload.FinishClear(MidiUpload::OK, false);
+                break;
+            }
+            const bool ok = RemoveSlotFiles(upload.Slot(), on_key);
             ScanFirmwares(false);
             Log("usb: clear key %d -> %s", s + 1, ok ? "ok" : "failed");
             picker_wanted = true;
-            upload.FinishClear(ok ? MidiUpload::OK : MidiUpload::WRITE_FAILED);
+            upload.FinishClear(ok ? MidiUpload::OK : MidiUpload::WRITE_FAILED, ok);
             break;
         }
     }

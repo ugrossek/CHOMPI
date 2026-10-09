@@ -109,6 +109,7 @@ Reply `41`:
 | max_chunk | `u28` | most raw bytes one `DATA` may carry (currently 256) |
 | slots | `u7` | highest slot number accepted (currently 15) |
 | features | `u7` | optional, see Features. Missing on older launchers: treat as `0` |
+| launcher_version | 3 × `u7` | optional: major, minor, patch of the launcher itself. Missing on older launchers |
 
 PING is safe at any time and does not affect an upload in progress. Clients
 should use it to find the launcher and should refuse to continue if
@@ -176,7 +177,8 @@ the last step, so it is final:
 1. Checks that all `size` bytes arrived (`INCOMPLETE`).
 2. Checks the CRC (`BAD_CRC`).
 3. Checks the image (`BAD_IMAGE`, see Image requirements).
-4. Writes the slot file and verifies it (`NO_CARD`, `WRITE_FAILED`).
+4. Writes the slot file and verifies it (`NO_CARD`, `WRITE_FAILED`,
+   `CARD_FULL`).
 
 On `OK`, the launcher boots the firmware right after replying, unless
 the flags asked it to store only (then see `STAY` below). The client
@@ -191,8 +193,9 @@ and started. The client should say so rather than claim a failure.
 
 On any failure, nothing on the card has changed and the upload is still in
 memory. Problems with the image (`BAD_CRC`, `BAD_IMAGE`) need a new upload.
-Problems with the card (`NO_CARD`, `WRITE_FAILED`) can be fixed (insert the
-card) and END sent again.
+Problems with the card (`NO_CARD`, `WRITE_FAILED`, `CARD_FULL`) can be fixed
+(insert the card, make room) and END sent again. A write that fails part way
+leaves nothing behind on the card.
 
 ## Features
 
@@ -243,13 +246,28 @@ characters, and anything outside printable ASCII comes as `?`. On failure
 | Field | Type | Meaning |
 |---|---|---|
 | slot | `u7` | 1 – `slots` |
+| name_len | `u7` | optional, 1 – 40 |
+| name | `name_len` bytes | the file LIST reported on that key |
 
-Reply `46`: status (`u7`).
+Reply `46`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| status | `u7` | |
+| slot | `u7` | the slot asked about |
+| removed | `u7` | `1` if something was removed, `0` if not |
 
 Removes every `NN_*` file of that slot from `/FIRMWARE`, and the file
 without a number sitting on that key if there is one, i.e. whatever LIST
 reported. An empty key is not an error. Afterwards a file without a number
 may move onto the freed key; LIST again to see the result.
+
+With a name, the key is emptied only if LIST would report exactly that name
+on it; otherwise nothing is removed and the reply is `OK` with `removed` 0.
+Clients should always send the name. A CLEAR resent after a slow reply would
+otherwise also remove a file without a number that moved onto the key in the
+meantime. On failure (`BAD_SLOT`, `NO_CARD`, `WRITE_FAILED`) the reply is the
+status only.
 
 ### Setting up several slots
 
@@ -278,6 +296,7 @@ CLEAR the slot first.
 | 9 | `BAD_NAME` | name is empty, too long, or has a forbidden character |
 | 10 | `NO_CARD` | no SD card, or it would not mount |
 | 11 | `WRITE_FAILED` | the card refused the write, or the readback mismatched |
+| 12 | `CARD_FULL` | no room on the card for the image |
 
 Clients should show unknown codes as a number rather than fail, since later
 versions may add more.
@@ -404,3 +423,8 @@ image: 00 00 02 20 01 19 00 24 FF 80      crc32 = 0x8966E0AF
 - Find the device by a port name containing `CHOMPI`, then confirm with
   PING.
 - Ignore any incoming message that is not a reply to what you just sent.
+- A reply can arrive late, after you have already resent. The launcher then
+  answers the resend too, and that second reply turns up while you wait for
+  the next message's. For LIST and CLEAR, check the slot in the reply and skip
+  replies for another slot. For DATA, continue from `received` as described
+  above.

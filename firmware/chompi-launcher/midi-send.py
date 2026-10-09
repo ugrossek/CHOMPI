@@ -50,6 +50,7 @@ STATUS = {
     9: "bad name",
     10: "no SD card, or it would not mount",
     11: "writing to the card failed",
+    12: "the card is full",
 }
 
 NAME_OK = re.compile(r"^[A-Z0-9_-]{1,16}$")
@@ -116,8 +117,9 @@ class Link:
         msg = HEADER + bytes([cmd]) + payload + b"\xF7"
         os.write(self.fd, msg)
 
-    def recv(self, cmd, timeout):
-        """Next reply to cmd, or None on timeout. Anything else is skipped."""
+    def recv(self, cmd, timeout, match=None):
+        """Next reply to cmd that match() accepts, or None on timeout.
+        Anything else is skipped, e.g. a late reply to an earlier resend."""
         deadline = time.monotonic() + timeout
         while True:
             start = self.buf.find(b"\xF0")
@@ -126,7 +128,8 @@ class Link:
                 msg = bytes(self.buf[start:end + 1])
                 del self.buf[:end + 1]
                 if msg[:4] == HEADER and len(msg) > 5 and msg[4] == cmd | REPLY:
-                    return msg[5:-1]
+                    if match is None or match(msg[5:-1]):
+                        return msg[5:-1]
                 continue
             left = deadline - time.monotonic()
             if left <= 0:
@@ -135,10 +138,10 @@ class Link:
             if r:
                 self.buf.extend(os.read(self.fd, 4096))
 
-    def call(self, cmd, payload=b"", timeout=0.3, retries=10, required=True):
+    def call(self, cmd, payload=b"", timeout=0.3, retries=10, required=True, match=None):
         for attempt in range(retries):
             self.send(cmd, payload)
-            reply = self.recv(cmd, timeout)
+            reply = self.recv(cmd, timeout, match)
             if reply is not None:
                 return reply
             if self.verbose:
@@ -146,6 +149,11 @@ class Link:
         if not required:
             return None
         sys.exit("no reply from the launcher -- is CHOMPI on and showing the picker?")
+
+
+def for_slot(slot):
+    """LIST and CLEAR replies name their slot; failures are the status only."""
+    return lambda r: r[0] != 0 or len(r) < 2 or r[1] == slot
 
 
 def check(reply, what):
@@ -192,7 +200,8 @@ def main():
                  " -- update the launcher or this script")
     slots = reply[6]
     features = reply[7] if len(reply) > 7 else 0
-    print(f"launcher on {device} (protocol {version}, {max_chunk}-byte chunks)")
+    lver = ".".join(str(b) for b in reply[8:11]) if len(reply) > 10 else "unknown"
+    print(f"launcher {lver} on {device} (protocol {version}, {max_chunk}-byte chunks)")
 
     def need(feature, what):
         if not features & feature:
@@ -202,8 +211,10 @@ def main():
         need(FEATURE_CLEAR, "clear a key")
         if not 1 <= args.clear <= slots:
             sys.exit(f"slot must be 1-{slots}")
-        check(link.call(CLEAR, bytes([args.clear]), timeout=2.0), "clear")
-        print(f"  key {args.clear} cleared")
+        reply = link.call(CLEAR, bytes([args.clear]), timeout=2.0, match=for_slot(args.clear))
+        check(reply, "clear")
+        removed = len(reply) < 3 or reply[2]
+        print(f"  key {args.clear} " + ("cleared" if removed else "was already empty"))
 
     if args.image:
         if not 1 <= args.slot <= slots:
@@ -215,7 +226,7 @@ def main():
     if args.list:
         need(FEATURE_LIST, "list its keys")
         for slot in range(1, slots + 1):
-            reply = link.call(LIST, bytes([slot]), timeout=2.0)
+            reply = link.call(LIST, bytes([slot]), timeout=2.0, match=for_slot(slot))
             check(reply, f"list {slot}")
             n = reply[2]
             fname = reply[3:3 + n].decode("ascii")
@@ -249,12 +260,15 @@ def send(link, image, name, slot, max_chunk, stay):
     # already started the firmware and the resend goes unanswered too.
     print("  writing to the card...")
     flags = bytes([END_STAY]) if stay else b""
+    started = time.monotonic()
     reply = link.call(END, put7(zlib.crc32(image), 5) + flags, timeout=10.0,
                       retries=2, required=False)
+    stored_in = time.monotonic() - started
     if reply is None:
         sys.exit("no reply to END -- the firmware was probably stored and started; "
                  "check the card")
     check(reply, "end")
+    print(f"  written and checked in {stored_in:.1f} s")
     print(f"stored in slot {slot}" + ("" if stay else " -- starting firmware"))
 
 

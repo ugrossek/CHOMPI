@@ -15,13 +15,13 @@
  *      F0 7D 43 48 <cmd> <payload...> F7
  *
  *      01 PING                                -> 41 OK version max_chunk slots
- *                                                    features
+ *                                                    features launcher_version
  *      02 BEGIN  total:u28 slot name_len name -> 42 status
  *      03 DATA   offset:u28  packed           -> 43 status  received:u28
  *      04 END    crc32:u35  [flags]           -> 44 status  (after the write)
  *      05 LIST   slot                         -> 45 status slot name_len name
  *                                                    size:u28
- *      06 CLEAR  slot                         -> 46 status
+ *      06 CLEAR  slot [name_len name]         -> 46 status slot removed
  *
  *  The host sends one message and waits for its reply. Stop-and-wait keeps the
  *  receive side to a single buffer, and USB round trips are short enough that
@@ -40,6 +40,9 @@ namespace chompi
     {
       public:
         static constexpr uint8_t  kVersion  = 1;
+        /** The launcher's own version, major.minor.patch, after the features
+         *  byte in the PING reply. Test build: not a release number yet. */
+        static constexpr uint8_t  kLauncherVersion[3] = {1, 4, 0};
         static constexpr uint32_t kMaxChunk = 256; /**< raw bytes per DATA */
         static constexpr size_t   kMaxName  = 16;  /**< chars in a slot name */
         /** Most chars of a card filename LIST reports. */
@@ -84,6 +87,7 @@ namespace chompi
             BAD_NAME    = 9, /**< empty, too long, or a forbidden character */
             NO_CARD      = 10, /**< no card, or it would not mount */
             WRITE_FAILED = 11, /**< the card refused it, or readback differed */
+            CARD_FULL    = 12, /**< no room on the card for the image */
         };
 
         /** What Poll() saw, for the caller's LEDs and log. */
@@ -164,21 +168,37 @@ namespace chompi
                 return;
             }
             uint8_t p[2 + 1 + kMaxListName + 4] = {s, query_slot_};
-            size_t  len = 0;
-            if (name)
-                while (name[len] && len < kMaxListName)
-                {
-                    const uint8_t c = (uint8_t)name[len];
-                    p[3 + len++]    = (c >= 0x20 && c < 0x7F) ? c : '?';
-                }
+            const size_t len = ListName(name, p + 3);
             p[2] = (uint8_t)len;
             Put7(p + 3 + len, size, 4);
             last_status_ = s;
             Reply(LIST, p, 3 + len + 4);
         }
 
-        /** Answer CLEAR once Slot()'s key is empty, or could not be made so. */
-        void FinishClear(Status s) { ReplyStatus(CLEAR, s); }
+        /** Whether CLEAR may remove `name`, the file on Slot()'s key: yes if
+         *  the CLEAR named no file, or named this one as LIST reports it. */
+        bool ClearMatches(const char *name) const
+        {
+            if (!clear_name_given_)
+                return true;
+            uint8_t listed[kMaxListName];
+            const size_t len = ListName(name, listed);
+            return len == clear_name_len_ && memcmp(listed, clear_name_, len) == 0;
+        }
+
+        /** Answer CLEAR: OK with whether anything was removed, or why the key
+         *  could not be emptied. */
+        void FinishClear(Status s, bool removed)
+        {
+            if (s != OK)
+            {
+                ReplyStatus(CLEAR, s);
+                return;
+            }
+            const uint8_t p[3] = {s, query_slot_, (uint8_t)(removed ? 1 : 0)};
+            last_status_       = s;
+            Reply(CLEAR, p, sizeof(p));
+        }
 
         /** The END asked to store only: the launcher stays in the picker. */
         bool Stay() const { return end_flags_ & kEndStay; }
@@ -270,6 +290,21 @@ namespace chompi
                 p[i] = v & 0x7F;
         }
 
+        /** A card filename the way LIST sends it: at most kMaxListName
+         *  chars, anything outside printable ASCII as '?'. Returns the
+         *  length; nullptr counts as "". */
+        static size_t ListName(const char *name, uint8_t *out)
+        {
+            size_t len = 0;
+            if (name)
+                while (name[len] && len < kMaxListName)
+                {
+                    const uint8_t c = (uint8_t)name[len];
+                    out[len++]      = (c >= 0x20 && c < 0x7F) ? c : '?';
+                }
+            return len;
+        }
+
         static uint32_t Crc32(const uint8_t *p, uint32_t len)
         {
             uint32_t crc = 0xFFFFFFFFU;
@@ -340,10 +375,11 @@ namespace chompi
             {
                 case PING:
                 {
-                    uint8_t p[8] = {OK, kVersion};
+                    uint8_t p[11] = {OK, kVersion};
                     Put7(p + 2, kMaxChunk, 4);
                     p[6] = slots_;
                     p[7] = kFeatures;
+                    memcpy(p + 8, kLauncherVersion, 3);
                     Reply(cmd, p, sizeof(p));
                     return Event::Pinged;
                 }
@@ -426,7 +462,6 @@ namespace chompi
                 }
 
                 case LIST:
-                case CLEAR:
                 {
                     if (blen != 1)
                         return Fail(cmd, BAD_MESSAGE);
@@ -435,7 +470,24 @@ namespace chompi
                     /* An upload in progress keeps its image; only the card is
                        looked at or changed. */
                     query_slot_ = body[0];
-                    return cmd == LIST ? Event::List : Event::Clear;
+                    return Event::List;
+                }
+
+                case CLEAR:
+                {
+                    /* slot [name_len name]: with a name, only that file goes.
+                       A resent CLEAR then cannot take a file that moved onto
+                       the key after the first one. */
+                    if (blen != 1 && (blen < 2 || blen != 2u + body[1]
+                                      || body[1] > kMaxListName))
+                        return Fail(cmd, BAD_MESSAGE);
+                    if (body[0] < 1 || body[0] > slots_)
+                        return Fail(cmd, BAD_SLOT);
+                    clear_name_given_ = blen > 1;
+                    clear_name_len_   = clear_name_given_ ? body[1] : 0;
+                    memcpy(clear_name_, body + 2, clear_name_len_);
+                    query_slot_ = body[0];
+                    return Event::Clear;
                 }
 
                 default: return Fail(cmd, BAD_MESSAGE);
@@ -455,6 +507,9 @@ namespace chompi
         uint8_t  query_slot_  = 0; /**< LIST/CLEAR's slot until answered */
         uint8_t  end_flags_   = 0;
         bool     stored_      = false; /**< END answered OK */
+        bool     clear_name_given_ = false;
+        size_t   clear_name_len_   = 0;
+        uint8_t  clear_name_[kMaxListName] = {};
         char     name_[kMaxName + 1] = {};
         Status   last_status_ = OK;
 
