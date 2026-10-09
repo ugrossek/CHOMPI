@@ -16,12 +16,17 @@
  *      02 BEGIN  total:u28 slot name_len name -> 42 status
  *      03 DATA   offset:u28  packed           -> 43 status  received:u28
  *      04 END    crc32:u35                    -> 44 status  (after the write)
+ *      05 RUN    slot                         -> 45 status  (then starts it)
  *
  *  The host sends one message and waits for its reply. Stop-and-wait keeps the
  *  receive side to a single buffer, and USB round trips are short enough that
  *  an image still lands in a few seconds. DATA is addressed by offset, so a
  *  resend after a lost reply is harmless, and the reply always carries how much
  *  has arrived so the host can pick up from there.
+ *
+ *  RUN starts a slot that is already on the card, as its key would, so a host
+ *  can switch firmwares without anyone at the panel. Poll() reports Event::Run
+ *  and the caller answers with FinishRun() before it starts the slot.
  */
 #pragma once
 #include "daisy_seed.h"
@@ -43,6 +48,7 @@ namespace chompi
             BEGIN = 0x02,
             DATA  = 0x03,
             END   = 0x04,
+            RUN   = 0x05,
             REPLY = 0x40, /**< or'd into the command being answered */
         };
 
@@ -56,7 +62,8 @@ namespace chompi
             BAD_IMAGE   = 5, /**< vector table rejected */
             NOT_STARTED = 6, /**< DATA or END without a BEGIN */
             INCOMPLETE  = 7, /**< END before every byte arrived */
-            BAD_SLOT    = 8, /**< slot is 0 or above the number of slots */
+            BAD_SLOT    = 8, /**< slot is 0, above the number of slots, or
+                                  (RUN) has no firmware in it */
             BAD_NAME    = 9, /**< empty, too long, or a forbidden character */
             NO_CARD      = 10, /**< no card, or it would not mount */
             WRITE_FAILED = 11, /**< the card refused it, or readback differed */
@@ -71,6 +78,7 @@ namespace chompi
             Progress,
             Rejected, /**< a message was answered with an error */
             Complete, /**< image whole and checked; END awaits FinishEnd() */
+            Run,      /**< RUN for RunSlot(); awaits FinishRun() */
         };
 
         /** Start USB MIDI and begin listening.
@@ -123,10 +131,15 @@ namespace chompi
          *  host may fix the problem and send END again. */
         void FinishEnd(Status s) { ReplyStatus(END, s); }
 
+        /** Answer the RUN that produced Event::Run: OK just before the caller
+         *  starts the slot, BAD_SLOT if there is nothing in it. */
+        void FinishRun(Status s) { ReplyStatus(RUN, s); }
+
         uint32_t    Received() const { return received_; }
         uint32_t    Total() const { return total_; }
         uint32_t    Crc() const { return crc_; }
         uint8_t     Slot() const { return slot_; }
+        uint8_t     RunSlot() const { return run_slot_; }
         const char *Name() const { return name_; }
         Status      LastStatus() const { return last_status_; }
 
@@ -360,6 +373,22 @@ namespace chompi
                     return Event::Complete;
                 }
 
+                case RUN:
+                {
+                    if (blen != 1)
+                        return Fail(cmd, BAD_MESSAGE);
+                    if (body[0] < 1 || body[0] > slots_)
+                        return Fail(cmd, BAD_SLOT);
+                    /* Starting a slot reads it into fw_image, over whatever
+                       an upload had put there. */
+                    total_    = 0;
+                    received_ = 0;
+                    run_slot_ = body[0];
+                    /* No reply yet: the caller knows whether the slot holds
+                       a firmware. FinishRun(). */
+                    return Event::Run;
+                }
+
                 default: return Fail(cmd, BAD_MESSAGE);
             }
         }
@@ -374,6 +403,7 @@ namespace chompi
         uint32_t last_heard_  = 0;
         uint32_t crc_         = 0;
         uint8_t  slot_        = 0;
+        uint8_t  run_slot_    = 0;
         char     name_[kMaxName + 1] = {};
         Status   last_status_ = OK;
 

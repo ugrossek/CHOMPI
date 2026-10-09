@@ -157,6 +157,17 @@ picked one, and that route has not failed since.
 It also works with an empty `/FIRMWARE` or a card inserted after power-on.
 Without a card it reports `NO_CARD` and nothing happens.
 
+A firmware that is already on the card can be started the same way, without
+sending anything, as if its key had been pressed:
+
+```bash
+./midi-send.py --run 5
+```
+
+Together with a firmware that can restart itself into the launcher, that
+switches firmwares from the computer alone, e.g. between a development build
+and the USB storage firmware.
+
 `midi-send.py` is Linux only and needs nothing beyond Python 3. For macOS and
 Windows there is a web page that does the same in Chrome or Edge:
 https://ugrossek.github.io/CHOMPI/ (source in [ugrossek/CHOMPI](https://github.com/ugrossek/CHOMPI/tree/midi-firmware-load/docs)). The protocol is
