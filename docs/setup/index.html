@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="demo.js"></script>
 <style>
   :root {
     --paper: #FAF6F0;
@@ -284,6 +285,10 @@
   </div>
   <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
   <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each card below links to its release.</p>
+
+  <aside class="notice" id="demo-note" hidden>
+    <p><strong>Demo.</strong> No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
+  </aside>
 
   <aside class="notice">
     <p><strong>Use at your own risk.</strong> This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. It writes to your SD card and replaces what is on the keys you change, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
@@ -935,6 +940,7 @@ $("write").addEventListener("click", async () => {
 });
 
 /* ---- start --------------------------------------------------------------- */
+$("demo-note").hidden = !new URLSearchParams(location.search).has("demo");
 buildKeys();
 buildRows();
 const catalogReady = loadCatalog().then(() => { buildCatalog(); render(); }).catch(() => {
