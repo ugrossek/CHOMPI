@@ -106,7 +106,7 @@ Reply `41`:
 |---|---|---|
 | status | `u7` | always `0` |
 | version | `u7` | protocol version, `1` for this document |
-| max_chunk | `u28` | most raw bytes one `DATA` may carry (currently 256) |
+| max_chunk | `u28` | most raw bytes one `DATA` may carry (currently 2048; 256 before launcher 1.4). Clients may send less |
 | slots | `u7` | highest slot number accepted (currently 15) |
 | features | `u7` | optional, see Features. Missing on older launchers: treat as `0` |
 | launcher_version | 3 × `u7` | optional: major, minor, patch of the launcher itself. Missing on older launchers |

@@ -43,7 +43,7 @@ namespace chompi
         /** The launcher's own version, major.minor.patch, after the features
          *  byte in the PING reply. Test build: not a release number yet. */
         static constexpr uint8_t  kLauncherVersion[3] = {1, 4, 0};
-        static constexpr uint32_t kMaxChunk = 256; /**< raw bytes per DATA */
+        static constexpr uint32_t kMaxChunk = 2048; /**< raw bytes per DATA */
         static constexpr size_t   kMaxName  = 16;  /**< chars in a slot name */
         /** Most chars of a card filename LIST reports. */
         static constexpr size_t kMaxListName = 40;

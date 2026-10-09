@@ -173,6 +173,7 @@ def main():
     ap.add_argument("--clear", type=int, metavar="SLOT", help="empty that key")
     ap.add_argument("--name", help="name on the card, 1-16 of A-Z 0-9 - _ "
                     "(default: from the project folder, e.g. TAPE)")
+    ap.add_argument("--chunk", type=int, help="bytes per DATA message (default: the most the launcher takes)")
     ap.add_argument("--device", help="raw MIDI node, e.g. /dev/snd/midiC1D0 (default: find CHOMPI)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
@@ -201,6 +202,8 @@ def main():
     slots = reply[6]
     features = reply[7] if len(reply) > 7 else 0
     lver = ".".join(str(b) for b in reply[8:11]) if len(reply) > 10 else "unknown"
+    if args.chunk:
+        max_chunk = max(1, min(args.chunk, max_chunk))
     print(f"launcher {lver} on {device} (protocol {version}, {max_chunk}-byte chunks)")
 
     def need(feature, what):
