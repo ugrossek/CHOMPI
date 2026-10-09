@@ -377,6 +377,9 @@ import { Launcher, ProtocolError, FEATURE } from "../chompi-midi.js";
 
 const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:";
 const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the test launcher:";
+/* ?chunk=N: send at most N bytes per message, for comparing speeds */
+const CHUNK = Math.max(0, parseInt(new URLSearchParams(location.search).get("chunk"), 10) || 0);
+const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.info.maxChunk);
 const NEEDED = FEATURE.LIST | FEATURE.CLEAR | FEATURE.STAY;
 const SLOTS = 15;
 const CATALOG_FAILED = "Couldn't load the list of firmwares. Check your internet connection and reload the page.";
@@ -991,7 +994,7 @@ $("write").addEventListener("click", async () => {
       }
       if (op.kind === "write") {
         const img = images[op.fw.id];
-        const t = await state.launcher.upload(img, op.key, op.fw.card, state.info.maxChunk, (phase, done, total) => {
+        const t = await state.launcher.upload(img, op.key, op.fw.card, chunkSize(), (phase, done, total) => {
           if (phase === "send") {
             const pct = Math.floor((100 * done) / total);
             screen(`${step}: ${op.fw.title} to key ${op.key}… ${pct}%`, "busy");
@@ -1062,7 +1065,7 @@ function showSpeed(timings) {
   const send = timings.reduce((a, t) => a + t.sendMs, 0);
   const store = timings.reduce((a, t) => a + t.storeMs, 0);
   $("speed").textContent = `${timings.length} firmware${timings.length > 1 ? "s" : ""}, ${(bytes / 1024).toFixed(0)} KB: `
-    + `sending took ${(send / 1000).toFixed(1)} s (${kbs(bytes, send)} KB/s), writing to the card ${(store / 1000).toFixed(1)} s.`;
+    + `sending took ${(send / 1000).toFixed(1)} s (${kbs(bytes, send)} KB/s, ${chunkSize()}-byte chunks), writing to the card ${(store / 1000).toFixed(1)} s.`;
   $("speed").hidden = false;
 }
 

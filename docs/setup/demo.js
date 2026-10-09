@@ -34,7 +34,7 @@
     send(m) {
       if (SILENT) return;
       const cmd = m[4], b = m.slice(5, -1);
-      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(256,4),15,7,1,4,0]);
+      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(2048,4),15,7,1,4,0]);
       if (cmd === 2) { const n = b[5]; up = { size: g7(b.slice(0,4)), slot: b[4], name: String.fromCharCode(...b.slice(6,6+n)), got: 0 }; return reply(2,[0]); }
       if (cmd === 3) { const off = g7(b.slice(0,4)); const L = b.length - 4; const raw = L - Math.ceil(L/8); up.got = Math.max(up.got, off+raw); return reply(3,[0,...p7(up.got,4)]); }
       if (cmd === 4) {
