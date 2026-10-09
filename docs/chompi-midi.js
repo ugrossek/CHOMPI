@@ -11,7 +11,9 @@ export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x05, CL
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
-export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4 };
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8 };
+/** BEGIN's slot for a new launcher (FEATURE.LAUNCHER). */
+export const LAUNCHER_SLOT = 127;
 const END_STAY = 1;
 
 export const STATUS = {
@@ -28,6 +30,8 @@ export const STATUS = {
   10: "CHOMPI has no SD card, or can't read it. Insert one and send again.",
   11: "Writing to the SD card failed. Check the card and send again.",
   12: "The SD card is full. Make some room on it and send again.",
+  13: "That file isn't a CHOMPI launcher.",
+  14: "There's another .bin file at the top level of the SD card, which CHOMPI would install instead of the launcher. Remove it, then try again.",
 };
 
 export const NAME_RE = /^[A-Z0-9_-]{1,16}$/;

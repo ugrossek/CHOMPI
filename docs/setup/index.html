@@ -257,6 +257,8 @@
   .notes:empty { display: none; }
   .slots .what .sub.upd { color: var(--ink); font-weight: 600; }
   .speed { color: var(--ink-soft); font-size: .92rem; margin-top: 6px; }
+  #launcher-update { margin-top: 14px; }
+  #launcher-update p { margin: 0 0 8px; }
 
   details.log { margin-top: 40px; }
   details.log summary { cursor: pointer; color: var(--ink-soft); }
@@ -310,6 +312,10 @@
           <select id="port" hidden aria-label="MIDI device"></select>
         </div>
         <p class="result" id="connect-result" hidden></p>
+        <div id="launcher-update" hidden>
+          <p id="launcher-update-text"></p>
+          <button class="soft" id="update-launcher" type="button">Update the launcher</button>
+        </div>
         <div id="old-launcher" hidden>
           <p class="result bad" id="old-launcher-why">This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:</p>
           <ol>
@@ -373,7 +379,7 @@
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, FEATURE } from "../chompi-midi.js";
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js";
 
 const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:";
 const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the test launcher:";
@@ -392,6 +398,8 @@ const state = {
   access: null, pair: null, launcher: null, info: null,
   connecting: false, busy: false, autoTimer: 0,
   catalog: [], byId: {},
+  newLauncher: null,     // catalog.json's launcher: { version, file, size, sha256 }
+  launcherUpdate: null,  // { to } while CHOMPI restarts into a new launcher
   current: [],   // per key (index 0 = key 1): { file, size, id } or null before reading
   plan: [],      // per key: "empty", "keep", or a catalogue id
   selected: 0,
@@ -432,6 +440,7 @@ async function loadCatalog() {
   const data = await res.json();
   if (!Array.isArray(data.firmwares) || !data.firmwares.length) throw new Error("catalog.json: no firmwares");
   state.catalog = data.firmwares;
+  state.newLauncher = data.launcher || null;
   state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
 }
 
@@ -745,6 +754,59 @@ $("update-all").addEventListener("click", () => {
   render();
 });
 
+/* ---- launcher version --------------------------------------------------- */
+/** -1, 0, 1 for "1.4.1" vs "1.4.2"; null counts as oldest. */
+function cmpVersion(a, b) {
+  const pa = (a || "0").split(".").map(Number), pb = (b || "0").split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0) ? -1 : 1;
+  return 0;
+}
+
+/** Offer the newer launcher from catalog.json: over USB if this one can
+ *  update itself, else the steps to install it by hand. */
+function offerLauncher(info) {
+  $("launcher-update").hidden = true;
+  const nl = state.newLauncher;
+  if (!nl || cmpVersion(info.launcherVersion, nl.version) >= 0) return;
+  const have = info.launcherVersion ? `CHOMPI has ${info.launcherVersion}` : "CHOMPI has an older one";
+  if (info.features & FEATURE.LAUNCHER) {
+    $("launcher-update-text").textContent = `A newer launcher is available: ${nl.version} (${have}). Updating takes a few seconds. CHOMPI then restarts and shows a rainbow while it installs it.`;
+    $("launcher-update").hidden = false;
+  } else {
+    $("old-launcher-why").textContent = `A newer launcher is available: ${nl.version} (${have}). This one can't update itself, so it goes on by hand once. After that, this page updates it for you:`;
+    $("old-launcher").hidden = false;
+  }
+}
+
+$("update-launcher").addEventListener("click", async () => {
+  const nl = state.newLauncher;
+  if (!nl || state.busy || !state.info) return;
+  state.busy = true;
+  $("update-launcher").disabled = true;
+  render();
+  try {
+    screen("Downloading the launcher…", "busy");
+    const img = await fetchImage({ id: "_launcher", title: "the launcher", file: nl.file, size: nl.size, sha256: nl.sha256 });
+    await state.launcher.upload(img, LAUNCHER_SLOT, "LAUNCHER", chunkSize(), (phase, done, total) => {
+      screen(phase === "send" ? `Sending the launcher… ${Math.floor((100 * done) / total)}%` : "Writing the launcher to the card…", "busy");
+    });
+    state.launcherUpdate = { to: nl.version };
+    state.info = null;
+    $("launcher-update").hidden = true;
+    $("step-connect").classList.remove("done");
+    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then breathe white again. This page reconnects by itself.";
+    screen(msg, "busy");
+    show("connect-result", msg);
+  } catch (e) {
+    screen(e.message, "bad");
+    show("connect-result", e.message, true);
+  } finally {
+    state.busy = false;
+    $("update-launcher").disabled = false;
+    render();
+  }
+});
+
 /* ---- connect ----------------------------------------------------------- */
 /* Chrome keeps unplugged devices in the port lists, marked "disconnected". */
 const live = (p) => p && p.state === "connected";
@@ -822,7 +884,17 @@ async function connectTo(pair, quiet = false) {
     state.info = info;
     const n = state.current.filter((c) => c.file).length;
     screen(`Connected. ${n} key${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} a firmware.`, "ok");
-    show("connect-result", "Connected. Step 2 shows what's on your CHOMPI now.");
+    const lv = info.launcherVersion ? ` (launcher ${info.launcherVersion})` : "";
+    if (state.launcherUpdate) {
+      const ok = info.launcherVersion === state.launcherUpdate.to;
+      show("connect-result", ok
+        ? `Launcher updated to ${info.launcherVersion}. Step 2 shows what's on your CHOMPI now.`
+        : `CHOMPI came back with launcher ${info.launcherVersion || "(unknown)"}, not ${state.launcherUpdate.to}: the update didn't take. Try again, or install it by hand.`, !ok);
+      state.launcherUpdate = null;
+    } else {
+      show("connect-result", `Connected${lv}. Step 2 shows what's on your CHOMPI now.`);
+    }
+    offerLauncher(info);
     $("step-connect").classList.add("done");
     ok = true;
   } catch (e) {
@@ -908,8 +980,11 @@ function refreshPorts(connectNow, quiet = false) {
     if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
       state.info = null;
       $("step-connect").classList.remove("done");
-      show("connect-result", "");
-      screen("CHOMPI went away. Switch it on and plug it in; this page connects by itself.", "idle");
+      $("launcher-update").hidden = true;
+      if (!state.launcherUpdate) {
+        screen("CHOMPI went away. Switch it on and plug it in; this page connects by itself.", "idle");
+        show("connect-result", "");
+      }
       render();
     }
     clearTimeout(state.autoTimer);
