@@ -835,6 +835,7 @@ const images = {};
 /** The firmware file, checked against the catalogue's size and checksum. */
 async function fetchImage(fw) {
   if (images[fw.id]) return images[fw.id];
+  if (window.CHOMPI_DEMO) return (images[fw.id] = new Uint8Array(fw.size)); /* the pretend CHOMPI takes anything */
   const res = await fetch(fw.file);
   if (!res.ok) throw new Error(`Couldn't download ${fw.title} (${res.status}). Check your internet connection and try again.`);
   const bytes = new Uint8Array(await res.arrayBuffer());
@@ -940,7 +941,7 @@ $("write").addEventListener("click", async () => {
 });
 
 /* ---- start --------------------------------------------------------------- */
-$("demo-note").hidden = !new URLSearchParams(location.search).has("demo");
+$("demo-note").hidden = !window.CHOMPI_DEMO;
 buildKeys();
 buildRows();
 const catalogReady = loadCatalog().then(() => { buildCatalog(); render(); }).catch(() => {

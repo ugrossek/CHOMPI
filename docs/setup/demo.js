@@ -2,7 +2,10 @@
    ?demo&old = a launcher too old for the page; ?demo&failslot=N = writing key N fails. */
 (() => {
   const P = new URLSearchParams(location.search);
-  if (!P.has("demo")) return;
+  /* <html data-mockup>: the published mockup, always pretend */
+  const DEMO = P.has("demo") || document.documentElement.hasAttribute("data-mockup");
+  if (!DEMO) return;
+  window.CHOMPI_DEMO = true;
   const OLD = P.has("old");
   const card = JSON.parse(P.get("card") || "null") || {
     "01_TAPE.bin": 240620, "02_TEMPO.bin": 263624, "03_WAVE.bin": 200664,
