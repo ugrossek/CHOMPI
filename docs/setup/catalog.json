@@ -1,6 +1,12 @@
 {
-  "about": "Firmwares the setup page offers. Files are copies of the release assets, served from this site so the browser may fetch them. 'checked': false = not yet reviewed with the author for the page; double-check before a public release.",
+  "about": "Firmwares the setup page offers. Files are copies of the release assets, served from this site so the browser may fetch them. 'checked': false = not yet reviewed with the author for the page; double-check before a public release. 'previous' lists earlier versions, so the page can recognise them on a card and offer the update.",
   "updated": "2026-10-09",
+  "launcher": {
+    "version": "1.4.2",
+    "file": "launcher/CHOMPI.bin",
+    "size": 128872,
+    "sha256": "bb9c7c9ff25d50da08470a408059d8b8fab2d740e9a5b4546b2d2d1c5f2f3eb2"
+  },
   "firmwares": [
     {
       "id": "tape",
@@ -161,7 +167,10 @@
       "file": "../firmware/catalog/SING-beta-2.bin",
       "size": 183740,
       "sha256": "21d0639403314bdb587fbb4646f634a0075827c6a19635f6b54ed3f2c8ffc913",
-      "checked": false
+      "checked": false,
+      "previous": [
+        { "version": "beta", "size": 174348, "sha256": "18fae1e5eab49f391a5b95cc0e9b1b088d1cc55e915aea722ee3c77bf27d5dfa" }
+      ]
     },
     {
       "id": "tehp",

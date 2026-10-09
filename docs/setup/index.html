@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-mockup>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -252,6 +252,13 @@
 
   .changes { margin: 0 0 14px; padding-left: 1.3em; }
   .changes li { margin: 2px 0; }
+  .changes .warn { display: block; color: var(--coral); font-weight: 600; font-size: .92rem; }
+  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--ink-soft); font-size: .95rem; }
+  .notes:empty { display: none; }
+  .slots .what .sub.upd { color: var(--ink); font-weight: 600; }
+  .speed { color: var(--ink-soft); font-size: .92rem; margin-top: 6px; }
+  #launcher-update { margin-top: 14px; }
+  #launcher-update p { margin: 0 0 8px; }
 
   details.log { margin-top: 40px; }
   details.log summary { cursor: pointer; color: var(--ink-soft); }
@@ -287,7 +294,7 @@
   <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each card below links to its release.</p>
 
   <aside class="notice" id="demo-note" hidden>
-    <p><strong>Mockup.</strong> This page talks to a pretend CHOMPI in your browser, so nothing is written anywhere and no firmware is downloaded. The real thing needs a launcher that isn't released yet. Reload to start over.</p>
+    <p><strong>Demo.</strong> No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
   </aside>
 
   <aside class="notice">
@@ -305,8 +312,12 @@
           <select id="port" hidden aria-label="MIDI device"></select>
         </div>
         <p class="result" id="connect-result" hidden></p>
+        <div id="launcher-update" hidden>
+          <p id="launcher-update-text"></p>
+          <button class="soft" id="update-launcher" type="button">Update the launcher</button>
+        </div>
         <div id="old-launcher" hidden>
-          <p class="result bad">This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:</p>
+          <p class="result bad" id="old-launcher-why">This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:</p>
           <ol>
             <li>Download <a href="launcher/CHOMPI.bin" download>CHOMPI.bin</a> (test launcher).</li>
             <li>Switch CHOMPI off, take out the SD card and put it in your computer.</li>
@@ -330,6 +341,7 @@
         <div class="tools">
           <button class="soft" id="stock-setup" type="button">Standard setup</button>
           <button class="soft" id="undo" type="button">Undo my changes</button>
+          <button class="soft" id="update-all" type="button" hidden>Update all</button>
         </div>
         <p class="hint" id="tools-hint">Standard setup: TAPE on 1, TEMPO on 2, WAVE on 3, USB storage on 15. Other keys stay as they are.</p>
         <ul class="slots" id="slots"></ul>
@@ -345,9 +357,17 @@
       <div class="inner">
         <p id="summary">Nothing to write yet.</p>
         <ul class="changes" id="changes"></ul>
+        <ul class="notes" id="notes"></ul>
         <button class="act big" id="write" disabled>Write to CHOMPI</button>
         <p class="hint">CHOMPI's keys fill cyan as each firmware arrives and amber while it's written to the card. Keep it plugged in until this page says it's done.</p>
         <p class="result" id="write-result" hidden></p>
+        <p class="speed" id="speed" hidden></p>
+        <div id="speedtest" hidden>
+          <h3>Speed test</h3>
+          <p class="hint">Sends 1 MB of random data at each message size and times it. CHOMPI's keys fill cyan, but nothing is written to the card.</p>
+          <button class="soft" id="run-speedtest" type="button">Run speed test</button>
+          <pre id="speedtest-result"></pre>
+        </div>
       </div>
     </li>
   </ol>
@@ -359,16 +379,22 @@
 
   <footer>
     Works in Chrome and Edge on a computer, and Chrome on Android. Safari can't talk MIDI to CHOMPI.
-    The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/midi-firmware-load/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
+    The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/launcher-batch/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
     To send a single firmware file of your own, use the <a href="../">firmware page</a>.
   </footer>
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, FEATURE } from "../chompi-midi.js";
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js";
 
+const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:";
+const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the test launcher:";
+/* ?chunk=N: send at most N bytes per message, for comparing speeds */
+const CHUNK = Math.max(0, parseInt(new URLSearchParams(location.search).get("chunk"), 10) || 0);
+const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.info.maxChunk);
 const NEEDED = FEATURE.LIST | FEATURE.CLEAR | FEATURE.STAY;
 const SLOTS = 15;
+const CATALOG_FAILED = "Couldn't load the list of firmwares. Check your internet connection and reload the page.";
 /* one colour per firmware, for its key's LED */
 const SWATCH = ["#FF9431", "#FF5C7C", "#3FAEFF", "#39D27E", "#B57BFF", "#FFD23F",
                 "#18D2DF", "#FF7AD9", "#9BE15D", "#FF6B3D", "#7AA2FF", "#E0C097"];
@@ -378,6 +404,8 @@ const state = {
   access: null, pair: null, launcher: null, info: null,
   connecting: false, busy: false, autoTimer: 0,
   catalog: [], byId: {},
+  newLauncher: null,     // catalog.json's launcher: { version, file, size, sha256 }
+  launcherUpdate: null,  // { to } while CHOMPI restarts into a new launcher
   current: [],   // per key (index 0 = key 1): { file, size, id } or null before reading
   plan: [],      // per key: "empty", "keep", or a catalogue id
   selected: 0,
@@ -414,18 +442,28 @@ function screen(text, mood = "idle") {
 /* ---- catalogue --------------------------------------------------------- */
 async function loadCatalog() {
   const res = await fetch("catalog.json", { cache: "no-cache" });
+  if (!res.ok) throw new Error(`catalog.json: ${res.status}`);
   const data = await res.json();
+  if (!Array.isArray(data.firmwares) || !data.firmwares.length) throw new Error("catalog.json: no firmwares");
   state.catalog = data.firmwares;
+  state.newLauncher = data.launcher || null;
   state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
 }
 
-/** Which catalogue firmware a file on the card is: same name and size. */
+/** Which catalogue firmware a file on the card is, by name and size:
+ *  { id } for the current version, { prev: { id, version } } for an earlier
+ *  one, {} if it isn't in the list. */
 function identify(file, size) {
   const m = /^\d\d_(.+)\.bin$/i.exec(file) || /^(.+)\.bin$/i.exec(file);
-  if (!m) return null;
+  if (!m) return {};
   const card = m[1].toUpperCase();
   const f = state.catalog.find((f) => f.card === card && f.size === size);
-  return f ? f.id : null;
+  if (f) return { id: f.id };
+  for (const f of state.catalog.filter((f) => f.card === card)) {
+    const old = (f.previous || []).find((p) => p.size === size);
+    if (old) return { prev: { id: f.id, version: old.version } };
+  }
+  return {};
 }
 
 /* ---- what a key holds, in words --------------------------------------- */
@@ -434,8 +472,11 @@ function describeCurrent(i) {
   if (!c) return "—";
   if (!c.file) return "empty";
   if (c.id) return `${state.byId[c.id].title} ${state.byId[c.id].version}`;
+  if (c.prev) return `${state.byId[c.prev.id].title} ${c.prev.version}`;
   return c.file;
 }
+/** A file the page can't put back: not in the list, not an earlier version. */
+const unknownFile = (c) => c && c.file && !c.id && !c.prev;
 function initialPlan(i) {
   const c = state.current[i];
   if (!c || !c.file) return "empty";
@@ -446,14 +487,14 @@ const changed = (i) => state.current[i] && state.plan[i] !== initialPlan(i);
 function planLabel(i) {
   const p = state.plan[i];
   if (p === "empty") return "Nothing";
-  if (p === "keep") return state.current[i].file;
+  if (p === "keep") return describeCurrent(i);
   const f = state.byId[p];
   return `${f.title} ${f.version}`;
 }
 function planColor(i) {
   const p = state.plan[i];
   if (p === "empty") return null;
-  if (p === "keep") return "#FFFFFF";
+  if (p === "keep") return state.current[i].prev ? state.byId[state.current[i].prev.id].color : "#FFFFFF";
   return state.byId[p].color;
 }
 
@@ -494,11 +535,11 @@ function buildRows() {
 function fillOptions(sel, i) {
   const c = state.current[i];
   /* only rebuild when the choices change: rebuilding an open list closes it */
-  const sig = `${c.file}|${c.id}|${state.catalog.length}`;
+  const sig = `${c.file}|${c.id}|${c.prev?.id}|${state.catalog.length}`;
   if (sel.dataset.sig === sig) { sel.value = state.plan[i]; return; }
   sel.dataset.sig = sig;
   const opts = [new Option("Nothing", "empty")];
-  if (c.file && !c.id) opts.push(new Option(`Keep ${c.file}`, "keep"));
+  if (c.file && !c.id) opts.push(new Option(`Keep ${describeCurrent(i)}${c.prev ? " (older)" : ""}`, "keep"));
   const groups = [["Stock", (f) => f.stage === "stock"], ["Community", (f) => f.stage !== "stock"]];
   const els = [...opts];
   for (const [label, test] of groups) {
@@ -554,9 +595,14 @@ function render() {
         const now = describeCurrent(i);
         sub.textContent = now === "empty" ? "new" : state.plan[i] === "empty" ? `${now} will be removed` : `replaces ${now}`;
         sub.classList.add("chg");
+        sub.classList.remove("upd");
       } else {
-        sub.textContent = state.plan[i] === "empty" ? "" : "on CHOMPI now";
+        const c = state.current[i];
+        const upd = state.plan[i] === "keep" && c.prev;
+        sub.textContent = state.plan[i] === "empty" ? ""
+          : upd ? `on CHOMPI now · ${state.byId[c.prev.id].version} is available` : "on CHOMPI now";
         sub.classList.remove("chg");
+        sub.classList.toggle("upd", !!upd);
       }
     }
     const st = li.querySelector(".state");
@@ -568,6 +614,10 @@ function render() {
   renderSummary();
   $("stock-setup").disabled = !known || state.busy;
   $("undo").disabled = !known || state.busy || !state.plan.some((_, i) => changed(i));
+  const outdated = known ? state.current.filter((c, i) => c.prev && state.plan[i] === "keep").length : 0;
+  $("update-all").hidden = !outdated;
+  $("update-all").textContent = `Update ${outdated === 1 ? "the older firmware" : `all ${outdated} older firmwares`}`;
+  $("update-all").disabled = state.busy;
 }
 
 /* ---- catalogue cards --------------------------------------------------- */
@@ -642,14 +692,48 @@ function renderSummary() {
   const known = state.current.length === SLOTS;
   const ops = known ? plannedOps() : [];
   const list = $("changes");
+  const planned = (id) => state.plan.some((p, i) => p === id || (p === "keep" && state.current[i]?.prev?.id === id));
   list.replaceChildren(...ops.map((op) => {
     const li = document.createElement("li");
+    const c = state.current[op.key - 1];
     const was = describeCurrent(op.key - 1);
     li.textContent = op.kind === "clear"
       ? `Key ${op.key}: remove ${was}`
       : `Key ${op.key}: ${op.fw.title} ${op.fw.version}` + (was === "empty" ? "" : ` (replaces ${was})`);
+    const warn = [];
+    if (unknownFile(c))
+      warn.push(`${c.file} isn't in the firmware list. Once it's gone, you need your own copy of it to put it back.`);
+    if ((c.id || c.prev?.id) === "usb-storage" && !planned("usb-storage"))
+      warn.push("Without USB storage, copying samples to CHOMPI means taking the SD card out.");
+    for (const w of warn) {
+      const s = document.createElement("span");
+      s.className = "warn";
+      s.textContent = w;
+      li.append(s);
+    }
     return li;
   }));
+
+  /* things worth knowing about the plan as a whole */
+  const notes = [];
+  if (ops.length) {
+    const onKeys = {};
+    state.plan.forEach((p, i) => { if (state.byId[p]) (onKeys[p] ||= []).push(i + 1); });
+    for (const [id, ks] of Object.entries(onKeys))
+      if (ks.length > 1) notes.push(`${state.byId[id].title} is on keys ${ks.slice(0, -1).join(", ")} and ${ks.at(-1)}. That works, but one key would do.`);
+    const byFolder = {};
+    state.plan.forEach((p, i) => {
+      const id = state.byId[p] ? p : p === "keep" ? state.current[i]?.prev?.id : null;
+      const f = state.byId[id];
+      if (f?.folder) (byFolder[f.folder] ||= new Set()).add(f.title);
+    });
+    for (const [folder, titles] of Object.entries(byFolder))
+      if (titles.size > 1) {
+        const t = [...titles];
+        notes.push(`${t.slice(0, -1).join(", ")} and ${t.at(-1)} share one folder on the card (/${folder}): the same samples, settings and presets.`);
+      }
+  }
+  $("notes").replaceChildren(...notes.map((t) => { const li = document.createElement("li"); li.textContent = t; return li; }));
   const writes = ops.filter((o) => o.kind === "write").length;
   const clears = ops.length - writes;
   const parts = [];
@@ -670,6 +754,63 @@ $("stock-setup").addEventListener("click", () => {
 $("undo").addEventListener("click", () => {
   state.plan = state.current.map((_, i) => initialPlan(i));
   render();
+});
+$("update-all").addEventListener("click", () => {
+  state.current.forEach((c, i) => { if (c.prev && state.plan[i] === "keep") state.plan[i] = c.prev.id; });
+  render();
+});
+
+/* ---- launcher version --------------------------------------------------- */
+/** -1, 0, 1 for "1.4.1" vs "1.4.2"; null counts as oldest. */
+function cmpVersion(a, b) {
+  const pa = (a || "0").split(".").map(Number), pb = (b || "0").split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0) ? -1 : 1;
+  return 0;
+}
+
+/** Offer the newer launcher from catalog.json: over USB if this one can
+ *  update itself, else the steps to install it by hand. */
+function offerLauncher(info) {
+  $("launcher-update").hidden = true;
+  const nl = state.newLauncher;
+  if (!nl || cmpVersion(info.launcherVersion, nl.version) >= 0) return;
+  const have = info.launcherVersion ? `CHOMPI has ${info.launcherVersion}` : "CHOMPI has an older one";
+  if (info.features & FEATURE.LAUNCHER) {
+    $("launcher-update-text").textContent = `A newer launcher is available: ${nl.version} (${have}). Updating takes a few seconds. CHOMPI then restarts and shows a rainbow while it installs it.`;
+    $("launcher-update").hidden = false;
+  } else {
+    $("old-launcher-why").textContent = `A newer launcher is available: ${nl.version} (${have}). This one can't update itself, so it goes on by hand once. After that, this page updates it for you:`;
+    $("old-launcher").hidden = false;
+  }
+}
+
+$("update-launcher").addEventListener("click", async () => {
+  const nl = state.newLauncher;
+  if (!nl || state.busy || !state.info) return;
+  state.busy = true;
+  $("update-launcher").disabled = true;
+  render();
+  try {
+    screen("Downloading the launcher…", "busy");
+    const img = await fetchImage({ id: "_launcher", title: "the launcher", file: nl.file, size: nl.size, sha256: nl.sha256 });
+    await state.launcher.upload(img, LAUNCHER_SLOT, "LAUNCHER", chunkSize(), (phase, done, total) => {
+      screen(phase === "send" ? `Sending the launcher… ${Math.floor((100 * done) / total)}%` : "Writing the launcher to the card…", "busy");
+    });
+    state.launcherUpdate = { to: nl.version };
+    state.info = null;
+    $("launcher-update").hidden = true;
+    $("step-connect").classList.remove("done");
+    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then breathe white again. This page reconnects by itself.";
+    screen(msg, "busy");
+    show("connect-result", msg);
+  } catch (e) {
+    screen(e.message, "bad");
+    show("connect-result", e.message, true);
+  } finally {
+    state.busy = false;
+    $("update-launcher").disabled = false;
+    render();
+  }
 });
 
 /* ---- connect ----------------------------------------------------------- */
@@ -708,11 +849,14 @@ function paintConnection() {
 /** Read every key off the card. */
 async function readCard(talk = true) {
   await catalogReady;
+  /* Without the list every firmware would look unknown, and the page would
+     offer to remove TAPE as a stranger. */
+  if (!state.catalog.length) throw new ProtocolError(CATALOG_FAILED);
   const current = [];
   for (let n = 1; n <= SLOTS; n++) {
     if (talk) screen(`Looking at key ${n} of ${SLOTS}…`, "busy");
     const { file, size } = await state.launcher.list(n);
-    current.push({ file, size, id: file ? identify(file, size) : null });
+    current.push({ file, size, ...(file ? identify(file, size) : {}) });
   }
   return current;
 }
@@ -729,8 +873,10 @@ async function connectTo(pair, quiet = false) {
     await Promise.all([pair.in.open(), pair.out.open()]);
     state.launcher = new Launcher(adapter(pair), log);
     const info = await state.launcher.ping();
+    note(`launcher ${info.launcherVersion || "(no version)"}, features ${info.features}`);
     if ((info.features & NEEDED) !== NEEDED) {
       state.info = null;
+      $("old-launcher-why").textContent = OLD_LAUNCHER;
       $("old-launcher").hidden = false;
       show("connect-result", "");
       screen("This launcher is too old for this page. See step 1.", "bad");
@@ -744,12 +890,27 @@ async function connectTo(pair, quiet = false) {
     state.info = info;
     const n = state.current.filter((c) => c.file).length;
     screen(`Connected. ${n} key${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} a firmware.`, "ok");
-    show("connect-result", "Connected. Step 2 shows what's on your CHOMPI now.");
+    const lv = info.launcherVersion ? ` (launcher ${info.launcherVersion})` : "";
+    if (state.launcherUpdate) {
+      const ok = info.launcherVersion === state.launcherUpdate.to;
+      show("connect-result", ok
+        ? `Launcher updated to ${info.launcherVersion}. Step 2 shows what's on your CHOMPI now.`
+        : `CHOMPI came back with launcher ${info.launcherVersion || "(unknown)"}, not ${state.launcherUpdate.to}: the update didn't take. Try again, or install it by hand.`, !ok);
+      state.launcherUpdate = null;
+    } else {
+      show("connect-result", `Connected${lv}. Step 2 shows what's on your CHOMPI now.`);
+    }
+    offerLauncher(info);
     $("step-connect").classList.add("done");
     ok = true;
   } catch (e) {
     state.info = null;
     $("step-connect").classList.remove("done");
+    if (e.message === CATALOG_FAILED) {
+      screen(CATALOG_FAILED, "bad");
+      show("connect-result", CATALOG_FAILED, true);
+      return true; // retrying won't help
+    }
     if (!quiet) {
       screen(e.message, "bad");
       show("connect-result", e.message, true);
@@ -770,13 +931,22 @@ async function autoConnect() {
     if (await connectTo(pair, true)) return;
     await sleep(1000);
   }
-  if (!state.info && !state.busy && $("old-launcher").hidden)
-    screen("CHOMPI is there, but the launcher isn't answering. Switch it off and on so its keys breathe white; this page connects by itself.", "idle");
+  if (!state.info && !state.busy && $("old-launcher").hidden && state.catalog.length) {
+    screen("CHOMPI is there, but the launcher isn't answering. Maybe a firmware is running: switch CHOMPI off and on so its keys breathe white, and this page connects by itself.", "idle");
+    /* Still nothing a while later: maybe there is no launcher at all. A
+       stock CHOMPI starts TAPE every time, so off and on won't change it. */
+    clearTimeout(state.noLauncherTimer);
+    state.noLauncherTimer = setTimeout(() => {
+      if (state.info || state.busy || !$("old-launcher").hidden) return;
+      $("old-launcher-why").textContent = NO_LAUNCHER;
+      $("old-launcher").hidden = false;
+    }, 20000);
+  }
 }
 
 async function startMidi(user) {
   if (!navigator.requestMIDIAccess) {
-    if (user) show("connect-result", "This browser can't talk MIDI. Open this page in Chrome or Edge.", true);
+    if (user) show("connect-result", NO_MIDI, true);
     return;
   }
   if (!state.access) {
@@ -791,6 +961,13 @@ async function startMidi(user) {
   refreshPorts(true, !user);
 }
 $("connect").addEventListener("click", () => startMidi(true));
+
+/* No browser on iPhone or iPad has Web MIDI, Chrome included. iPadOS says it's a Mac. */
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const NO_MIDI = IOS
+  ? "iPhone and iPad can't talk MIDI to CHOMPI from a web page, in any browser. Use a computer with Chrome or Edge, or an Android phone with Chrome."
+  : "This browser can't talk MIDI. Open this page in Chrome or Edge.";
+if (!navigator.requestMIDIAccess) show("connect-result", NO_MIDI, true);
 
 (async () => {
   try {
@@ -809,8 +986,11 @@ function refreshPorts(connectNow, quiet = false) {
     if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
       state.info = null;
       $("step-connect").classList.remove("done");
-      show("connect-result", "");
-      screen("CHOMPI went away. Switch it on and plug it in; this page connects by itself.", "idle");
+      $("launcher-update").hidden = true;
+      if (!state.launcherUpdate) {
+        screen("CHOMPI went away. Switch it on and plug it in; this page connects by itself.", "idle");
+        show("connect-result", "");
+      }
       render();
     }
     clearTimeout(state.autoTimer);
@@ -818,7 +998,7 @@ function refreshPorts(connectNow, quiet = false) {
     return;
   }
   if (!pairs.length) {
-    if (quiet) { screen("Waiting for CHOMPI. Switch it on and plug it in.", "idle"); return; }
+    if (quiet) { screen("Waiting for CHOMPI. Switch it on and plug it in. If a firmware is running, switch CHOMPI off and on to get back to the launcher.", "idle"); return; }
     show("connect-result", `No MIDI device found that can both send and receive. Is CHOMPI on and plugged in? (The browser sees ${seenPorts()}.)`, true);
     note(`ports seen: ${seenPorts()}`);
     return;
@@ -826,9 +1006,46 @@ function refreshPorts(connectNow, quiet = false) {
   note(`ports seen: ${seenPorts()}`);
   const guess = Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)));
   sel.value = guess;
-  connectTo(pairs[guess], quiet);
+  /* no answer: keep trying, and say so, rather than sit on "Knocking…" */
+  connectTo(pairs[guess], quiet).then((ok) => { if (!ok) autoConnect(); });
 }
 $("port").addEventListener("change", (e) => connectTo(portsByName()[e.target.value]));
+
+/* ---- speed test (?speedtest) ------------------------------------------- */
+$("speedtest").hidden = !new URLSearchParams(location.search).has("speedtest");
+$("run-speedtest").addEventListener("click", async () => {
+  if (state.busy || !state.info) return;
+  state.busy = true;
+  $("run-speedtest").disabled = true;
+  render();
+  const out = $("speedtest-result");
+  const lines = [];
+  const print = (t) => { lines.push(t); out.textContent = lines.join("\n"); };
+  const ROUND = 512 * 1024;                 // the most the launcher holds
+  const img = new Uint8Array(ROUND);
+  for (let o = 0; o < ROUND; o += 65536) crypto.getRandomValues(img.subarray(o, o + 65536));
+  try {
+    for (const chunk of [256, 512, 1024, 2048].filter((c) => c <= state.info.maxChunk)) {
+      let ms = 0;
+      for (let r = 0; r < 2; r++) {
+        const t = await state.launcher.upload(img, 1, "SPEEDTEST", chunk, (phase, done, total) => {
+          screen(`Speed test, ${chunk}-byte messages: ${Math.floor((100 * (r * total + done)) / (2 * total))}%`, "busy");
+        }, { end: false });
+        ms += t.sendMs;
+      }
+      print(`${String(chunk).padStart(4)}-byte messages: 1 MB in ${(ms / 1000).toFixed(1)} s = ${kbs(2 * ROUND, ms)} KB/s`);
+      note(`speed test: ${chunk} bytes -> ${kbs(2 * ROUND, ms)} KB/s`);
+    }
+    screen("Speed test done. Nothing was written to the card.", "ok");
+  } catch (e) {
+    print(`stopped: ${e.message}`);
+    screen(e.message, "bad");
+  } finally {
+    state.busy = false;
+    $("run-speedtest").disabled = false;
+    render();
+  }
+});
 
 /* ---- write -------------------------------------------------------------- */
 const images = {};
@@ -861,7 +1078,10 @@ $("write").addEventListener("click", async () => {
   show("write-result", "");
   $("step-write").classList.remove("done");
   for (const op of ops) progress(op.key, "", "waiting");
+  $("speed").hidden = true;
+  const timings = [];
   let failed = null;
+  const awake = await keepAwake();
   try {
     /* Download everything first, so a bad connection fails before CHOMPI is touched. */
     screen("Downloading firmwares…", "busy");
@@ -876,7 +1096,7 @@ $("write").addEventListener("click", async () => {
       progress(op.key, "store", "emptying…");
       const now = await readCard(false);
       const at = now.findIndex((c) => c.file === op.loose);
-      if (at >= 0) await state.launcher.clear(at + 1);
+      if (at >= 0) await state.launcher.clear(at + 1, op.loose);
       if (op.kind === "clear") progress(op.key, "done", "done");
     }
     const ordered = [...ops.filter((o) => o.kind === "clear" && !o.loose), ...ops.filter((o) => o.kind === "write")];
@@ -886,11 +1106,12 @@ $("write").addEventListener("click", async () => {
       if (op.kind === "clear") {
         screen(`${step}: emptying key ${op.key}…`, "busy");
         progress(op.key, "store", "emptying…");
-        await state.launcher.clear(op.key);
+        /* named, so a resend can't take a file that moved onto the key */
+        await state.launcher.clear(op.key, state.current[op.key - 1].file);
       }
       if (op.kind === "write") {
         const img = images[op.fw.id];
-        await state.launcher.upload(img, op.key, op.fw.card, state.info.maxChunk, (phase, done, total) => {
+        const t = await state.launcher.upload(img, op.key, op.fw.card, chunkSize(), (phase, done, total) => {
           if (phase === "send") {
             const pct = Math.floor((100 * done) / total);
             screen(`${step}: ${op.fw.title} to key ${op.key}… ${pct}%`, "busy");
@@ -900,6 +1121,8 @@ $("write").addEventListener("click", async () => {
             progress(op.key, "store", "writing to the card…");
           }
         }, { stay: true });
+        timings.push({ bytes: img.length, ...t });
+        note(`key ${op.key}: ${img.length} bytes sent in ${(t.sendMs / 1000).toFixed(1)} s (${kbs(img.length, t.sendMs)} KB/s), card write ${(t.storeMs / 1000).toFixed(1)} s`);
       }
       progress(op.key, "done", "done");
       note(`key ${op.key}: ${op.kind === "clear" ? "emptied" : op.fw.title + " written"}`);
@@ -908,15 +1131,23 @@ $("write").addEventListener("click", async () => {
 
     /* Read the card back: that is what CHOMPI will offer. */
     const expected = state.plan.slice();
+    const before = state.current;
     state.current = await readCard();
     state.plan = state.current.map((_, i) => initialPlan(i));
     const off = expected.map((p, i) => (p !== state.plan[i] ? i + 1 : 0)).filter(Boolean);
     if (off.length) {
       /* most likely a file without a number that moved to a freed key */
-      const moved = off.map((n) => state.current[n - 1].file && !/^\d\d_/.test(state.current[n - 1].file)
-        ? `${state.current[n - 1].file} is now on key ${n}` : `key ${n} looks different`);
+      const loose = (f) => f && !/^\d\d_/.test(f);
+      const wasOn = (f) => before.findIndex((c) => c.file === f) + 1;
+      const nowOn = (f) => state.current.some((c) => c.file === f);
+      const moved = off.flatMap((n) => {
+        const c = state.current[n - 1], was = before[n - 1];
+        if (loose(c.file)) return [wasOn(c.file) ? `${c.file} moved from key ${wasOn(c.file)} to key ${n}` : `${c.file} is now on key ${n}`];
+        if (loose(was.file) && nowOn(was.file)) return []; // the key it left
+        return [`key ${n} looks different`];
+      });
       screen("Written, but the card looks a little different from the plan.", "bad");
-      show("write-result", `Written. But ${moved.join(", ")}: files without a number in front take the first free key. Check the list above and write again if you like.`, true);
+      show("write-result", `Written. But ${moved.join(", ")}: firmwares without a number in front of their file name take the first free key. Check the list above and write again if you like.`, true);
     } else {
       screen("All done. Press a lit key on CHOMPI to start that firmware.", "ok");
       show("write-result", "All done. Press a lit key on CHOMPI to start that firmware. To come back to the keys, switch CHOMPI off and on.");
@@ -935,17 +1166,46 @@ $("write").addEventListener("click", async () => {
     screen(msg, "bad");
     show("write-result", `${msg} Keys marked done are written; press Write again to do the rest.`, true);
   } finally {
+    awake?.release().catch(() => {});
+    showSpeed(timings);
     state.busy = false;
     render();
   }
+});
+
+const kbs = (bytes, ms) => (bytes / 1024 / (ms / 1000)).toFixed(0);
+
+/** How fast it went, for the curious (and for us: MIDI is the slow part). */
+function showSpeed(timings) {
+  if (!timings.length) return;
+  const bytes = timings.reduce((a, t) => a + t.bytes, 0);
+  const send = timings.reduce((a, t) => a + t.sendMs, 0);
+  const store = timings.reduce((a, t) => a + t.storeMs, 0);
+  $("speed").textContent = `${timings.length} firmware${timings.length > 1 ? "s" : ""}, ${(bytes / 1024).toFixed(0)} KB: `
+    + `sending took ${(send / 1000).toFixed(1)} s (${kbs(bytes, send)} KB/s, ${chunkSize()}-byte chunks), writing to the card ${(store / 1000).toFixed(1)} s.`;
+  $("speed").hidden = false;
+}
+
+/* Phones pause a page when the screen turns off, which would stall a write. */
+async function keepAwake() {
+  try { return await navigator.wakeLock?.request("screen"); } catch { return null; }
+}
+
+/* Leaving mid-write leaves the card half done: ask first. */
+addEventListener("beforeunload", (e) => {
+  if (!state.busy) return;
+  e.preventDefault();
+  e.returnValue = "";
 });
 
 /* ---- start --------------------------------------------------------------- */
 $("demo-note").hidden = !window.CHOMPI_DEMO;
 buildKeys();
 buildRows();
-const catalogReady = loadCatalog().then(() => { buildCatalog(); render(); }).catch(() => {
-  $("catalog").textContent = "Couldn't load the list of firmwares. Reload the page to try again.";
+const catalogReady = loadCatalog().then(() => { buildCatalog(); render(); }).catch((e) => {
+  note(`couldn't load the firmware list: ${e.message}`);
+  $("catalog").textContent = CATALOG_FAILED;
+  screen(CATALOG_FAILED, "bad");
 });
 render();
 </script>

@@ -11,7 +11,9 @@ export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x05, CL
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
-export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4 };
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8 };
+/** BEGIN's slot for a new launcher (FEATURE.LAUNCHER). */
+export const LAUNCHER_SLOT = 127;
 const END_STAY = 1;
 
 export const STATUS = {
@@ -27,6 +29,9 @@ export const STATUS = {
   9: "The launcher refused that name.",
   10: "CHOMPI has no SD card, or can't read it. Insert one and send again.",
   11: "Writing to the SD card failed. Check the card and send again.",
+  12: "The SD card is full. Make some room on it and send again.",
+  13: "That file isn't a CHOMPI launcher.",
+  14: "There's another .bin file at the top level of the SD card, which CHOMPI would install instead of the launcher. Remove it, then try again.",
 };
 
 export const NAME_RE = /^[A-Z0-9_-]{1,16}$/;
@@ -100,25 +105,28 @@ export class Launcher {
     if (!w || bytes.length < 6) return;
     for (let i = 0; i < 4; i++) if (bytes[i] !== HEADER[i]) return;
     if (bytes[4] !== (w.cmd | REPLY)) return; // not the reply we are waiting for
+    const body = bytes.slice(5, -1);
+    if (w.match && !w.match(body)) return; // a late reply to an earlier resend
     this.waiting = null;
     clearTimeout(w.timer);
-    w.resolve(bytes.slice(5, -1));
+    w.resolve(body);
   }
 
-  #once(cmd, payload, timeout) {
+  #once(cmd, payload, timeout, match) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => { this.waiting = null; resolve(null); }, timeout);
-      this.waiting = { cmd, resolve, timer };
+      this.waiting = { cmd, resolve, timer, match };
       const msg = message(cmd, payload);
       this.log("out", msg);
       this.port.send(msg);
     });
   }
 
-  /** Send and wait for the reply, resending on silence. Null if none came. */
-  async call(cmd, payload = [], { timeout = 300, retries = 10 } = {}) {
+  /** Send and wait for the reply, resending on silence. Null if none came.
+   *  match(reply), if given, skips replies it rejects. */
+  async call(cmd, payload = [], { timeout = 300, retries = 10, match = null } = {}) {
     for (let i = 0; i < retries; i++) {
-      const reply = await this.#once(cmd, payload, timeout);
+      const reply = await this.#once(cmd, payload, timeout, match);
       if (reply) return reply;
     }
     return null;
@@ -137,33 +145,49 @@ export class Launcher {
     if (version !== PROTOCOL_VERSION || r.length < 7)
       throw new ProtocolError(`This CHOMPI's launcher speaks protocol ${version}; this page speaks ${PROTOCOL_VERSION}. Put the newer launcher on the card.`);
     const features = r.length > 7 ? r[7] : 0;
-    return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6], features };
+    const launcherVersion = r.length > 10 ? [...r.slice(8, 11)].join(".") : null;
+    return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6], features, launcherVersion };
+  }
+
+  /** LIST and CLEAR replies name their slot; failures are the status only. */
+  static #forSlot(slot) {
+    return (r) => r[0] !== 0 || r.length < 2 || r[1] === slot;
   }
 
   /** What is on a key: { file, size }, file "" if the key is empty. */
   async list(slot) {
-    const r = await this.call(LIST, [slot], { timeout: 2000, retries: 3 });
+    const r = await this.call(LIST, [slot], { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
     Launcher.#check(r);
     const n = r[2];
     const file = String.fromCharCode(...r.slice(3, 3 + n));
     return { file, size: n ? get7(r.slice(3 + n, 7 + n)) : 0 };
   }
 
-  /** Empty a key: whatever list() reported on it is removed from the card. */
-  async clear(slot) {
-    Launcher.#check(await this.call(CLEAR, [slot], { timeout: 2000, retries: 3 }));
+  /** Empty a key. With `file` (what list() reported there), only that file
+   *  goes: if the key holds something else by now, nothing is removed.
+   *  Returns whether something was removed (true from older launchers). */
+  async clear(slot, file = "") {
+    const name = [...file].map((c) => c.charCodeAt(0) & 0x7F);
+    const payload = name.length ? [slot, name.length, ...name] : [slot];
+    const r = await this.call(CLEAR, payload, { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
+    Launcher.#check(r);
+    return r.length < 3 || r[2] === 1;
   }
 
   /**
    * Upload, store in a slot, and let the launcher start it.
    * onProgress(phase, done, total): phase is "send" or "store".
    * stay: only store it, the launcher keeps showing the picker (FEATURE.STAY).
+   * Returns how long it took: { sendMs, storeMs }.
+   * end: false sends everything but no END, so nothing reaches the card and
+   * the next BEGIN discards it. For measuring the transfer alone.
    */
-  async upload(image, slot, name, maxChunk, onProgress = () => {}, { stay = false } = {}) {
+  async upload(image, slot, name, maxChunk, onProgress = () => {}, { stay = false, end = true } = {}) {
     if (!NAME_RE.test(name)) throw new ProtocolError("Names are 1–16 of A–Z, 0–9, - and _.");
     const nameBytes = [...name].map((c) => c.charCodeAt(0));
     Launcher.#check(await this.call(BEGIN, [...put7(image.length, 4), slot, nameBytes.length, ...nameBytes]));
 
+    const t0 = performance.now();
     let offset = 0;
     while (offset < image.length) {
       const chunk = image.subarray(offset, offset + maxChunk);
@@ -176,6 +200,8 @@ export class Launcher {
     // The reply comes once the card write is done. One resend covers an END
     // that got lost; if it was the reply that got lost, the launcher has
     // already started the firmware and the resend goes unanswered too.
+    const t1 = performance.now();
+    if (!end) return { sendMs: t1 - t0, storeMs: 0 };
     onProgress("store", 0, image.length);
     const flags = stay ? [END_STAY] : [];
     const reply = await this.call(END, [...put7(crc32(image), 5), ...flags], { timeout: 10000, retries: 2 });
@@ -183,5 +209,6 @@ export class Launcher {
       ? "No answer after writing. The firmware was probably stored; check CHOMPI."
       : "No answer after writing. The firmware was probably stored and started; check CHOMPI.");
     Launcher.#check(reply);
+    return { sendMs: t1 - t0, storeMs: performance.now() - t1 };
   }
 }
