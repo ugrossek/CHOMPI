@@ -2,10 +2,10 @@
   "about": "Firmwares the setup page offers. Files are copies of the release assets, served from this site so the browser may fetch them. 'checked': false = not yet reviewed with the author for the page; double-check before a public release. 'previous' lists earlier versions, so the page can recognise them on a card and offer the update.",
   "updated": "2026-10-09",
   "launcher": {
-    "version": "1.4.2",
+    "version": "1.4.3",
     "file": "launcher/CHOMPI.bin",
-    "size": 128872,
-    "sha256": "bb9c7c9ff25d50da08470a408059d8b8fab2d740e9a5b4546b2d2d1c5f2f3eb2"
+    "size": 128880,
+    "sha256": "bdf56ba2051a5199b52afd1cebd72704036b2e865f8c75e992a09134bd3c6486"
   },
   "firmwares": [
     {

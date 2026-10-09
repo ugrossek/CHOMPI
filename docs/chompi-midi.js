@@ -7,7 +7,9 @@
 export const PROTOCOL_VERSION = 1;
 
 const HEADER = [0xF0, 0x7D, 0x43, 0x48];
-export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x05, CLEAR = 0x06;
+export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x06, CLEAR = 0x07;
+/** Where the test launchers 1.4.0 - 1.4.2 had them, before 05 went to RUN. */
+const OLD_LIST = 0x05, OLD_CLEAR = 0x06;
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
@@ -96,6 +98,7 @@ export class Launcher {
     this.port = port;
     this.log = log;
     this.waiting = null;
+    this.cmd = { LIST, CLEAR }; // ping() switches to the old numbers if needed
     port.onMessage((bytes) => this.#receive(bytes));
   }
 
@@ -146,6 +149,9 @@ export class Launcher {
       throw new ProtocolError(`This CHOMPI's launcher speaks protocol ${version}; this page speaks ${PROTOCOL_VERSION}. Put the newer launcher on the card.`);
     const features = r.length > 7 ? r[7] : 0;
     const launcherVersion = r.length > 10 ? [...r.slice(8, 11)].join(".") : null;
+    const v = launcherVersion ? launcherVersion.split(".").map(Number) : [0, 0, 0];
+    const oldNumbers = features & (FEATURE.LIST | FEATURE.CLEAR) && v[0] * 1e6 + v[1] * 1e3 + v[2] < 1004003;
+    this.cmd = oldNumbers ? { LIST: OLD_LIST, CLEAR: OLD_CLEAR } : { LIST, CLEAR };
     return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6], features, launcherVersion };
   }
 
@@ -156,7 +162,7 @@ export class Launcher {
 
   /** What is on a key: { file, size }, file "" if the key is empty. */
   async list(slot) {
-    const r = await this.call(LIST, [slot], { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
+    const r = await this.call(this.cmd.LIST, [slot], { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
     Launcher.#check(r);
     const n = r[2];
     const file = String.fromCharCode(...r.slice(3, 3 + n));
@@ -169,7 +175,7 @@ export class Launcher {
   async clear(slot, file = "") {
     const name = [...file].map((c) => c.charCodeAt(0) & 0x7F);
     const payload = name.length ? [slot, name.length, ...name] : [slot];
-    const r = await this.call(CLEAR, payload, { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
+    const r = await this.call(this.cmd.CLEAR, payload, { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
     Launcher.#check(r);
     return r.length < 3 || r[2] === 1;
   }
