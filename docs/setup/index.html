@@ -243,6 +243,7 @@
   .chip.stock { background: var(--ink); color: var(--paper); }
   .chip.beta  { background: var(--tab-3); color: #1B1815; }
   .chip.alpha { background: var(--tab-2); color: #1B1815; }
+  .chip.release { box-shadow: inset 0 0 0 1.5px currentColor; }
   .fw .by { font-size: .88rem; color: var(--ink-soft); }
   .fw .s { font-size: .95rem; margin: 0; }
   .fw .note { font-size: .85rem; color: var(--ink-soft); margin: 0; }
@@ -440,11 +441,15 @@ function screen(text, mood = "idle") {
 }
 
 /* ---- catalogue --------------------------------------------------------- */
+/* The firmware list; ?catalog=URL tries another one. Its file paths are
+   relative to it. */
+const CATALOG_URL = new URL(new URLSearchParams(location.search).get("catalog") || "catalog.json", location.href);
 async function loadCatalog() {
-  const res = await fetch("catalog.json", { cache: "no-cache" });
+  const res = await fetch(CATALOG_URL, { cache: "no-cache" });
   if (!res.ok) throw new Error(`catalog.json: ${res.status}`);
   const data = await res.json();
   if (!Array.isArray(data.firmwares) || !data.firmwares.length) throw new Error("catalog.json: no firmwares");
+  for (const f of [...data.firmwares, data.launcher].filter(Boolean)) f.file = new URL(f.file, CATALOG_URL).href;
   state.catalog = data.firmwares;
   state.newLauncher = data.launcher || null;
   state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
