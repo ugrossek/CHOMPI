@@ -7,8 +7,12 @@
 export const PROTOCOL_VERSION = 1;
 
 const HEADER = [0xF0, 0x7D, 0x43, 0x48];
-export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04;
+export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x05, CLEAR = 0x06;
 const REPLY = 0x40;
+
+/** PING's optional features byte; launchers before it have none of these. */
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4 };
+const END_STAY = 1;
 
 export const STATUS = {
   0: "OK",
@@ -132,14 +136,30 @@ export class Launcher {
     const version = r[1];
     if (version !== PROTOCOL_VERSION || r.length < 7)
       throw new ProtocolError(`This CHOMPI's launcher speaks protocol ${version}; this page speaks ${PROTOCOL_VERSION}. Put the newer launcher on the card.`);
-    return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6] };
+    const features = r.length > 7 ? r[7] : 0;
+    return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6], features };
+  }
+
+  /** What is on a key: { file, size }, file "" if the key is empty. */
+  async list(slot) {
+    const r = await this.call(LIST, [slot], { timeout: 2000, retries: 3 });
+    Launcher.#check(r);
+    const n = r[2];
+    const file = String.fromCharCode(...r.slice(3, 3 + n));
+    return { file, size: n ? get7(r.slice(3 + n, 7 + n)) : 0 };
+  }
+
+  /** Empty a key: whatever list() reported on it is removed from the card. */
+  async clear(slot) {
+    Launcher.#check(await this.call(CLEAR, [slot], { timeout: 2000, retries: 3 }));
   }
 
   /**
    * Upload, store in a slot, and let the launcher start it.
    * onProgress(phase, done, total): phase is "send" or "store".
+   * stay: only store it, the launcher keeps showing the picker (FEATURE.STAY).
    */
-  async upload(image, slot, name, maxChunk, onProgress = () => {}) {
+  async upload(image, slot, name, maxChunk, onProgress = () => {}, { stay = false } = {}) {
     if (!NAME_RE.test(name)) throw new ProtocolError("Names are 1–16 of A–Z, 0–9, - and _.");
     const nameBytes = [...name].map((c) => c.charCodeAt(0));
     Launcher.#check(await this.call(BEGIN, [...put7(image.length, 4), slot, nameBytes.length, ...nameBytes]));
@@ -157,8 +177,11 @@ export class Launcher {
     // that got lost; if it was the reply that got lost, the launcher has
     // already started the firmware and the resend goes unanswered too.
     onProgress("store", 0, image.length);
-    const reply = await this.call(END, put7(crc32(image), 5), { timeout: 10000, retries: 2 });
-    if (!reply) throw new ProtocolError("No answer after writing. The firmware was probably stored and started; check CHOMPI.");
+    const flags = stay ? [END_STAY] : [];
+    const reply = await this.call(END, [...put7(crc32(image), 5), ...flags], { timeout: 10000, retries: 2 });
+    if (!reply) throw new ProtocolError(stay
+      ? "No answer after writing. The firmware was probably stored; check CHOMPI."
+      : "No answer after writing. The firmware was probably stored and started; check CHOMPI.");
     Launcher.#check(reply);
   }
 }
