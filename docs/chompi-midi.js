@@ -179,8 +179,10 @@ export class Launcher {
    * onProgress(phase, done, total): phase is "send" or "store".
    * stay: only store it, the launcher keeps showing the picker (FEATURE.STAY).
    * Returns how long it took: { sendMs, storeMs }.
+   * end: false sends everything but no END, so nothing reaches the card and
+   * the next BEGIN discards it. For measuring the transfer alone.
    */
-  async upload(image, slot, name, maxChunk, onProgress = () => {}, { stay = false } = {}) {
+  async upload(image, slot, name, maxChunk, onProgress = () => {}, { stay = false, end = true } = {}) {
     if (!NAME_RE.test(name)) throw new ProtocolError("Names are 1–16 of A–Z, 0–9, - and _.");
     const nameBytes = [...name].map((c) => c.charCodeAt(0));
     Launcher.#check(await this.call(BEGIN, [...put7(image.length, 4), slot, nameBytes.length, ...nameBytes]));
@@ -199,6 +201,7 @@ export class Launcher {
     // that got lost; if it was the reply that got lost, the launcher has
     // already started the firmware and the resend goes unanswered too.
     const t1 = performance.now();
+    if (!end) return { sendMs: t1 - t0, storeMs: 0 };
     onProgress("store", 0, image.length);
     const flags = stay ? [END_STAY] : [];
     const reply = await this.call(END, [...put7(crc32(image), 5), ...flags], { timeout: 10000, retries: 2 });

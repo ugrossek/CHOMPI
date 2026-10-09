@@ -362,6 +362,12 @@
         <p class="hint">CHOMPI's keys fill cyan as each firmware arrives and amber while it's written to the card. Keep it plugged in until this page says it's done.</p>
         <p class="result" id="write-result" hidden></p>
         <p class="speed" id="speed" hidden></p>
+        <div id="speedtest" hidden>
+          <h3>Speed test</h3>
+          <p class="hint">Sends 1 MB of random data at each message size and times it. CHOMPI's keys fill cyan, but nothing is written to the card.</p>
+          <button class="soft" id="run-speedtest" type="button">Run speed test</button>
+          <pre id="speedtest-result"></pre>
+        </div>
       </div>
     </li>
   </ol>
@@ -1004,6 +1010,42 @@ function refreshPorts(connectNow, quiet = false) {
   connectTo(pairs[guess], quiet).then((ok) => { if (!ok) autoConnect(); });
 }
 $("port").addEventListener("change", (e) => connectTo(portsByName()[e.target.value]));
+
+/* ---- speed test (?speedtest) ------------------------------------------- */
+$("speedtest").hidden = !new URLSearchParams(location.search).has("speedtest");
+$("run-speedtest").addEventListener("click", async () => {
+  if (state.busy || !state.info) return;
+  state.busy = true;
+  $("run-speedtest").disabled = true;
+  render();
+  const out = $("speedtest-result");
+  const lines = [];
+  const print = (t) => { lines.push(t); out.textContent = lines.join("\n"); };
+  const ROUND = 512 * 1024;                 // the most the launcher holds
+  const img = new Uint8Array(ROUND);
+  for (let o = 0; o < ROUND; o += 65536) crypto.getRandomValues(img.subarray(o, o + 65536));
+  try {
+    for (const chunk of [256, 512, 1024, 2048].filter((c) => c <= state.info.maxChunk)) {
+      let ms = 0;
+      for (let r = 0; r < 2; r++) {
+        const t = await state.launcher.upload(img, 1, "SPEEDTEST", chunk, (phase, done, total) => {
+          screen(`Speed test, ${chunk}-byte messages: ${Math.floor((100 * (r * total + done)) / (2 * total))}%`, "busy");
+        }, { end: false });
+        ms += t.sendMs;
+      }
+      print(`${String(chunk).padStart(4)}-byte messages: 1 MB in ${(ms / 1000).toFixed(1)} s = ${kbs(2 * ROUND, ms)} KB/s`);
+      note(`speed test: ${chunk} bytes -> ${kbs(2 * ROUND, ms)} KB/s`);
+    }
+    screen("Speed test done. Nothing was written to the card.", "ok");
+  } catch (e) {
+    print(`stopped: ${e.message}`);
+    screen(e.message, "bad");
+  } finally {
+    state.busy = false;
+    $("run-speedtest").disabled = false;
+    render();
+  }
+});
 
 /* ---- write -------------------------------------------------------------- */
 const images = {};
