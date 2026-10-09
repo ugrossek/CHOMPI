@@ -19,9 +19,12 @@
  *      02 BEGIN  total:u28 slot name_len name -> 42 status
  *      03 DATA   offset:u28  packed           -> 43 status  received:u28
  *      04 END    crc32:u35  [flags]           -> 44 status  (after the write)
- *      05 LIST   slot                         -> 45 status slot name_len name
+ *      06 LIST   slot                         -> 46 status slot name_len name
  *                                                    size:u28
- *      06 CLEAR  slot [name_len name]         -> 46 status slot removed
+ *      07 CLEAR  slot [name_len name]         -> 47 status slot removed
+ *
+ *  05 is left for RUN (start a slot), proposed upstream separately. Test
+ *  launchers 1.4.0 - 1.4.2 had LIST and CLEAR at 05 and 06.
  *
  *  The host sends one message and waits for its reply. Stop-and-wait keeps the
  *  receive side to a single buffer, and USB round trips are short enough that
@@ -35,7 +38,7 @@
 /** The launcher's own version. Also in the image as kLauncherTag, which is
  *  how a launcher recognises another one sent to it for self-update. */
 #ifndef CHOMPI_LAUNCHER_VERSION_PATCH
-#define CHOMPI_LAUNCHER_VERSION_PATCH 2
+#define CHOMPI_LAUNCHER_VERSION_PATCH 3
 #endif
 #define CHOMPI_LAUNCHER_VERSION_MAJOR 1
 #define CHOMPI_LAUNCHER_VERSION_MINOR 4
@@ -66,8 +69,8 @@ namespace chompi
          *  byte of the PING reply. Older launchers send no such byte. */
         enum Feature : uint8_t
         {
-            FEATURE_LIST  = 1 << 0, /**< 05 LIST */
-            FEATURE_CLEAR = 1 << 1, /**< 06 CLEAR */
+            FEATURE_LIST  = 1 << 0, /**< 06 LIST */
+            FEATURE_CLEAR = 1 << 1, /**< 07 CLEAR */
             FEATURE_STAY  = 1 << 2, /**< END flag: store, do not start */
             FEATURE_LAUNCHER = 1 << 3, /**< slot 127: update the launcher */
         };
@@ -83,8 +86,8 @@ namespace chompi
             BEGIN = 0x02,
             DATA  = 0x03,
             END   = 0x04,
-            LIST  = 0x05,
-            CLEAR = 0x06,
+            LIST  = 0x06,
+            CLEAR = 0x07,
             REPLY = 0x40, /**< or'd into the command being answered */
         };
 

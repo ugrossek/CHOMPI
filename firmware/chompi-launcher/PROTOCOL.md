@@ -205,10 +205,15 @@ commands below with `BAD_MESSAGE`, and END with a flags byte the same way.
 
 | Bit | Name | Meaning |
 |---|---|---|
-| 0 | `LIST` | `05 LIST` is there |
-| 1 | `CLEAR` | `06 CLEAR` is there |
+| 0 | `LIST` | `06 LIST` is there |
+| 1 | `CLEAR` | `07 CLEAR` is there |
 | 2 | `STAY` | END takes the flags byte |
 | 3 | `LAUNCHER` | BEGIN to slot 127 updates the launcher itself |
+
+Command `05` is left for RUN (start the firmware in a slot), proposed
+separately. The test launchers 1.4.0 – 1.4.2 had LIST and CLEAR at `05` and
+`06`; a client that wants to talk to them can tell them apart by
+`launcher_version` (missing on 1.4.0, which already had the features byte).
 
 ### `STAY`: store without starting
 
@@ -221,13 +226,13 @@ there is a firmware to offer.
 An END resent after a lost reply stores the same image again, which is
 harmless.
 
-### `05` LIST
+### `06` LIST
 
 | Field | Type | Meaning |
 |---|---|---|
 | slot | `u7` | 1 – `slots` |
 
-Reply `45`:
+Reply `46`:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -242,7 +247,7 @@ number that filled a free key (`HMMM.bin`). Longer names are cut to 40
 characters, and anything outside printable ASCII comes as `?`. On failure
 (`BAD_SLOT`, `NO_CARD`) the reply is the status only.
 
-### `06` CLEAR
+### `07` CLEAR
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -250,7 +255,7 @@ characters, and anything outside printable ASCII comes as `?`. On failure
 | name_len | `u7` | optional, 1 – 40 |
 | name | `name_len` bytes | the file LIST reported on that key |
 
-Reply `46`:
+Reply `47`:
 
 | Field | Type | Meaning |
 |---|---|---|
