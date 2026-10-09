@@ -31,6 +31,15 @@
  */
 #pragma once
 #include "daisy_seed.h"
+
+/** The launcher's own version. Also in the image as kLauncherTag, which is
+ *  how a launcher recognises another one sent to it for self-update. */
+#ifndef CHOMPI_LAUNCHER_VERSION_PATCH
+#define CHOMPI_LAUNCHER_VERSION_PATCH 2
+#endif
+#define CHOMPI_LAUNCHER_VERSION_MAJOR 1
+#define CHOMPI_LAUNCHER_VERSION_MINOR 4
+#define CHOMPI_LAUNCHER_TAG_PREFIX "CHOMPI-LAUNCHER "
 #include "chainload.h"
 #include <cstring>
 
@@ -42,7 +51,12 @@ namespace chompi
         static constexpr uint8_t  kVersion  = 1;
         /** The launcher's own version, major.minor.patch, after the features
          *  byte in the PING reply. Test build: not a release number yet. */
-        static constexpr uint8_t  kLauncherVersion[3] = {1, 4, 0};
+        static constexpr uint8_t kLauncherVersion[3]
+            = {CHOMPI_LAUNCHER_VERSION_MAJOR, CHOMPI_LAUNCHER_VERSION_MINOR,
+               CHOMPI_LAUNCHER_VERSION_PATCH};
+        /** BEGIN's slot for "this image is a new launcher" (FEATURE_LAUNCHER).
+         *  Out of the range of keys; slot 0 is reserved for something else. */
+        static constexpr uint8_t kLauncherSlot = 127;
         static constexpr uint32_t kMaxChunk = 2048; /**< raw bytes per DATA */
         static constexpr size_t   kMaxName  = 16;  /**< chars in a slot name */
         /** Most chars of a card filename LIST reports. */
@@ -55,9 +69,10 @@ namespace chompi
             FEATURE_LIST  = 1 << 0, /**< 05 LIST */
             FEATURE_CLEAR = 1 << 1, /**< 06 CLEAR */
             FEATURE_STAY  = 1 << 2, /**< END flag: store, do not start */
+            FEATURE_LAUNCHER = 1 << 3, /**< slot 127: update the launcher */
         };
         static constexpr uint8_t kFeatures
-            = FEATURE_LIST | FEATURE_CLEAR | FEATURE_STAY;
+            = FEATURE_LIST | FEATURE_CLEAR | FEATURE_STAY | FEATURE_LAUNCHER;
 
         /** END's optional flags byte. */
         static constexpr uint8_t kEndStay = 1 << 0;
@@ -88,6 +103,9 @@ namespace chompi
             NO_CARD      = 10, /**< no card, or it would not mount */
             WRITE_FAILED = 11, /**< the card refused it, or readback differed */
             CARD_FULL    = 12, /**< no room on the card for the image */
+            NOT_LAUNCHER = 13, /**< slot 127, but the image is no launcher */
+            OTHER_BIN    = 14, /**< another .bin in the card root would be
+                                    installed instead of the new launcher */
         };
 
         /** What Poll() saw, for the caller's LEDs and log. */
@@ -209,6 +227,8 @@ namespace chompi
         /** The upload's slot, or for List/Clear the slot asked about. */
         uint8_t     Slot() const { return query_slot_ ? query_slot_ : slot_; }
         const char *Name() const { return name_; }
+        /** The upload is a new launcher, not a firmware for a key. */
+        bool        ForLauncher() const { return slot_ == kLauncherSlot; }
         Status      LastStatus() const { return last_status_; }
 
       private:
@@ -288,6 +308,19 @@ namespace chompi
         {
             for (int i = 0; i < n; i++, v >>= 7)
                 p[i] = v & 0x7F;
+        }
+
+        /** Whether the image carries a launcher's kLauncherTag: the prefix
+         *  followed by a version number. A firmware for a key never does. */
+        static bool HasLauncherTag(const uint8_t *p, uint32_t len)
+        {
+            static const char kPrefix[] = CHOMPI_LAUNCHER_TAG_PREFIX;
+            const uint32_t    n         = sizeof(kPrefix) - 1;
+            for (uint32_t i = 0; i + n < len; i++)
+                if (p[i] == (uint8_t)kPrefix[0] && memcmp(p + i, kPrefix, n) == 0
+                   && p[i + n] >= '0' && p[i + n] <= '9')
+                    return true;
+            return false;
         }
 
         /** A card filename the way LIST sends it: at most kMaxListName
@@ -397,7 +430,7 @@ namespace chompi
                     if (total < 8 || total > capacity_)
                         return Fail(cmd, TOO_BIG);
                     const uint8_t slot = body[4];
-                    if (slot < 1 || slot > slots_)
+                    if ((slot < 1 || slot > slots_) && slot != kLauncherSlot)
                         return Fail(cmd, BAD_SLOT);
                     if (!NameValid(body + 6, body[5]))
                         return Fail(cmd, BAD_NAME);
@@ -456,6 +489,8 @@ namespace chompi
                         return Fail(cmd, BAD_CRC);
                     if (!ImageLooksValid(image_, total_))
                         return Fail(cmd, BAD_IMAGE);
+                    if (ForLauncher() && !HasLauncherTag(image_, total_))
+                        return Fail(cmd, NOT_LAUNCHER);
                     /* No reply yet: it waits until the image is on the card,
                        so the host learns the final outcome. FinishEnd(). */
                     return Event::Complete;

@@ -32,7 +32,7 @@ HEADER = bytes([0xF0, 0x7D, 0x43, 0x48])
 PING, BEGIN, DATA, END, LIST, CLEAR = 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 REPLY = 0x40
 
-FEATURE_LIST, FEATURE_CLEAR, FEATURE_STAY = 1, 2, 4
+FEATURE_LIST, FEATURE_CLEAR, FEATURE_STAY, FEATURE_LAUNCHER = 1, 2, 4, 8
 END_STAY = 1
 
 PROTOCOL_VERSION = 1
@@ -51,7 +51,11 @@ STATUS = {
     10: "no SD card, or it would not mount",
     11: "writing to the card failed",
     12: "the card is full",
+    13: "that image is not a launcher",
+    14: "another .bin in the card root would be installed instead; remove it first",
 }
+
+LAUNCHER_SLOT = 127
 
 NAME_OK = re.compile(r"^[A-Z0-9_-]{1,16}$")
 
@@ -167,6 +171,8 @@ def main():
     ap.add_argument("image", nargs="?", help="firmware .bin to send")
     ap.add_argument("--slot", type=int,
                     help="slot to store it in, 1-15; replaces what is there")
+    ap.add_argument("--launcher", action="store_true",
+                    help="the image is a new launcher: install it (CHOMPI restarts)")
     ap.add_argument("--stay", action="store_true",
                     help="store only; the launcher stays in the picker")
     ap.add_argument("--list", action="store_true", help="show what is on each key")
@@ -177,8 +183,10 @@ def main():
     ap.add_argument("--device", help="raw MIDI node, e.g. /dev/snd/midiC1D0 (default: find CHOMPI)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
-    if args.image and args.slot is None:
+    if args.image and args.slot is None and not args.launcher:
         ap.error("--slot is needed to send an image")
+    if args.launcher and not args.image:
+        ap.error("--launcher needs the launcher's CHOMPI.bin")
     if not (args.image or args.list or args.clear):
         ap.error("nothing to do: give an image and --slot, or --list or --clear")
 
@@ -219,6 +227,11 @@ def main():
         removed = len(reply) < 3 or reply[2]
         print(f"  key {args.clear} " + ("cleared" if removed else "was already empty"))
 
+    if args.image and args.launcher:
+        need(FEATURE_LAUNCHER, "update itself")
+        send(link, image, "LAUNCHER", LAUNCHER_SLOT, max_chunk, False, launcher=True)
+        return
+
     if args.image:
         if not 1 <= args.slot <= slots:
             sys.exit(f"slot must be 1-{slots}")
@@ -237,9 +250,12 @@ def main():
             print(f"  key {slot:2d}: {fname} ({size} bytes)" if n else f"  key {slot:2d}: -")
 
 
-def send(link, image, name, slot, max_chunk, stay):
-    target = f"{slot:02d}_{name}.bin"
-    print(f"  storing as FIRMWARE/{target}, replacing anything in slot {slot}")
+def send(link, image, name, slot, max_chunk, stay, launcher=False):
+    if launcher:
+        print("  storing as the new launcher, CHOMPI.bin; the current one becomes CHOMPI.old")
+    else:
+        target = f"{slot:02d}_{name}.bin"
+        print(f"  storing as FIRMWARE/{target}, replacing anything in slot {slot}")
 
     check(link.call(BEGIN, put7(len(image), 4) + bytes([slot, len(name)])
                     + name.encode("ascii")), "begin")
@@ -272,7 +288,10 @@ def send(link, image, name, slot, max_chunk, stay):
                  "check the card")
     check(reply, "end")
     print(f"  written and checked in {stored_in:.1f} s")
-    print(f"stored in slot {slot}" + ("" if stay else " -- starting firmware"))
+    if launcher:
+        print("stored -- CHOMPI restarts and installs it (rainbow), then the keys breathe white")
+    else:
+        print(f"stored in slot {slot}" + ("" if stay else " -- starting firmware"))
 
 
 if __name__ == "__main__":

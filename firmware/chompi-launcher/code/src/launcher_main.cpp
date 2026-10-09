@@ -28,6 +28,14 @@
 #include <cstdarg>
 
 using namespace daisy;
+
+#define CHOMPI_STR_(x) #x
+#define CHOMPI_STR(x) CHOMPI_STR_(x)
+/** Marks this image as a launcher, with its version. A launcher only takes
+ *  an image carrying this as a new launcher (MidiUpload::HasLauncherTag). */
+extern "C" __attribute__((used)) const char kLauncherTag[]
+    = CHOMPI_LAUNCHER_TAG_PREFIX CHOMPI_STR(CHOMPI_LAUNCHER_VERSION_MAJOR) "." CHOMPI_STR(
+        CHOMPI_LAUNCHER_VERSION_MINOR) "." CHOMPI_STR(CHOMPI_LAUNCHER_VERSION_PATCH);
 using namespace chompi;
 
 /** Where the firmwares live. Invisible to the bootloader because it is a
@@ -491,16 +499,15 @@ static bool RemoveSlotFiles(unsigned slot, const char *also)
     return true;
 }
 
-/** Write the uploaded image into its slot: /FIRMWARE/NN_NAME.bin.
- *
- *  Goes to a temporary file first, which is read back and compared before any
- *  existing NN_* file is removed, so a failed write never costs the firmware
- *  already in the slot. On success *out describes the new file, ready for
- *  LoadImage(). */
-static MidiUpload::Status StoreUpload(Slot *out)
+/** Where an upload is written and checked before it takes its place. In
+ *  /FIRMWARE, which the bootloader never looks into, and not called *.bin. */
+static const char *kTemp = "FIRMWARE/upload.tmp";
+
+/** Write the uploaded image to kTemp and read it back. On failure kTemp is
+ *  gone again and nothing else on the card has changed. */
+static MidiUpload::Status WriteTemp()
 {
-    static const char *kTemp = "FIRMWARE/upload.tmp";
-    static FIL         file;
+    static FIL file;
 
     const uint32_t len = upload.Total();
 
@@ -572,6 +579,21 @@ static MidiUpload::Status StoreUpload(Slot *out)
     }
     Log("store: %lu bytes written and verified in %lu ms", (unsigned long)len,
         (unsigned long)(System::GetNow() - started));
+    return MidiUpload::OK;
+}
+
+/** Write the uploaded image into its slot: /FIRMWARE/NN_NAME.bin.
+ *
+ *  Goes to a temporary file first, which is read back and compared before any
+ *  existing NN_* file is removed, so a failed write never costs the firmware
+ *  already in the slot. On success *out describes the new file, ready for
+ *  LoadImage(). */
+static MidiUpload::Status StoreUpload(Slot *out)
+{
+    const MidiUpload::Status st = WriteTemp();
+    if (st != MidiUpload::OK)
+        return st;
+    const uint32_t len = upload.Total();
 
     /* Clear the slot: every NN_* file, whatever its name. A firmware without
        a number that happened to sit on this key stays, and moves to a free
@@ -585,12 +607,99 @@ static MidiUpload::Status StoreUpload(Slot *out)
 
     char path[80];
     snprintf(path, sizeof(path), "%s/%s", kFirmwareDir, out->name);
-    res = f_rename(kTemp, path);
+    const FRESULT res = f_rename(kTemp, path);
     Log("store: f_rename -> \"%s\" -> %d", path, (int)res);
     if (res != FR_OK)
         return MidiUpload::WRITE_FAILED;
 
     return MidiUpload::OK;
+}
+
+/** A .bin in the card root other than CHOMPI.bin, as the bootloader sees
+ *  them: it installs the first one it meets, so with one of these around a
+ *  new CHOMPI.bin might never be installed. Fills `name` if found. */
+static bool OtherRootBin(char *name, size_t size)
+{
+    DIR     dir;
+    FILINFO info;
+    bool    found = false;
+    if (f_opendir(&dir, "/") != FR_OK)
+        return false;
+    while (!found && f_readdir(&dir, &info) == FR_OK && info.fname[0])
+    {
+        if (info.fattrib & (AM_HID | AM_DIR))
+            continue; /* the bootloader skips these too */
+        if ((strstr(info.fname, ".bin") || strstr(info.fname, ".BIN"))
+           && strcasecmp(info.fname, "CHOMPI.bin") != 0)
+        {
+            snprintf(name, size, "%s", info.fname);
+            found = true;
+        }
+    }
+    f_closedir(&dir);
+    return found;
+}
+
+/** Put the uploaded launcher in place as /CHOMPI.bin, keeping the current one
+ *  as /CHOMPI.old. The bootloader installs it at the next start, because it
+ *  differs from what it holds.
+ *
+ *  Safe against power loss at any step: until the bootloader has installed
+ *  the new file, it still holds this launcher and starts it, and while it
+ *  installs, the new file stays on the card for it to try again. To go back,
+ *  rename CHOMPI.old to CHOMPI.bin on a computer. */
+static MidiUpload::Status StoreLauncher()
+{
+    if (!EnsureCard())
+        return MidiUpload::NO_CARD;
+
+    char other[_MAX_LFN + 1];
+    if (OtherRootBin(other, sizeof(other)))
+    {
+        Log("launcher: refusing, \"%s\" in the card root would be installed instead",
+            other);
+        return MidiUpload::OTHER_BIN;
+    }
+
+    const MidiUpload::Status st = WriteTemp();
+    if (st != MidiUpload::OK)
+        return st;
+
+    FRESULT res = f_unlink("/CHOMPI.old");
+    Log("launcher: f_unlink(CHOMPI.old) -> %d", (int)res);
+    res = f_rename("/CHOMPI.bin", "/CHOMPI.old");
+    Log("launcher: CHOMPI.bin -> CHOMPI.old: %d", (int)res);
+    if (res != FR_OK && res != FR_NO_FILE)
+    {
+        f_unlink(kTemp);
+        return MidiUpload::WRITE_FAILED;
+    }
+    res = f_rename(kTemp, "/CHOMPI.bin");
+    Log("launcher: upload -> CHOMPI.bin: %d", (int)res);
+    if (res != FR_OK)
+    {
+        /* Put the old one back, so the card is as it was. */
+        Log("launcher: restoring CHOMPI.old -> %d",
+            (int)f_rename("/CHOMPI.old", "/CHOMPI.bin"));
+        f_unlink(kTemp);
+        return MidiUpload::WRITE_FAILED;
+    }
+    return MidiUpload::OK;
+}
+
+static void ShutdownPeripherals();
+
+/** Restart without a jump request: the bootloader then checks the card and
+ *  installs the new CHOMPI.bin. */
+[[noreturn]] static void RestartForInstall()
+{
+    Log("launcher: restarting so the bootloader installs the new one");
+    LogFlush();
+    ShutdownPeripherals();
+    boot_info.status = System::BootInfo::Type::INVALID;
+    __DSB();
+    NVIC_SystemReset();
+    for (;;) {}
 }
 
 /** Breathing white on every populated key. Unpopulated keys stay dark, so the
@@ -972,6 +1081,20 @@ static void ServiceUsb(uint32_t now)
                 (unsigned long)upload.Crc(), (unsigned)upload.Slot(),
                 upload.Name());
 
+            if (upload.ForLauncher())
+            {
+                const MidiUpload::Status st = StoreLauncher();
+                upload.FinishEnd(st);
+                if (st != MidiUpload::OK)
+                {
+                    Log("usb: launcher not stored, status %d", (int)st);
+                    LogFlush();
+                    break;
+                }
+                System::Delay(50); /* let the END reply leave */
+                RestartForInstall();
+            }
+
             Slot                     stored;
             const MidiUpload::Status st = StoreUpload(&stored);
             if (st == MidiUpload::OK && upload.Stay())
@@ -1066,7 +1189,7 @@ int main(void)
     card_ok = (mres == FR_OK);
     if (card_ok)
         LogStartRun();
-    Log("==== CHOMPI launcher: boot");
+    Log("==== %s: boot", kLauncherTag);
     Log("f_mount(\"%s\") -> %d", sd_path ? sd_path : "(null)", (int)mres);
 
     if (mres != FR_OK)

@@ -121,7 +121,7 @@ they expect and ignore what they do not know.
 | Field | Type | Meaning |
 |---|---|---|
 | size | `u28` | image size in bytes |
-| slot | `u7` | 1 – `slots`. 0 is reserved (see below) |
+| slot | `u7` | 1 – `slots`, or 127 for a new launcher (`LAUNCHER`). 0 is reserved (see below) |
 | name_len | `u7` | 1 – 16 |
 | name | `name_len` bytes | ASCII, see Names |
 
@@ -208,6 +208,7 @@ commands below with `BAD_MESSAGE`, and END with a flags byte the same way.
 | 0 | `LIST` | `05 LIST` is there |
 | 1 | `CLEAR` | `06 CLEAR` is there |
 | 2 | `STAY` | END takes the flags byte |
+| 3 | `LAUNCHER` | BEGIN to slot 127 updates the launcher itself |
 
 ### `STAY`: store without starting
 
@@ -269,6 +270,36 @@ otherwise also remove a file without a number that moved onto the key in the
 meantime. On failure (`BAD_SLOT`, `NO_CARD`, `WRITE_FAILED`) the reply is the
 status only.
 
+### `LAUNCHER`: updating the launcher
+
+BEGIN with slot **127** (out of the range of keys; slot 0 is reserved) sends
+a new launcher instead of a firmware. The name is ignored but must follow
+the name rules; use `LAUNCHER`. DATA as usual. At END, besides the usual
+checks, the launcher:
+
+1. Checks that the image is a launcher: it must contain the text
+   `CHOMPI-LAUNCHER ` followed by its version, e.g. `CHOMPI-LAUNCHER 1.4.2`
+   (`NOT_LAUNCHER`). Launchers carry this tag from version 1.4.1 on.
+2. Refuses if the card root holds another `.bin` besides `CHOMPI.bin`
+   (`OTHER_BIN`): the bootloader installs the first `.bin` it finds, so the
+   new launcher might never be installed.
+3. Writes the image to a temporary file in `/FIRMWARE` and reads it back.
+4. Renames `/CHOMPI.bin` to `/CHOMPI.old` (replacing an older one) and the
+   temporary file to `/CHOMPI.bin`.
+5. Replies `OK`, then restarts. The bootloader finds a `CHOMPI.bin` that
+   differs from what it holds and installs it (a rainbow on the keys), then
+   starts it. The USB device goes away and comes back with the new launcher;
+   PING it to check `launcher_version`.
+
+The STAY flag is ignored. Any failure leaves the card and the running
+launcher as they were.
+
+Power loss is safe at every step: until the bootloader has installed the new
+`CHOMPI.bin`, it still holds the old launcher and starts that; if it is cut
+off while installing, the new file is still on the card and it tries again.
+If a new launcher turns out not to work, rename `CHOMPI.old` back to
+`CHOMPI.bin` on a computer.
+
 ### Setting up several slots
 
 1. PING, and check `features`.
@@ -297,6 +328,8 @@ CLEAR the slot first.
 | 10 | `NO_CARD` | no SD card, or it would not mount |
 | 11 | `WRITE_FAILED` | the card refused the write, or the readback mismatched |
 | 12 | `CARD_FULL` | no room on the card for the image |
+| 13 | `NOT_LAUNCHER` | slot 127, but the image has no launcher tag |
+| 14 | `OTHER_BIN` | slot 127, but another `.bin` in the card root would be installed instead |
 
 Clients should show unknown codes as a number rather than fail, since later
 versions may add more.
