@@ -20,6 +20,10 @@ Sending again to the same slot replaces the firmware there. That is the
 intended develop-test-debug loop: one slot for your work-in-progress build,
 overwritten on each send.
 
+Newer launchers can also set up several slots in one go: the client lists
+what is on each key, clears keys, and stores firmwares without starting them
+(see Features). The launcher then stays in the picker throughout.
+
 ## When the launcher listens
 
 The launcher listens while it is running, i.e. while the picker is showing or
@@ -104,10 +108,12 @@ Reply `41`:
 | version | `u7` | protocol version, `1` for this document |
 | max_chunk | `u28` | most raw bytes one `DATA` may carry (currently 256) |
 | slots | `u7` | highest slot number accepted (currently 15) |
+| features | `u7` | optional, see Features. Missing on older launchers: treat as `0` |
 
 PING is safe at any time and does not affect an upload in progress. Clients
 should use it to find the launcher and should refuse to continue if
-`version` is one they do not know.
+`version` is one they do not know. They should accept a longer reply than
+they expect and ignore what they do not know.
 
 ### `02` BEGIN
 
@@ -156,6 +162,7 @@ Fails with `NOT_STARTED` without a prior BEGIN, `BAD_OFFSET` if `offset` >
 | Field | Type | Meaning |
 |---|---|---|
 | crc32 | `u35` | CRC-32 of the whole image |
+| flags | `u7` | optional, only if the launcher has `STAY` (see Features). Bit 0: store only, do not start |
 
 The CRC is the standard IEEE 802.3 / zlib / PNG CRC-32 (reflected,
 polynomial `0xEDB88320`, initial value and final XOR `0xFFFFFFFF`), as
@@ -171,7 +178,8 @@ the last step, so it is final:
 3. Checks the image (`BAD_IMAGE`, see Image requirements).
 4. Writes the slot file and verifies it (`NO_CARD`, `WRITE_FAILED`).
 
-On `OK`, the launcher boots the firmware right after replying. The client
+On `OK`, the launcher boots the firmware right after replying, unless
+the flags asked it to store only (then see `STAY` below). The client
 should then close the MIDI port. The launcher is gone, and the USB device
 disappears or changes as the new firmware starts.
 
@@ -185,6 +193,74 @@ On any failure, nothing on the card has changed and the upload is still in
 memory. Problems with the image (`BAD_CRC`, `BAD_IMAGE`) need a new upload.
 Problems with the card (`NO_CARD`, `WRITE_FAILED`) can be fixed (insert the
 card) and END sent again.
+
+## Features
+
+PING's last byte says what the launcher can do beyond the upload above. A
+client uses a feature only if its bit is set; an older launcher answers the
+commands below with `BAD_MESSAGE`, and END with a flags byte the same way.
+
+| Bit | Name | Meaning |
+|---|---|---|
+| 0 | `LIST` | `05 LIST` is there |
+| 1 | `CLEAR` | `06 CLEAR` is there |
+| 2 | `STAY` | END takes the flags byte |
+
+### `STAY`: store without starting
+
+With bit 0 of END's flags set, the launcher stores the firmware as usual and
+then stays where it is. The picker shows the new key, and the launcher keeps
+listening, so the client can send the next firmware right away. If a fault
+was showing (no card, nothing on the card), the picker comes up as soon as
+there is a firmware to offer.
+
+An END resent after a lost reply stores the same image again, which is
+harmless.
+
+### `05` LIST
+
+| Field | Type | Meaning |
+|---|---|---|
+| slot | `u7` | 1 – `slots` |
+
+Reply `45`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| status | `u7` | |
+| slot | `u7` | the slot asked about |
+| name_len | `u7` | 0 – 40; 0 means the key is empty |
+| name | `name_len` bytes | the file's name in `/FIRMWARE`, e.g. `05_TAPE-DEV.bin` |
+| size | `u28` | its size in bytes |
+
+This is what the picker shows on that key, so it includes files without a
+number that filled a free key (`HMMM.bin`). Longer names are cut to 40
+characters, and anything outside printable ASCII comes as `?`. On failure
+(`BAD_SLOT`, `NO_CARD`) the reply is the status only.
+
+### `06` CLEAR
+
+| Field | Type | Meaning |
+|---|---|---|
+| slot | `u7` | 1 – `slots` |
+
+Reply `46`: status (`u7`).
+
+Removes every `NN_*` file of that slot from `/FIRMWARE`, and the file
+without a number sitting on that key if there is one, i.e. whatever LIST
+reported. An empty key is not an error. Afterwards a file without a number
+may move onto the freed key; LIST again to see the result.
+
+### Setting up several slots
+
+1. PING, and check `features`.
+2. LIST every slot to show the user what is there now.
+3. For each change: CLEAR, or BEGIN / DATA / END with `STAY`.
+4. LIST again to confirm.
+
+Storing over a slot does not touch a file without a number that was sitting
+on that key: it moves to the next free key. Clients that want it gone should
+CLEAR the slot first.
 
 ## Status codes
 
@@ -283,6 +359,7 @@ samples.
 |---|---|
 | reply to PING, BEGIN, DATA | expect within 300 ms. Resend after that, up to ~10 tries |
 | reply to END | allow 10 s (it writes and verifies ~250 KB on the card) |
+| reply to LIST, CLEAR | allow 2 s (they may have to mount the card first) |
 | gaps between messages | keep below 3 s, or the launcher may treat the upload as abandoned |
 
 A 240 KB image takes about 1–5 s to transfer, depending on the host's MIDI

@@ -12,6 +12,10 @@ firmware starts. Send to the same slot again to replace it.
 The name defaults to the project folder the image was built in (chompi-tape
 -> TAPE); override it with --name.
 
+With --stay the launcher only stores it and keeps showing the picker, so more
+can follow. --list shows what is on each key, --clear N empties key N. These
+three need a launcher that has them; older ones say so.
+
 Linux only, no dependencies -- talks to ALSA's raw MIDI device directly.
 Protocol: see PROTOCOL.md.
 """
@@ -25,8 +29,11 @@ import time
 import zlib
 
 HEADER = bytes([0xF0, 0x7D, 0x43, 0x48])
-PING, BEGIN, DATA, END = 0x01, 0x02, 0x03, 0x04
+PING, BEGIN, DATA, END, LIST, CLEAR = 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 REPLY = 0x40
+
+FEATURE_LIST, FEATURE_CLEAR, FEATURE_STAY = 1, 2, 4
+END_STAY = 1
 
 PROTOCOL_VERSION = 1
 
@@ -149,19 +156,28 @@ def check(reply, what):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("image", help="firmware .bin to send")
-    ap.add_argument("--slot", type=int, required=True,
+    ap.add_argument("image", nargs="?", help="firmware .bin to send")
+    ap.add_argument("--slot", type=int,
                     help="slot to store it in, 1-15; replaces what is there")
+    ap.add_argument("--stay", action="store_true",
+                    help="store only; the launcher stays in the picker")
+    ap.add_argument("--list", action="store_true", help="show what is on each key")
+    ap.add_argument("--clear", type=int, metavar="SLOT", help="empty that key")
     ap.add_argument("--name", help="name on the card, 1-16 of A-Z 0-9 - _ "
                     "(default: from the project folder, e.g. TAPE)")
     ap.add_argument("--device", help="raw MIDI node, e.g. /dev/snd/midiC1D0 (default: find CHOMPI)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
+    if args.image and args.slot is None:
+        ap.error("--slot is needed to send an image")
+    if not (args.image or args.list or args.clear):
+        ap.error("nothing to do: give an image and --slot, or --list or --clear")
 
-    image = open(args.image, "rb").read()
-    name = args.name.upper() if args.name else default_name(args.image)
-    if not NAME_OK.match(name):
-        sys.exit(f"bad name {name!r}: use 1-16 of A-Z 0-9 - _")
+    if args.image:
+        image = open(args.image, "rb").read()
+        name = args.name.upper() if args.name else default_name(args.image)
+        if not NAME_OK.match(name):
+            sys.exit(f"bad name {name!r}: use 1-16 of A-Z 0-9 - _")
     device = args.device or find_device()
     if not device:
         sys.exit("CHOMPI not found in /proc/asound/cards; plug it in or pass --device")
@@ -175,14 +191,43 @@ def main():
         sys.exit(f"launcher speaks protocol {version}, this script {PROTOCOL_VERSION}"
                  " -- update the launcher or this script")
     slots = reply[6]
+    features = reply[7] if len(reply) > 7 else 0
     print(f"launcher on {device} (protocol {version}, {max_chunk}-byte chunks)")
-    if not 1 <= args.slot <= slots:
-        sys.exit(f"slot must be 1-{slots}")
 
-    target = f"{args.slot:02d}_{name}.bin"
-    print(f"  storing as FIRMWARE/{target}, replacing anything in slot {args.slot}")
+    def need(feature, what):
+        if not features & feature:
+            sys.exit(f"this launcher cannot {what} -- put the newer launcher on the card")
 
-    check(link.call(BEGIN, put7(len(image), 4) + bytes([args.slot, len(name)])
+    if args.clear is not None:
+        need(FEATURE_CLEAR, "clear a key")
+        if not 1 <= args.clear <= slots:
+            sys.exit(f"slot must be 1-{slots}")
+        check(link.call(CLEAR, bytes([args.clear]), timeout=2.0), "clear")
+        print(f"  key {args.clear} cleared")
+
+    if args.image:
+        if not 1 <= args.slot <= slots:
+            sys.exit(f"slot must be 1-{slots}")
+        if args.stay:
+            need(FEATURE_STAY, "store without starting")
+        send(link, image, name, args.slot, max_chunk, args.stay)
+
+    if args.list:
+        need(FEATURE_LIST, "list its keys")
+        for slot in range(1, slots + 1):
+            reply = link.call(LIST, bytes([slot]), timeout=2.0)
+            check(reply, f"list {slot}")
+            n = reply[2]
+            fname = reply[3:3 + n].decode("ascii")
+            size = get7(reply[3 + n:7 + n])
+            print(f"  key {slot:2d}: {fname} ({size} bytes)" if n else f"  key {slot:2d}: -")
+
+
+def send(link, image, name, slot, max_chunk, stay):
+    target = f"{slot:02d}_{name}.bin"
+    print(f"  storing as FIRMWARE/{target}, replacing anything in slot {slot}")
+
+    check(link.call(BEGIN, put7(len(image), 4) + bytes([slot, len(name)])
                     + name.encode("ascii")), "begin")
 
     started = time.monotonic()
@@ -203,13 +248,14 @@ def main():
     # that got lost; if it was the reply that got lost, the launcher has
     # already started the firmware and the resend goes unanswered too.
     print("  writing to the card...")
-    reply = link.call(END, put7(zlib.crc32(image), 5), timeout=10.0, retries=2,
-                      required=False)
+    flags = bytes([END_STAY]) if stay else b""
+    reply = link.call(END, put7(zlib.crc32(image), 5) + flags, timeout=10.0,
+                      retries=2, required=False)
     if reply is None:
         sys.exit("no reply to END -- the firmware was probably stored and started; "
                  "check the card")
     check(reply, "end")
-    print(f"stored in slot {args.slot} -- starting firmware")
+    print(f"stored in slot {slot}" + ("" if stay else " -- starting firmware"))
 
 
 if __name__ == "__main__":

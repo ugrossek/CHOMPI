@@ -13,7 +13,9 @@
  *  A firmware can also arrive over USB MIDI (see midi_upload.h and
  *  PROTOCOL.md). It is written into the slot the host names, then read back
  *  off the card and started exactly as if its key had been pressed -- send it
- *  while the picker is up, or while any fault is showing.
+ *  while the picker is up, or while any fault is showing. A host setting up
+ *  several slots in one go asks to store only; the launcher then stays in the
+ *  picker, and the host can also list and clear slots.
  */
 #include "daisy_seed.h"
 #include "hardware.h"
@@ -71,6 +73,10 @@ MidiUpload upload;
 /** Whether the card is mounted. An upload remounts it if not, so a card
  *  inserted after power-on still works. */
 static bool card_ok = false;
+
+/** The host changed the card while a fault was showing: go to the picker
+ *  once there is something on it. */
+static bool picker_wanted = false;
 
 /* ------------------------------------------------------------------------
  *  Logging
@@ -209,7 +215,7 @@ static int SlotFromName(const char *name)
  *  a firmware stays on its key no matter what else is on the card -- the
  *  same slot number a USB upload names. Files without a prefix (or whose key
  *  is taken) fill the free keys in name order. */
-static void ScanFirmwares()
+static void ScanFirmwares(bool verbose = true)
 {
     static Slot found[2 * kMaxSlots];
     int         n_found = 0;
@@ -238,24 +244,28 @@ static void ScanFirmwares()
             break; /* end of directory */
 
         seen++;
-        Log("  entry: \"%s\" attrib=0x%02X size=%lu", info.fname,
-            (unsigned)info.fattrib, (unsigned long)info.fsize);
+        if (verbose)
+            Log("  entry: \"%s\" attrib=0x%02X size=%lu", info.fname,
+                (unsigned)info.fattrib, (unsigned long)info.fsize);
 
         if (info.fattrib & (AM_HID | AM_DIR))
         {
-            Log("    skip: hidden or directory");
+            if (verbose)
+                Log("    skip: hidden or directory");
             continue;
         }
         if (!HasBinExtension(info.fname))
         {
-            Log("    skip: not .bin");
+            if (verbose)
+                Log("    skip: not .bin");
             continue;
         }
         /* Anything that cannot be a valid image is not worth a key. */
         if (info.fsize < 8 || info.fsize > sizeof(fw_image))
         {
-            Log("    skip: size out of range (max %lu)",
-                (unsigned long)sizeof(fw_image));
+            if (verbose)
+                Log("    skip: size out of range (max %lu)",
+                    (unsigned long)sizeof(fw_image));
             continue;
         }
 
@@ -427,6 +437,60 @@ static void DrawWriteProgress(uint32_t done, uint32_t total)
     fill_led_data();
 }
 
+/** Mount the card if it is not yet. False if there is none. */
+static bool EnsureCard()
+{
+    if (card_ok)
+        return true;
+    const FRESULT res = f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
+    Log("card was not mounted, f_mount -> %d", (int)res);
+    card_ok = (res == FR_OK);
+    if (card_ok)
+        ScanFirmwares(false);
+    return card_ok;
+}
+
+/** Remove every NN_* file in /FIRMWARE, whatever its name, and with
+ *  `also` set that file too (a firmware without a number sitting on key NN).
+ *  Collected first, since deleting while the directory is being read is
+ *  asking for trouble. */
+static bool RemoveSlotFiles(unsigned slot, const char *also)
+{
+    char prefix[8];
+    snprintf(prefix, sizeof(prefix), "%02u_", slot);
+
+    static char doomed[8][_MAX_LFN + 1];
+    int         n_doomed = 0;
+    DIR         dir;
+    FILINFO     info;
+    if (f_opendir(&dir, kFirmwareDir) == FR_OK)
+    {
+        while (n_doomed < 8 && f_readdir(&dir, &info) == FR_OK && info.fname[0])
+        {
+            if (!(info.fattrib & AM_DIR)
+               && (strncmp(info.fname, prefix, 3) == 0
+                   || (also && strcmp(info.fname, also) == 0)))
+            {
+                /* Same size as fname, so it always fits. */
+                strcpy(doomed[n_doomed++], info.fname);
+            }
+        }
+        f_closedir(&dir);
+    }
+    for (int i = 0; i < n_doomed; i++)
+    {
+        static char path[sizeof(doomed[0]) + 16];
+        strcpy(path, kFirmwareDir);
+        strcat(path, "/");
+        strcat(path, doomed[i]);
+        const FRESULT res = f_unlink(path);
+        Log("removing %s, f_unlink -> %d", path, (int)res);
+        if (res != FR_OK)
+            return false;
+    }
+    return true;
+}
+
 /** Write the uploaded image into its slot: /FIRMWARE/NN_NAME.bin.
  *
  *  Goes to a temporary file first, which is read back and compared before any
@@ -440,14 +504,8 @@ static MidiUpload::Status StoreUpload(Slot *out)
 
     const uint32_t len = upload.Total();
 
-    if (!card_ok)
-    {
-        const FRESULT res = f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1);
-        Log("store: card was not mounted, f_mount -> %d", (int)res);
-        if (res != FR_OK)
-            return MidiUpload::NO_CARD;
-        card_ok = true;
-    }
+    if (!EnsureCard())
+        return MidiUpload::NO_CARD;
 
     FRESULT res = f_mkdir(kFirmwareDir);
     if (res != FR_OK && res != FR_EXIST)
@@ -506,40 +564,14 @@ static MidiUpload::Status StoreUpload(Slot *out)
     Log("store: %lu bytes written and verified in %lu ms", (unsigned long)len,
         (unsigned long)(System::GetNow() - started));
 
-    /* Clear the slot: every NN_* file, whatever its name. Collected first,
-       since deleting while the directory is being read is asking for trouble. */
-    char prefix[8];
-    snprintf(prefix, sizeof(prefix), "%02u_", (unsigned)upload.Slot());
+    /* Clear the slot: every NN_* file, whatever its name. A firmware without
+       a number that happened to sit on this key stays, and moves to a free
+       one. */
+    if (!RemoveSlotFiles(upload.Slot(), nullptr))
+        return MidiUpload::WRITE_FAILED;
 
-    static char doomed[8][_MAX_LFN + 1];
-    int         n_doomed = 0;
-    DIR         dir;
-    FILINFO     info;
-    if (f_opendir(&dir, kFirmwareDir) == FR_OK)
-    {
-        while (n_doomed < 8 && f_readdir(&dir, &info) == FR_OK && info.fname[0])
-        {
-            if (!(info.fattrib & AM_DIR) && strncmp(info.fname, prefix, 3) == 0)
-            {
-                /* Same size as fname, so it always fits. */
-                strcpy(doomed[n_doomed++], info.fname);
-            }
-        }
-        f_closedir(&dir);
-    }
-    for (int i = 0; i < n_doomed; i++)
-    {
-        static char path[sizeof(doomed[0]) + 16];
-        strcpy(path, kFirmwareDir);
-        strcat(path, "/");
-        strcat(path, doomed[i]);
-        res = f_unlink(path);
-        Log("store: replacing %s, f_unlink -> %d", path, (int)res);
-        if (res != FR_OK)
-            return MidiUpload::WRITE_FAILED;
-    }
-
-    snprintf(out->name, sizeof(out->name), "%s%s.bin", prefix, upload.Name());
+    snprintf(out->name, sizeof(out->name), "%02u_%s.bin", (unsigned)upload.Slot(),
+             upload.Name());
     out->size = len;
 
     char path[80];
@@ -610,6 +642,7 @@ enum class Fault
 
 static void ServiceUsb(uint32_t now);
 static void DrawUploadProgress();
+[[noreturn]] static void PickerLoop();
 
 /** Slow pulse, and the unit stays here rather than jumping into nothing.
  *  Commits the log on the way in -- this is where the evidence matters most.
@@ -636,6 +669,14 @@ static void DrawUploadProgress();
     {
         const uint32_t now = System::GetNow();
         ServiceUsb(now);
+
+        /* The host has put firmwares on the card: offer them. */
+        if (picker_wanted && slot_count > 0)
+        {
+            Log("fault cleared from USB -- picker up with %d slot(s)", slot_count);
+            LogFlush();
+            PickerLoop();
+        }
 
         if (now - tick < 16)
             continue;
@@ -924,12 +965,20 @@ static void ServiceUsb(uint32_t now)
 
             Slot                     stored;
             const MidiUpload::Status st = StoreUpload(&stored);
+            if (st == MidiUpload::OK && upload.Stay())
+                ScanFirmwares(false); /* before the reply: a LIST may follow */
             upload.FinishEnd(st);
             if (st != MidiUpload::OK)
             {
                 Log("usb: store failed, status %d -- upload kept for a retry",
                     (int)st);
                 LogFlush();
+                break;
+            }
+            if (upload.Stay())
+            {
+                Log("usb: stored as %s, staying in the picker", stored.name);
+                picker_wanted = true;
                 break;
             }
 
@@ -944,6 +993,37 @@ static void ServiceUsb(uint32_t now)
                 ErrorLoop(Fault::ReadFailed);
             }
             Boot(length);
+        }
+
+        case MidiUpload::Event::List:
+        {
+            const int s = upload.Slot() - 1;
+            if (!EnsureCard())
+                upload.FinishList(MidiUpload::NO_CARD, nullptr, 0);
+            else if (slots[s].size)
+                upload.FinishList(MidiUpload::OK, slots[s].name, slots[s].size);
+            else
+                upload.FinishList(MidiUpload::OK, "", 0);
+            break;
+        }
+
+        case MidiUpload::Event::Clear:
+        {
+            const int s = upload.Slot() - 1;
+            if (!EnsureCard())
+            {
+                upload.FinishClear(MidiUpload::NO_CARD);
+                break;
+            }
+            /* Whatever is on that key goes, numbered or not: the host saw it
+               there in a LIST. */
+            const bool ok
+                = RemoveSlotFiles(upload.Slot(), slots[s].size ? slots[s].name : nullptr);
+            ScanFirmwares(false);
+            Log("usb: clear key %d -> %s", s + 1, ok ? "ok" : "failed");
+            picker_wanted = true;
+            upload.FinishClear(ok ? MidiUpload::OK : MidiUpload::WRITE_FAILED);
+            break;
         }
     }
 }
@@ -1001,7 +1081,13 @@ int main(void)
 
     Log("ready -- picker up with %d slot(s)", slot_count);
     LogFlush();
+    PickerLoop();
+}
 
+/** Light a key per firmware and start the one pressed. Keeps listening on
+ *  USB throughout, and follows the card as the host changes it. */
+[[noreturn]] static void PickerLoop()
+{
     /* Wait for every key to be released before arming, so that a key still held
        down from power-on does not immediately select a slot. */
     bool     armed = false;
