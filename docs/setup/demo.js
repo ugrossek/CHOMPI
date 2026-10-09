@@ -18,7 +18,7 @@
   const failSlot = +(P.get("failslot") || 0);
   const FULL = P.has("full"), SLOWCLEAR = P.has("slowclear"), SILENT = P.has("silent");
   const NOSELF = P.has("noself");
-  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.4.2")).split(".").map(Number);
+  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.4.3")).split(".").map(Number);
   function keys() {
     const k = Array(15).fill(null);
     const bins = Object.keys(card).filter((f) => /\.bin$/i.test(f)).sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
@@ -47,7 +47,7 @@
           setTimeout(() => reply(4,[0]), 300);
           const plug = (on) => { input.state = output.state = on ? "connected" : "disconnected"; access.onstatechange && access.onstatechange({}); };
           setTimeout(() => plug(false), 400);
-          setTimeout(() => { lver = window.__newLauncher || [1,4,2]; plug(true); }, 3500);
+          setTimeout(() => { lver = window.__newLauncher || [1,4,3]; plug(true); }, 3500);
           return;
         }
         if (up.slot === failSlot) return setTimeout(() => reply(4,[11]), 200);
@@ -58,13 +58,16 @@
         return setTimeout(() => reply(4,[0]), 300);
       }
       if (OLD) return reply(cmd,[1]);
-      if (cmd === 5) { const f = keys()[b[0]-1]; if (!f) return reply(5,[0,b[0],0,0,0,0,0]);
-        return reply(5,[0,b[0],f.length,...[...f].map(c=>c.charCodeAt(0)),...p7(card[f],4)]); }
-      if (cmd === 6) { const pre = String(b[0]).padStart(2,"0")+"_"; const on = keys()[b[0]-1];
+      const legacy = NOSELF || lver[0] * 1e6 + lver[1] * 1e3 + lver[2] < 1004003; /* LIST/CLEAR at 05/06 */
+      const LIST = legacy ? 5 : 6, CLEAR = legacy ? 6 : 7;
+      if (cmd === LIST) { const f = keys()[b[0]-1]; if (!f) return reply(LIST,[0,b[0],0,0,0,0,0]);
+        return reply(LIST,[0,b[0],f.length,...[...f].map(c=>c.charCodeAt(0)),...p7(card[f],4)]); }
+      if (cmd === CLEAR) { const pre = String(b[0]).padStart(2,"0")+"_"; const on = keys()[b[0]-1];
         const want = b.length > 1 ? String.fromCharCode(...b.slice(2, 2 + b[1])) : null;
         const ms = SLOWCLEAR ? 2300 : 3;
-        if (!on || (want !== null && want !== on)) return reply(6,[0,b[0],0], ms);
-        for (const f of Object.keys(card)) if (f.startsWith(pre) || f === on) delete card[f]; return reply(6,[0,b[0],1], ms); }
+        if (!on || (want !== null && want !== on)) return reply(CLEAR,[0,b[0],0], ms);
+        for (const f of Object.keys(card)) if (f.startsWith(pre) || f === on) delete card[f]; return reply(CLEAR,[0,b[0],1], ms); }
+      return reply(cmd,[1]);
     } };
   const access = { inputs: new Map([["i", input]]), outputs: new Map([["o", output]]), onstatechange: null };
   navigator.requestMIDIAccess = async () => access;
