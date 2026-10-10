@@ -42,10 +42,10 @@
 /** The launcher's own version. Also in the image as kLauncherTag, which is
  *  how a launcher recognises another one sent to it for self-update. */
 #ifndef CHOMPI_LAUNCHER_VERSION_PATCH
-#define CHOMPI_LAUNCHER_VERSION_PATCH 4
+#define CHOMPI_LAUNCHER_VERSION_PATCH 0
 #endif
 #define CHOMPI_LAUNCHER_VERSION_MAJOR 1
-#define CHOMPI_LAUNCHER_VERSION_MINOR 4
+#define CHOMPI_LAUNCHER_VERSION_MINOR 5
 #define CHOMPI_LAUNCHER_TAG_PREFIX "CHOMPI-LAUNCHER "
 #include "chainload.h"
 #include <cstring>

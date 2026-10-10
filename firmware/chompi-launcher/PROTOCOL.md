@@ -1,7 +1,8 @@
 # CHOMPI Launcher USB-MIDI Upload Protocol
 
-**Status: draft, protocol version 1.** Nothing has been released yet, so this
-is the first version. It is not the one `midi_upload.h` currently implements.
+**Protocol version 1.** Launcher v1.1 brought PING, BEGIN, DATA and END;
+v1.5 adds the features below (LIST, CLEAR, STAY, the launcher's own update)
+and RUN. Additions keep version 1: clients find them in PING's features byte.
 
 This describes how a host program sends a firmware image to the CHOMPI
 launcher over USB MIDI and stores it in a slot on the SD card. It is meant
@@ -115,7 +116,7 @@ Reply `41`:
 |---|---|---|
 | status | `u7` | always `0` |
 | version | `u7` | protocol version, `1` for this document |
-| max_chunk | `u28` | most raw bytes one `DATA` may carry (currently 2048; 256 before launcher 1.4). Clients may send less |
+| max_chunk | `u28` | most raw bytes one `DATA` may carry (2048 from launcher v1.5; 256 before). Clients may send less |
 | slots | `u7` | highest slot number accepted (currently 15) |
 | features | `u7` | optional, see Features. Missing on older launchers: treat as `0` |
 | launcher_version | 3 × `u7` | optional: major, minor, patch of the launcher itself. Missing on older launchers |
@@ -292,8 +293,8 @@ the name rules; use `LAUNCHER`. DATA as usual. At END, besides the usual
 checks, the launcher:
 
 1. Checks that the image is a launcher: it must contain the text
-   `CHOMPI-LAUNCHER ` followed by its version, e.g. `CHOMPI-LAUNCHER 1.4.2`
-   (`NOT_LAUNCHER`). Launchers carry this tag from version 1.4.1 on.
+   `CHOMPI-LAUNCHER ` followed by its version, e.g. `CHOMPI-LAUNCHER 1.5.0`
+   (`NOT_LAUNCHER`). Launchers carry this tag from v1.5 on (and the test builds from 1.4.1).
 2. Refuses if the card root holds another `.bin` besides `CHOMPI.bin`
    (`OTHER_BIN`): the bootloader installs the first `.bin` it finds, so the
    new launcher might never be installed.
