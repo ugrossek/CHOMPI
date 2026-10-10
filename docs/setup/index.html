@@ -291,10 +291,9 @@
 <main>
   <div class="masthead">
     <h1>Set up your CHOMPI</h1>
-    <span class="badge">Test page</span>
   </div>
   <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
-  <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each card below links to its release.</p>
+  <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each card below links to its release.</p>
 
   <aside class="notice" id="demo-note" hidden>
     <p><strong>Demo.</strong> No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
@@ -302,7 +301,7 @@
 
   <aside class="notice">
     <p><strong>Use at your own risk.</strong> This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. It writes to your SD card and replaces what is on the keys you change, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
-    <p><strong>Test page.</strong> It needs a test version of the launcher (see step 1). The list of firmwares is just starting: more join as their authors add them.</p>
+    <p><strong>Needs launcher 1.5.</strong> Step 1 tells you if yours is older and how to update it. More firmwares join the list as their authors add them; <a href="https://github.com/ugrossek/CHOMPI-firmwares#readme">here's how to add yours</a>.</p>
   </aside>
 
   <ol class="steps">
@@ -320,9 +319,9 @@
           <button class="soft" id="update-launcher" type="button">Update the launcher</button>
         </div>
         <div id="old-launcher" hidden>
-          <p class="result bad" id="old-launcher-why">This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:</p>
+          <p class="result bad" id="old-launcher-why">This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:</p>
           <ol>
-            <li>Download <a id="launcher-download" href="launcher/CHOMPI.bin" download>CHOMPI.bin</a> (test launcher).</li>
+            <li>Download <a id="launcher-download" href="launcher/CHOMPI.bin" download>CHOMPI.bin</a>, the new launcher.</li>
             <li>Switch CHOMPI off, take out the SD card and put it in your computer.</li>
             <li>Replace the <code>CHOMPI.bin</code> at the top level of the card with the downloaded one. Leave the <code>FIRMWARE</code> folder alone.</li>
             <li>Put the card back and switch CHOMPI on. A rainbow shows while it installs the new launcher.</li>
@@ -372,7 +371,7 @@
           <button class="soft" id="run-speedtest" type="button">Run speed test</button>
           <pre id="speedtest-result"></pre>
           <h3>Start a key</h3>
-          <p class="hint">Starts the firmware on a key from here, as pressing the key would. Needs launcher 1.4.4.</p>
+          <p class="hint">Starts the firmware on a key from here, as pressing the key would. Needs launcher 1.5.</p>
           <label>Key <input id="run-key" type="number" min="1" max="15" value="1" style="width: 4em"></label>
           <button class="soft" id="run-key-start" type="button">Start</button>
           <pre id="run-result"></pre>
@@ -388,7 +387,7 @@
 
   <footer>
     Works in Chrome and Edge on a computer, and Chrome on Android. Safari can't talk MIDI to CHOMPI.
-    The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/launcher-batch/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
+    The protocol is described in <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/blob/main/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
     To send a single firmware file of your own, use the <a href="../">firmware page</a>.
   </footer>
 </main>
@@ -396,8 +395,8 @@
 <script type="module">
 import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-10";
 
-const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:";
-const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the test launcher:";
+const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:";
+const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the launcher:";
 /* ?chunk=N: send at most N bytes per message, for comparing speeds */
 const CHUNK = Math.max(0, parseInt(new URLSearchParams(location.search).get("chunk"), 10) || 0);
 const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.info.maxChunk);
@@ -1068,7 +1067,7 @@ $("run-speedtest").addEventListener("click", async () => {
 $("run-key-start").addEventListener("click", async () => {
   const out = $("run-result");
   if (state.busy || !state.info) { out.textContent = "Connect CHOMPI first."; return; }
-  if (!(state.info.features & FEATURE.RUN)) { out.textContent = "This launcher can't start keys from here (needs 1.4.4)."; return; }
+  if (!(state.info.features & FEATURE.RUN)) { out.textContent = "This launcher can't start keys from here (needs 1.5)."; return; }
   const key = parseInt($("run-key").value, 10);
   try {
     await state.launcher.run(key);
