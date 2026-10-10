@@ -12,6 +12,10 @@ firmware starts. Send to the same slot again to replace it.
 The name defaults to the project folder the image was built in (chompi-tape
 -> TAPE); override it with --name.
 
+To start a firmware that is already on the card, as its key would:
+
+    ./midi-send.py --run 5
+
 Linux only, no dependencies -- talks to ALSA's raw MIDI device directly.
 Protocol: see PROTOCOL.md.
 """
@@ -25,7 +29,7 @@ import time
 import zlib
 
 HEADER = bytes([0xF0, 0x7D, 0x43, 0x48])
-PING, BEGIN, DATA, END = 0x01, 0x02, 0x03, 0x04
+PING, BEGIN, DATA, END, RUN = 0x01, 0x02, 0x03, 0x04, 0x05
 REPLY = 0x40
 
 PROTOCOL_VERSION = 1
@@ -149,19 +153,27 @@ def check(reply, what):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("image", help="firmware .bin to send")
-    ap.add_argument("--slot", type=int, required=True,
+    ap.add_argument("image", nargs="?", help="firmware .bin to send")
+    ap.add_argument("--slot", type=int,
                     help="slot to store it in, 1-15; replaces what is there")
+    ap.add_argument("--run", type=int, metavar="SLOT",
+                    help="start the firmware already in this slot instead of sending one")
     ap.add_argument("--name", help="name on the card, 1-16 of A-Z 0-9 - _ "
                     "(default: from the project folder, e.g. TAPE)")
     ap.add_argument("--device", help="raw MIDI node, e.g. /dev/snd/midiC1D0 (default: find CHOMPI)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
+    if args.run is not None:
+        if args.image or args.slot:
+            ap.error("--run takes no image and no --slot")
+    elif not args.image or not args.slot:
+        ap.error("an image and --slot, or --run")
 
-    image = open(args.image, "rb").read()
-    name = args.name.upper() if args.name else default_name(args.image)
-    if not NAME_OK.match(name):
-        sys.exit(f"bad name {name!r}: use 1-16 of A-Z 0-9 - _")
+    if args.image:
+        image = open(args.image, "rb").read()
+        name = args.name.upper() if args.name else default_name(args.image)
+        if not NAME_OK.match(name):
+            sys.exit(f"bad name {name!r}: use 1-16 of A-Z 0-9 - _")
     device = args.device or find_device()
     if not device:
         sys.exit("CHOMPI not found in /proc/asound/cards; plug it in or pass --device")
@@ -176,6 +188,10 @@ def main():
                  " -- update the launcher or this script")
     slots = reply[6]
     print(f"launcher on {device} (protocol {version}, {max_chunk}-byte chunks)")
+
+    if args.run is not None:
+        run(link, args.run, slots)
+        return
     if not 1 <= args.slot <= slots:
         sys.exit(f"slot must be 1-{slots}")
 
@@ -210,6 +226,20 @@ def main():
                  "check the card")
     check(reply, "end")
     print(f"stored in slot {args.slot} -- starting firmware")
+
+
+def run(link, slot, slots):
+    if not 1 <= slot <= slots:
+        sys.exit(f"slot must be 1-{slots}")
+    # The launcher starts the firmware right after its reply, so a resend after
+    # a lost reply goes unanswered: no reply means it most likely started.
+    reply = link.call(RUN, bytes([slot]), timeout=1.0, retries=2, required=False)
+    if reply is None:
+        sys.exit("no reply to RUN -- the firmware has probably started")
+    if reply[0] == 1:
+        sys.exit("this launcher does not know RUN -- update it")
+    check(reply, f"run slot {slot}")
+    print(f"starting slot {slot}")
 
 
 if __name__ == "__main__":
