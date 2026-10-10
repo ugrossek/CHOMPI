@@ -15,7 +15,8 @@
  *  off the card and started exactly as if its key had been pressed -- send it
  *  while the picker is up, or while any fault is showing. A host setting up
  *  several slots in one go asks to store only; the launcher then stays in the
- *  picker, and the host can also list and clear slots.
+ *  picker, and the host can also list and clear slots, or start one that is
+ *  already on the card (RUN), as its key would.
  */
 #include "daisy_seed.h"
 #include "hardware.h"
@@ -761,6 +762,7 @@ enum class Fault
 static void ServiceUsb(uint32_t now);
 static void DrawUploadProgress();
 [[noreturn]] static void PickerLoop();
+[[noreturn]] static void StartSlot(int index);
 
 /** Slow pulse, and the unit stays here rather than jumping into nothing.
  *  Commits the log on the way in -- this is where the evidence matters most.
@@ -1164,7 +1166,39 @@ static void ServiceUsb(uint32_t now)
             upload.FinishClear(ok ? MidiUpload::OK : MidiUpload::WRITE_FAILED, ok);
             break;
         }
+
+        case MidiUpload::Event::Run:
+        {
+            const int index = upload.RunSlot() - 1;
+            if (slots[index].size == 0)
+            {
+                Log("usb: run slot %d -- nothing in it", index + 1);
+                upload.FinishRun(MidiUpload::BAD_SLOT);
+                break;
+            }
+            Log("usb: run slot %d", index + 1);
+            upload.FinishRun(MidiUpload::OK);
+            StartSlot(index); /* its flash lets the reply leave */
+        }
     }
+}
+
+/** Start the firmware in slots[index], the way both a key press and RUN do. */
+[[noreturn]] static void StartSlot(int index)
+{
+    uint32_t length = 0;
+
+    Log("starting slot %d -> %s", index + 1, slots[index].name);
+    FlashChoice(index);
+
+    if (!LoadImage(slots[index], &length))
+    {
+        Log("FAIL: could not read %s off the card", slots[index].name);
+        ErrorLoop(Fault::ReadFailed);
+    }
+    Log("read %lu bytes into SDRAM", (unsigned long)length);
+
+    Boot(length);
 }
 
 int main(void)
@@ -1264,21 +1298,7 @@ int main(void)
             {
                 any_down = true;
                 if (armed)
-                {
-                    uint32_t length = 0;
-
-                    Log("key %d pressed -> %s", i + 1, slots[i].name);
-                    FlashChoice(i);
-
-                    if (!LoadImage(slots[i], &length))
-                    {
-                        Log("FAIL: could not read %s off the card", slots[i].name);
-                        ErrorLoop(Fault::ReadFailed);
-                    }
-                    Log("read %lu bytes into SDRAM", (unsigned long)length);
-
-                    Boot(length);
-                }
+                    StartSlot(i);
             }
         }
 

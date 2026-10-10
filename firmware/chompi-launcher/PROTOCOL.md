@@ -94,6 +94,15 @@ client                         launcher
                                    (on OK: boots the firmware)
 ```
 
+Starting a firmware that is already on the card is a single exchange:
+
+```
+client                         launcher
+  RUN   slot           ──────►
+                       ◄──────  45  status
+                                   (on OK: boots the firmware)
+```
+
 ## Commands
 
 ### `01` PING
@@ -209,9 +218,9 @@ commands below with `BAD_MESSAGE`, and END with a flags byte the same way.
 | 1 | `CLEAR` | `07 CLEAR` is there |
 | 2 | `STAY` | END takes the flags byte |
 | 3 | `LAUNCHER` | BEGIN to slot 127 updates the launcher itself |
+| 4 | `RUN` | `05 RUN` is there (launchers with RUN but no features byte have it too) |
 
-Command `05` is left for RUN (start the firmware in a slot), proposed
-separately. The test launchers 1.4.0 – 1.4.2 had LIST and CLEAR at `05` and
+The test launchers 1.4.0 – 1.4.2 had LIST and CLEAR at `05` and
 `06`; a client that wants to talk to them can tell them apart by
 `launcher_version` (missing on 1.4.0, which already had the features byte).
 
@@ -316,6 +325,32 @@ Storing over a slot does not touch a file without a number that was sitting
 on that key: it moves to the next free key. Clients that want it gone should
 CLEAR the slot first.
 
+### `05` RUN
+
+Starts the firmware already in a slot, exactly as pressing its key would.
+Nothing is sent and nothing on the card changes. This lets a client switch
+between firmwares without anyone at the panel.
+
+| Field | Type | Meaning |
+|---|---|---|
+| slot | `u7` | 1 – `slots` |
+
+Reply `45`: status (`u7`).
+
+Fails with `BAD_SLOT` if the slot is out of range or has no firmware in it,
+and `BAD_MESSAGE` if the payload is not one byte. On `OK` the launcher flashes
+the slot's key, reads the firmware off the card and boots it, as for a key
+press; the client should close the MIDI port, as after END.
+
+RUN discards an upload in progress, since starting a slot reads it into the
+same buffer.
+
+Launchers from before RUN answer it with `BAD_MESSAGE`, like any unknown
+command, so a client can tell them apart without a new protocol version.
+Launchers with a features byte also say so in bit 4.
+If the reply is lost, a resend goes unanswered because the firmware has
+already started; no reply therefore most likely means it did.
+
 ## Status codes
 
 | Code | Name | Meaning |
@@ -328,7 +363,7 @@ CLEAR the slot first.
 | 5 | `BAD_IMAGE` | image failed validation (not a CHOMPI app) |
 | 6 | `NOT_STARTED` | DATA or END without a BEGIN |
 | 7 | `INCOMPLETE` | END before every byte arrived |
-| 8 | `BAD_SLOT` | slot is 0 or above `slots` |
+| 8 | `BAD_SLOT` | slot is 0 or above `slots`; for RUN also an empty slot |
 | 9 | `BAD_NAME` | name is empty, too long, or has a forbidden character |
 | 10 | `NO_CARD` | no SD card, or it would not mount |
 | 11 | `WRITE_FAILED` | the card refused the write, or the readback mismatched |
@@ -417,6 +452,7 @@ samples.
 | reply to PING, BEGIN, DATA | expect within 300 ms. Resend after that, up to ~10 tries |
 | reply to END | allow 10 s (it writes and verifies ~250 KB on the card) |
 | reply to LIST, CLEAR | allow 2 s (they may have to mount the card first) |
+| reply to RUN | expect within 300 ms. Resend once at most; no reply most likely means it started |
 | gaps between messages | keep below 3 s, or the launcher may treat the upload as abandoned |
 
 A 240 KB image takes about 1–5 s to transfer, depending on the host's MIDI

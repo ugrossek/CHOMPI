@@ -16,6 +16,10 @@ With --stay the launcher only stores it and keeps showing the picker, so more
 can follow. --list shows what is on each key, --clear N empties key N. These
 three need a launcher that has them; older ones say so.
 
+To start a firmware that is already on the card, as its key would:
+
+    ./midi-send.py --run 5
+
 Linux only, no dependencies -- talks to ALSA's raw MIDI device directly.
 Protocol: see PROTOCOL.md.
 """
@@ -29,10 +33,10 @@ import time
 import zlib
 
 HEADER = bytes([0xF0, 0x7D, 0x43, 0x48])
-PING, BEGIN, DATA, END, LIST, CLEAR = 0x01, 0x02, 0x03, 0x04, 0x06, 0x07
+PING, BEGIN, DATA, END, RUN, LIST, CLEAR = 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
 REPLY = 0x40
 
-FEATURE_LIST, FEATURE_CLEAR, FEATURE_STAY, FEATURE_LAUNCHER = 1, 2, 4, 8
+FEATURE_LIST, FEATURE_CLEAR, FEATURE_STAY, FEATURE_LAUNCHER, FEATURE_RUN = 1, 2, 4, 8, 16
 END_STAY = 1
 
 PROTOCOL_VERSION = 1
@@ -177,18 +181,22 @@ def main():
                     help="store only; the launcher stays in the picker")
     ap.add_argument("--list", action="store_true", help="show what is on each key")
     ap.add_argument("--clear", type=int, metavar="SLOT", help="empty that key")
+    ap.add_argument("--run", type=int, metavar="SLOT",
+                    help="start the firmware already in this slot instead of sending one")
     ap.add_argument("--name", help="name on the card, 1-16 of A-Z 0-9 - _ "
                     "(default: from the project folder, e.g. TAPE)")
     ap.add_argument("--chunk", type=int, help="bytes per DATA message (default: the most the launcher takes)")
     ap.add_argument("--device", help="raw MIDI node, e.g. /dev/snd/midiC1D0 (default: find CHOMPI)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
+    if args.run is not None and (args.image or args.slot or args.list or args.clear):
+        ap.error("--run takes nothing else")
     if args.image and args.slot is None and not args.launcher:
         ap.error("--slot is needed to send an image")
     if args.launcher and not args.image:
         ap.error("--launcher needs the launcher's CHOMPI.bin")
-    if not (args.image or args.list or args.clear):
-        ap.error("nothing to do: give an image and --slot, or --list or --clear")
+    if not (args.image or args.list or args.clear or args.run is not None):
+        ap.error("nothing to do: give an image and --slot, or --list, --clear or --run")
 
     if args.image:
         image = open(args.image, "rb").read()
@@ -217,6 +225,11 @@ def main():
     def need(feature, what):
         if not features & feature:
             sys.exit(f"this launcher cannot {what} -- put the newer launcher on the card")
+
+    if args.run is not None:
+        need(FEATURE_RUN, "start a key")
+        run(link, args.run, slots)
+        return
 
     if args.clear is not None:
         need(FEATURE_CLEAR, "clear a key")
@@ -292,6 +305,20 @@ def send(link, image, name, slot, max_chunk, stay, launcher=False):
         print("stored -- CHOMPI restarts and installs it (rainbow), then the keys breathe white")
     else:
         print(f"stored in slot {slot}" + ("" if stay else " -- starting firmware"))
+
+
+def run(link, slot, slots):
+    if not 1 <= slot <= slots:
+        sys.exit(f"slot must be 1-{slots}")
+    # The launcher starts the firmware right after its reply, so a resend after
+    # a lost reply goes unanswered: no reply means it most likely started.
+    reply = link.call(RUN, bytes([slot]), timeout=1.0, retries=2, required=False)
+    if reply is None:
+        sys.exit("no reply to RUN -- the firmware has probably started")
+    if reply[0] == 1:
+        sys.exit("this launcher does not know RUN -- update it")
+    check(reply, f"run slot {slot}")
+    print(f"starting slot {slot}")
 
 
 if __name__ == "__main__":

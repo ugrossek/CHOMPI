@@ -19,18 +19,22 @@
  *      02 BEGIN  total:u28 slot name_len name -> 42 status
  *      03 DATA   offset:u28  packed           -> 43 status  received:u28
  *      04 END    crc32:u35  [flags]           -> 44 status  (after the write)
+ *      05 RUN    slot                         -> 45 status  (then starts it)
  *      06 LIST   slot                         -> 46 status slot name_len name
  *                                                    size:u28
  *      07 CLEAR  slot [name_len name]         -> 47 status slot removed
  *
- *  05 is left for RUN (start a slot), proposed upstream separately. Test
- *  launchers 1.4.0 - 1.4.2 had LIST and CLEAR at 05 and 06.
+ *  Test launchers 1.4.0 - 1.4.2 had LIST and CLEAR at 05 and 06.
  *
  *  The host sends one message and waits for its reply. Stop-and-wait keeps the
  *  receive side to a single buffer, and USB round trips are short enough that
  *  an image still lands in a few seconds. DATA is addressed by offset, so a
  *  resend after a lost reply is harmless, and the reply always carries how much
  *  has arrived so the host can pick up from there.
+ *
+ *  RUN starts a slot that is already on the card, as its key would, so a host
+ *  can switch firmwares without anyone at the panel. Poll() reports Event::Run
+ *  and the caller answers with FinishRun() before it starts the slot.
  */
 #pragma once
 #include "daisy_seed.h"
@@ -38,7 +42,7 @@
 /** The launcher's own version. Also in the image as kLauncherTag, which is
  *  how a launcher recognises another one sent to it for self-update. */
 #ifndef CHOMPI_LAUNCHER_VERSION_PATCH
-#define CHOMPI_LAUNCHER_VERSION_PATCH 3
+#define CHOMPI_LAUNCHER_VERSION_PATCH 4
 #endif
 #define CHOMPI_LAUNCHER_VERSION_MAJOR 1
 #define CHOMPI_LAUNCHER_VERSION_MINOR 4
@@ -73,9 +77,10 @@ namespace chompi
             FEATURE_CLEAR = 1 << 1, /**< 07 CLEAR */
             FEATURE_STAY  = 1 << 2, /**< END flag: store, do not start */
             FEATURE_LAUNCHER = 1 << 3, /**< slot 127: update the launcher */
+            FEATURE_RUN   = 1 << 4, /**< 05 RUN */
         };
         static constexpr uint8_t kFeatures
-            = FEATURE_LIST | FEATURE_CLEAR | FEATURE_STAY | FEATURE_LAUNCHER;
+            = FEATURE_LIST | FEATURE_CLEAR | FEATURE_STAY | FEATURE_LAUNCHER | FEATURE_RUN;
 
         /** END's optional flags byte. */
         static constexpr uint8_t kEndStay = 1 << 0;
@@ -86,6 +91,7 @@ namespace chompi
             BEGIN = 0x02,
             DATA  = 0x03,
             END   = 0x04,
+            RUN   = 0x05,
             LIST  = 0x06,
             CLEAR = 0x07,
             REPLY = 0x40, /**< or'd into the command being answered */
@@ -101,7 +107,8 @@ namespace chompi
             BAD_IMAGE   = 5, /**< vector table rejected */
             NOT_STARTED = 6, /**< DATA or END without a BEGIN */
             INCOMPLETE  = 7, /**< END before every byte arrived */
-            BAD_SLOT    = 8, /**< slot is 0 or above the number of slots */
+            BAD_SLOT    = 8, /**< slot is 0, above the number of slots, or
+                                  (RUN) has no firmware in it */
             BAD_NAME    = 9, /**< empty, too long, or a forbidden character */
             NO_CARD      = 10, /**< no card, or it would not mount */
             WRITE_FAILED = 11, /**< the card refused it, or readback differed */
@@ -122,6 +129,7 @@ namespace chompi
             Complete, /**< image whole and checked; END awaits FinishEnd() */
             List,     /**< LIST awaits FinishList() */
             Clear,    /**< CLEAR awaits FinishClear() */
+            Run,      /**< RUN for RunSlot(); awaits FinishRun() */
         };
 
         /** Start USB MIDI and begin listening.
@@ -224,11 +232,16 @@ namespace chompi
         /** The END asked to store only: the launcher stays in the picker. */
         bool Stay() const { return end_flags_ & kEndStay; }
 
+        /** Answer the RUN that produced Event::Run: OK just before the caller
+         *  starts the slot, BAD_SLOT if there is nothing in it. */
+        void FinishRun(Status s) { ReplyStatus(RUN, s); }
+
         uint32_t    Received() const { return received_; }
         uint32_t    Total() const { return total_; }
         uint32_t    Crc() const { return crc_; }
         /** The upload's slot, or for List/Clear the slot asked about. */
         uint8_t     Slot() const { return query_slot_ ? query_slot_ : slot_; }
+        uint8_t     RunSlot() const { return run_slot_; }
         const char *Name() const { return name_; }
         /** The upload is a new launcher, not a firmware for a key. */
         bool        ForLauncher() const { return slot_ == kLauncherSlot; }
@@ -528,6 +541,22 @@ namespace chompi
                     return Event::Clear;
                 }
 
+                case RUN:
+                {
+                    if (blen != 1)
+                        return Fail(cmd, BAD_MESSAGE);
+                    if (body[0] < 1 || body[0] > slots_)
+                        return Fail(cmd, BAD_SLOT);
+                    /* Starting a slot reads it into fw_image, over whatever
+                       an upload had put there. */
+                    total_    = 0;
+                    received_ = 0;
+                    run_slot_ = body[0];
+                    /* No reply yet: the caller knows whether the slot holds
+                       a firmware. FinishRun(). */
+                    return Event::Run;
+                }
+
                 default: return Fail(cmd, BAD_MESSAGE);
             }
         }
@@ -548,6 +577,7 @@ namespace chompi
         bool     clear_name_given_ = false;
         size_t   clear_name_len_   = 0;
         uint8_t  clear_name_[kMaxListName] = {};
+        uint8_t  run_slot_    = 0;
         char     name_[kMaxName + 1] = {};
         Status   last_status_ = OK;
 
