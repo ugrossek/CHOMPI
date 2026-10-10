@@ -369,6 +369,11 @@
           <p class="hint">Sends 1 MB of random data at each message size and times it. CHOMPI's keys fill cyan, but nothing is written to the card.</p>
           <button class="soft" id="run-speedtest" type="button">Run speed test</button>
           <pre id="speedtest-result"></pre>
+          <h3>Start a key</h3>
+          <p class="hint">Starts the firmware on a key from here, as pressing the key would. Needs launcher 1.4.4.</p>
+          <label>Key <input id="run-key" type="number" min="1" max="15" value="1" style="width: 4em"></label>
+          <button class="soft" id="run-key-start" type="button">Start</button>
+          <pre id="run-result"></pre>
         </div>
       </div>
     </li>
@@ -1054,6 +1059,22 @@ $("run-speedtest").addEventListener("click", async () => {
     state.busy = false;
     $("run-speedtest").disabled = false;
     render();
+  }
+});
+
+/* ---- start a key (?speedtest, RUN) ------------------------------------- */
+$("run-key-start").addEventListener("click", async () => {
+  const out = $("run-result");
+  if (state.busy || !state.info) { out.textContent = "Connect CHOMPI first."; return; }
+  if (!(state.info.features & FEATURE.RUN)) { out.textContent = "This launcher can't start keys from here (needs 1.4.4)."; return; }
+  const key = parseInt($("run-key").value, 10);
+  try {
+    await state.launcher.run(key);
+    out.textContent = `Key ${key} started.`;
+    note(`run key ${key}: started`);
+  } catch (e) {
+    out.textContent = `Key ${key}: ${e.message}`;
+    note(`run key ${key}: ${e.message}`);
   }
 });
 

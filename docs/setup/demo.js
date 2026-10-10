@@ -18,7 +18,7 @@
   const failSlot = +(P.get("failslot") || 0);
   const FULL = P.has("full"), SLOWCLEAR = P.has("slowclear"), SILENT = P.has("silent");
   const NOSELF = P.has("noself");
-  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.4.3")).split(".").map(Number);
+  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.4.4")).split(".").map(Number);
   function keys() {
     const k = Array(15).fill(null);
     const bins = Object.keys(card).filter((f) => /\.bin$/i.test(f)).sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
@@ -37,7 +37,7 @@
     send(m) {
       if (SILENT) return;
       const cmd = m[4], b = m.slice(5, -1);
-      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(2048,4),15,NOSELF ? 7 : 15,...lver]);
+      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(2048,4),15,NOSELF ? 7 : (lver[2] >= 4 || lver[1] > 4 ? 31 : 15),...lver]);
       if (cmd === 2) { const n = b[5];
         if (b[4] === 127 && NOSELF) return reply(2,[8]); up = { size: g7(b.slice(0,4)), slot: b[4], name: String.fromCharCode(...b.slice(6,6+n)), got: 0 }; return reply(2,[0]); }
       if (cmd === 3) { const off = g7(b.slice(0,4)); const L = b.length - 4; const raw = L - Math.ceil(L/8); up.got = Math.max(up.got, off+raw); return reply(3,[0,...p7(up.got,4)]); }
@@ -47,7 +47,7 @@
           setTimeout(() => reply(4,[0]), 300);
           const plug = (on) => { input.state = output.state = on ? "connected" : "disconnected"; access.onstatechange && access.onstatechange({}); };
           setTimeout(() => plug(false), 400);
-          setTimeout(() => { lver = window.__newLauncher || [1,4,3]; plug(true); }, 3500);
+          setTimeout(() => { lver = window.__newLauncher || [1,4,4]; plug(true); }, 3500);
           return;
         }
         if (up.slot === failSlot) return setTimeout(() => reply(4,[11]), 200);
@@ -60,6 +60,12 @@
       if (OLD) return reply(cmd,[1]);
       const legacy = NOSELF || lver[0] * 1e6 + lver[1] * 1e3 + lver[2] < 1004003; /* LIST/CLEAR at 05/06 */
       const LIST = legacy ? 5 : 6, CLEAR = legacy ? 6 : 7;
+      if (cmd === 5 && !legacy) { /* RUN: the firmware starts, the launcher is gone */
+        if (b[0] < 1 || b[0] > 15 || !keys()[b[0]-1]) return reply(5,[8]);
+        reply(5,[0]);
+        const plug = (on) => { input.state = output.state = on ? "connected" : "disconnected"; access.onstatechange && access.onstatechange({}); };
+        return setTimeout(() => plug(false), 300);
+      }
       if (cmd === LIST) { const f = keys()[b[0]-1]; if (!f) return reply(LIST,[0,b[0],0,0,0,0,0]);
         return reply(LIST,[0,b[0],f.length,...[...f].map(c=>c.charCodeAt(0)),...p7(card[f],4)]); }
       if (cmd === CLEAR) { const pre = String(b[0]).padStart(2,"0")+"_"; const on = keys()[b[0]-1];

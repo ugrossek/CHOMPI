@@ -7,13 +7,13 @@
 export const PROTOCOL_VERSION = 1;
 
 const HEADER = [0xF0, 0x7D, 0x43, 0x48];
-export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, LIST = 0x06, CLEAR = 0x07;
+export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, RUN = 0x05, LIST = 0x06, CLEAR = 0x07;
 /** Where the test launchers 1.4.0 - 1.4.2 had them, before 05 went to RUN. */
 const OLD_LIST = 0x05, OLD_CLEAR = 0x06;
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
-export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8 };
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8, RUN: 16 };
 /** BEGIN's slot for a new launcher (FEATURE.LAUNCHER). */
 export const LAUNCHER_SLOT = 127;
 const END_STAY = 1;
@@ -178,6 +178,14 @@ export class Launcher {
     const r = await this.call(this.cmd.CLEAR, payload, { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
     Launcher.#check(r);
     return r.length < 3 || r[2] === 1;
+  }
+
+  /** Start the firmware on a key, as pressing it would (FEATURE.RUN; on the
+   *  test launchers 1.4.0 - 1.4.2, 05 is LIST). Throws if the key is empty.
+   *  No reply most likely means it started before the reply got out. */
+  async run(slot) {
+    const r = await this.call(RUN, [slot], { timeout: 1000, retries: 2 });
+    if (r) Launcher.#check(r);
   }
 
   /**
