@@ -9,7 +9,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<script src="demo.js"></script>
+<!-- ?v= names this version of the scripts, so a browser never pairs this page
+     with an older copy it kept. Change it whenever demo.js or chompi-midi.js change. -->
+<script src="demo.js?v=2026-10-10"></script>
 <style>
   :root {
     --paper: #FAF6F0;
@@ -392,7 +394,7 @@
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js";
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-10";
 
 const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the test launcher:";
 const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the test launcher:";
