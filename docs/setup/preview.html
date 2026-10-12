@@ -37,6 +37,12 @@
     --field: #F8F5F1;
     --changed: #F6ECDA;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    /* the page's own colour: the title word, buttons, the risk note.
+       Red (--coral) is kept for things that went wrong. */
+    --accent: #1F8C88;
+    --accent-deep: #18716E;
+    --on-accent: #FFFFFF;
+    --accent-text: color-mix(in oklab, var(--accent) 80%, var(--ink));
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -78,7 +84,7 @@
   .eyebrow a:hover { color: var(--ink); }
   .masthead { margin: 0 0 14px; }
   h1 { font-size: clamp(3rem, 8.5vw, 5.4rem); line-height: .95; font-weight: 800; letter-spacing: -.04em; margin: 0; color: var(--ink-strong); }
-  h1 .brand { color: var(--coral); }
+  h1 .brand { color: var(--accent); }
   /* a row of key LEDs in the firmwares' colours, the page's one bit of fun */
   .leds { display: inline-flex; gap: 5px; margin-right: 12px; vertical-align: -1px; }
   .leds i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
@@ -86,8 +92,8 @@
   .credit { max-width: 40em; margin: 0; color: var(--ink-soft); font-size: .95rem; }
   .facts { font: 13px/1.7 var(--mono); color: var(--ink-soft); margin: 14px 0 0; }
 
-  .notice { border-left: 2px solid var(--coral); padding: 2px 0 2px 16px; margin: 0 0 16px; font-size: .95rem; }
-  .notice strong { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--coral); display: block; margin-bottom: 6px; }
+  .notice { border-left: 2px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 16px; font-size: .95rem; }
+  .notice strong { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); display: block; margin-bottom: 6px; }
   .notice p { margin: 0 0 10px; }
   .notice p:last-child { margin: 0; }
   #demo-note { border-left-color: var(--tab-3); }
@@ -136,7 +142,7 @@
   .key[data-busy="done"]  { --led: var(--green); }
   .key[data-busy="fail"]  { --led: var(--pink); }
   .key[aria-pressed="true"] { background: color-mix(in oklab, var(--amber) 16%, var(--paper)); border-color: color-mix(in oklab, var(--amber) 60%, var(--ink)); color: var(--ink-strong); }
-  .key.changed .n::after { content: "•"; color: var(--coral); margin-left: 1px; }
+  .key.changed .n::after { content: "•"; color: var(--accent); margin-left: 1px; }
   .key:focus-visible { outline: 2px solid var(--tab-3); outline-offset: 2px; }
   @media (prefers-reduced-motion: no-preference) {
     .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
@@ -175,12 +181,12 @@
 
   button.act, a.act {
     display: inline-flex; align-items: center; gap: 8px;
-    border: 1.5px solid var(--ink-strong); border-radius: 3px; padding: 10px 18px;
-    background: var(--ink-strong); color: var(--paper);
+    border: 1.5px solid var(--accent-deep); border-radius: 3px; padding: 10px 18px;
+    background: var(--accent-deep); color: var(--on-accent);
     font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
   }
   button.act:not(:disabled):hover, button.soft:not(:disabled):hover { background: var(--amber); border-color: var(--amber); color: #24211E; }
-  button.act.big { font-size: 1.1rem; padding: 13px 26px; background: var(--coral); border-color: var(--coral); color: #FFFFFF; }
+  button.act.big { font-size: 1.1rem; padding: 13px 26px; }
   button.act:disabled { opacity: .3; cursor: not-allowed; }
   button.soft {
     border: 1.5px solid var(--line); border-radius: 3px;
@@ -213,11 +219,22 @@
   .slots .what { min-width: 0; }
   .slots .what b { font-weight: 600; }
   .slots .what .sub { display: block; color: var(--ink-soft); font: .78rem/1.5 var(--mono); overflow-wrap: anywhere; }
-  .slots .what .sub.chg { color: var(--coral); }
+  .slots .what .sub.chg { color: var(--accent-text); }
+  /* the firmware picker: drawn like a key, with the firmware's colour down
+     its left edge and a chevron of our own */
   .slots select {
-    width: 100%; font: inherit; font-size: .92rem; color: var(--ink);
-    background: var(--field); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px;
+    appearance: none; -webkit-appearance: none;
+    width: 100%; font: inherit; font-size: .92rem; font-weight: 500; color: var(--ink-strong);
+    background:
+      linear-gradient(45deg, transparent 50%, currentColor 50%) right 17px center / 5px 5px no-repeat,
+      linear-gradient(-45deg, transparent 50%, currentColor 50%) right 12px center / 5px 5px no-repeat,
+      var(--field);
+    border: 1.5px solid var(--line); border-left: 5px solid var(--sw, var(--line)); border-radius: 3px;
+    padding: 7px 34px 7px 10px; cursor: pointer;
   }
+  .slots select:not(:disabled):hover { border-color: var(--ink); border-left-color: var(--sw, var(--ink)); }
+  .slots select:disabled { color: var(--ink-soft); cursor: default; }
+  .slots li.changed select { border-color: var(--accent); border-left-color: var(--sw, var(--accent)); }
   .slots .swatch { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .45em; vertical-align: .08em; background: var(--sw, transparent); }
   .slots .state { grid-column: 2 / -1; font: 500 .8rem/1.4 var(--mono); }
   .slots .state:empty { display: none; }
@@ -605,6 +622,7 @@ function render() {
       fillOptions(sel, i);
       sel.disabled = state.busy;
       const sw = planColor(i);
+      if (sw) li.style.setProperty("--sw", sw); else li.style.removeProperty("--sw");
       b.innerHTML = (sw ? `<span class="swatch" style="--sw:${sw}"></span>` : "") + esc(planLabel(i));
       if (changed(i)) {
         const now = describeCurrent(i);
