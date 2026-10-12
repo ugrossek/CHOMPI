@@ -22,9 +22,9 @@ class Warble
     void Init(float samplerate)
     {
         del_l_.Init();
-        del_l_.SetDelay(10u);
+        del_l_.SetDelay(size_t(10)); // size_t: on a PC 10u is ambiguous
         del_r_.Init();
-        del_r_.SetDelay(10u);
+        del_r_.SetDelay(size_t(10)); // size_t: on a PC 10u is ambiguous
         freq_ctrl_ = 0.f;
         mix_ = mix_target_ = 0.f;
     }
