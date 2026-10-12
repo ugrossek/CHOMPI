@@ -14,48 +14,48 @@
   /* Sober look (preview): warm grey paper, soft ink, thin rules, line-drawn
      keys. Colour only marks things: a step's top rule, a firmware's LED. */
   :root {
-    --paper: #F3EFE9;
-    --surface: #ECE7E0;
-    --ink: #3D3935;
-    --ink-strong: #24211E;
-    --ink-soft: #7A736B;
-    --line: #B7B0A7;
-    --rule: #D6D0C8;
+    --page: #EFF0EE;
+    --panel: #E5E7E4;
+    --text: #33373A;
+    --text-strong: #1C1F22;
+    --text-soft: #6A7075;
+    --edge: #A9AFB3;
+    --hair: #D3D7D8;
     --coral: #D2553F;
     --tab-1: #E08A3C;
     --tab-2: #D45C74;
     --tab-3: #3E86C6;
     --tab-4: #4E9E62;
-    --key: #F3EFE9;
-    --key-off: #E2DCD4;
+    --cap: #EFF0EE;
+    --cap-off: #DDE0DF;
     --cyan: #18C2CF;
     --amber: #F0A320;
     --pink: #E8497F;
     --green: #4E9E62;
-    --field: #F8F5F1;
-    --changed: #F6ECDA;
+    --field: #F8F9F8;
+    --changed: #F7EADB;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     /* the page's own colour: the title word, buttons, the risk note.
        Red (--coral) is kept for things that went wrong. */
     --accent: #D9772B;
     --accent-deep: #B5601C;
     --on-accent: #FFFFFF;
-    --accent-text: color-mix(in oklab, var(--accent) 80%, var(--ink));
+    --accent-text: color-mix(in oklab, var(--accent) 80%, var(--text));
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #22201D;
-      --surface: #2A2724;
-      --ink: #D2CCC4;
-      --ink-strong: #EEE9E2;
-      --ink-soft: #9A938A;
-      --line: #6A645D;
-      --rule: #3C3834;
-      --key: #22201D;
-      --key-off: #3A3632;
-      --field: #1D1B19;
-      --changed: #3A3123;
+      --page: #1D2023;
+      --panel: #25292C;
+      --text: #CDD2D5;
+      --text-strong: #ECEFF1;
+      --text-soft: #8F979C;
+      --edge: #5F676C;
+      --hair: #33383C;
+      --cap: #1D2023;
+      --cap-off: #33393D;
+      --field: #191B1E;
+      --changed: #3A3024;
       color-scheme: dark;
     }
   }
@@ -64,31 +64,31 @@
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    background: var(--paper);
-    color: var(--ink);
+    background: var(--page);
+    color: var(--text);
     font-family: "Schibsted Grotesk", system-ui, sans-serif;
     font-size: 17px;
     line-height: 1.55;
   }
   main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px; }
-  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--line); }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--edge); }
   a:hover { text-decoration-color: currentColor; }
-  code { font: .85em var(--mono); background: var(--surface); border-radius: 3px; padding: 1px 5px; }
+  code { font: .85em var(--mono); background: var(--panel); border-radius: 3px; padding: 1px 5px; }
 
   /* ---- top: title left, the small print right ---------------------------- */
   .head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 24px 56px; align-items: end; padding-bottom: 36px; }
-  .eyebrow { font: 500 13px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 18px; }
+  .eyebrow { font: 500 13px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-soft); margin: 0 0 18px; }
   .eyebrow a { text-decoration: none; }
-  .eyebrow a:hover { color: var(--ink); }
+  .eyebrow a:hover { color: var(--text); }
   .masthead { margin: 0 0 14px; }
-  h1 { font-size: clamp(3rem, 8.5vw, 5.4rem); line-height: .95; font-weight: 800; letter-spacing: -.04em; margin: 0; color: var(--ink-strong); }
+  h1 { font-size: clamp(3rem, 8.5vw, 5.4rem); line-height: .95; font-weight: 800; letter-spacing: -.04em; margin: 0; color: var(--text-strong); }
   h1 .brand { color: var(--accent); }
   /* a row of key LEDs in the firmwares' colours, the page's one bit of fun */
   .leds { display: inline-flex; gap: 5px; margin-right: 12px; vertical-align: -1px; }
   .leds i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
   .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.12rem; }
-  .credit { max-width: 40em; margin: 0; color: var(--ink-soft); font-size: .95rem; }
-  .facts { font: 13px/1.7 var(--mono); color: var(--ink-soft); margin: 14px 0 0; }
+  .credit { max-width: 40em; margin: 0; color: var(--text-soft); font-size: .95rem; }
+  .facts { font: 13px/1.7 var(--mono); color: var(--text-soft); margin: 14px 0 0; }
 
   .notice { border-left: 2px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 16px; font-size: .95rem; }
   .notice strong { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); display: block; margin-bottom: 6px; }
@@ -99,7 +99,7 @@
 
   /* ---- the instrument, drawn in lines ------------------------------------ */
   .chompi {
-    border: 1.5px solid var(--ink);
+    border: 1.5px solid var(--text);
     border-radius: 8px;
     padding: 14px 14px 16px;
     margin: 6px 0 18px;
@@ -107,10 +107,10 @@
   .screen {
     display: flex; align-items: center; gap: 10px;
     min-height: 38px; padding: 6px 12px; margin-bottom: 14px;
-    border: 1px solid var(--line); border-radius: 3px;
+    border: 1px solid var(--edge); border-radius: 3px;
     font: 14px/1.4 var(--mono);
   }
-  .screen .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line); flex: none; }
+  .screen .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--edge); flex: none; }
   .screen[data-mood="ok"]   .dot { background: var(--cyan);  border-color: var(--cyan); }
   .screen[data-mood="busy"] .dot { background: var(--amber); border-color: var(--amber); }
   .screen[data-mood="bad"]  .dot { background: var(--pink);  border-color: var(--pink); }
@@ -120,26 +120,26 @@
     position: relative;
     appearance: none; margin: 0; padding: 0;
     aspect-ratio: 1;
-    border: 1.5px solid var(--ink); border-radius: 3px;
-    background: var(--key);
-    cursor: pointer; font: inherit; color: var(--ink-soft);
+    border: 1.5px solid var(--text); border-radius: 3px;
+    background: var(--cap);
+    cursor: pointer; font: inherit; color: var(--text-soft);
   }
   .key:disabled { cursor: default; }
-  .key:not(:disabled):hover { background: var(--surface); }
+  .key:not(:disabled):hover { background: var(--panel); }
   .key .n { position: absolute; left: 0; right: 0; bottom: 12%; font: 500 clamp(.55rem, 1.6vw, .75rem)/1 var(--mono); }
   /* the LED: an empty ring when off, filled with the firmware's colour */
   .key::before {
     content: ""; position: absolute; left: 50%; top: 18%;
     width: 26%; aspect-ratio: 1; translate: -50% 0;
     border-radius: 50%;
-    border: 1px solid var(--led, var(--line));
+    border: 1px solid var(--led, var(--edge));
     background: var(--led, transparent);
   }
   .key[data-busy="send"]  { --led: var(--cyan); }
   .key[data-busy="store"] { --led: var(--amber); }
   .key[data-busy="done"]  { --led: var(--green); }
   .key[data-busy="fail"]  { --led: var(--pink); }
-  .key[aria-pressed="true"] { background: color-mix(in oklab, var(--amber) 16%, var(--paper)); border-color: color-mix(in oklab, var(--amber) 60%, var(--ink)); color: var(--ink-strong); }
+  .key[aria-pressed="true"] { background: color-mix(in oklab, var(--amber) 16%, var(--page)); border-color: color-mix(in oklab, var(--amber) 60%, var(--text)); color: var(--text-strong); }
   .key.changed .n::after { content: "•"; color: var(--accent); margin-left: 1px; }
   .key:focus-visible { outline: 2px solid var(--tab-3); outline-offset: 2px; }
   @media (prefers-reduced-motion: no-preference) {
@@ -147,24 +147,24 @@
     @keyframes write { to { opacity: .35; } }
   }
 
-  /* ---- steps: a coloured rule on top, no boxes ---------------------------- */
+  /* ---- steps: a coloured rule down the left, no boxes ------------------- */
   ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 44px; }
-  .steps > li { border-top: 3px solid var(--tab); padding-top: 14px; }
+  .steps > li { border-left: 3px solid var(--tab); padding: 2px 0 4px 18px; }
   .steps > li:nth-child(1) { --tab: var(--tab-1); }
   .steps > li:nth-child(2) { --tab: var(--tab-2); }
   .steps > li:nth-child(3) { --tab: var(--tab-3); }
   .steps h2 {
     display: flex; align-items: baseline; gap: 12px;
     margin: 0 0 12px;
-    font-size: 1.55rem; font-weight: 700; letter-spacing: -.015em; color: var(--ink-strong);
+    font-size: 1.55rem; font-weight: 700; letter-spacing: -.015em; color: var(--text-strong);
   }
-  .steps h2 .num { font: 500 1.2rem/1 var(--mono); color: color-mix(in oklab, var(--tab) 75%, var(--ink)); }
+  .steps h2 .num { font: 500 1.2rem/1 var(--mono); color: color-mix(in oklab, var(--tab) 75%, var(--text)); }
   #step-connect[data-conn="off"]  { --conn: var(--coral); }
   #step-connect[data-conn="busy"] { --conn: var(--amber); }
   #step-connect[data-conn="on"]   { --conn: var(--green); }
   .steps h2 .conn {
     margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
-    font: 500 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+    font: 500 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft);
   }
   .steps h2 .conn::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--conn); }
   /* done: a tick after the number, drawn (the font has no ✓) */
@@ -174,7 +174,7 @@
   }
   .steps .inner { padding: 0; }
   .steps p { margin: 0 0 12px; max-width: 40em; }
-  .hint { color: var(--ink-soft); font-size: .95rem; }
+  .hint { color: var(--text-soft); font-size: .95rem; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
   button.act, a.act {
@@ -189,8 +189,8 @@
   button.act.big { font-size: 1.1rem; padding: 13px 26px; }
   button.act:disabled { opacity: .3; cursor: not-allowed; }
   button.soft {
-    border: 1.5px solid var(--line); border-radius: 3px;
-    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--edge); border-radius: 3px;
+    background: transparent; color: var(--text);
     padding: 7px 14px; font: inherit; font-size: .95rem; font-weight: 500; cursor: pointer;
   }
   button.soft:disabled { opacity: .4; cursor: not-allowed; }
@@ -200,40 +200,40 @@
   .result.bad { color: var(--coral); }
 
   /* ---- the key list: ruled rows ------------------------------------------ */
-  .slots { list-style: none; margin: 4px 0 14px; padding: 0; border-top: 1px solid var(--line); }
+  .slots { list-style: none; margin: 4px 0 14px; padding: 0; border-top: 1px solid var(--edge); }
   .slots li {
     display: grid; grid-template-columns: 2.4em 1fr minmax(9em, 15em); gap: 4px 14px; align-items: center;
-    padding: 7px 8px; border-bottom: 1px solid var(--rule);
+    padding: 7px 8px; border-bottom: 1px solid var(--hair);
     cursor: pointer;
   }
-  .slots li:hover { background: var(--surface); }
-  .slots li.selected { box-shadow: inset 3px 0 0 var(--amber); background: color-mix(in oklab, var(--amber) 9%, var(--paper)); }
+  .slots li:hover { background: var(--panel); }
+  .slots li.selected { box-shadow: inset 3px 0 0 var(--amber); background: color-mix(in oklab, var(--amber) 9%, var(--page)); }
   .slots li.changed { background: var(--changed); }
   .slots li.selected.changed { background: color-mix(in oklab, var(--amber) 14%, var(--changed)); }
   .slots .kn {
     display: inline-grid; place-items: center;
     width: 1.9em; height: 1.9em; border-radius: 3px;
-    border: 1.5px solid var(--ink); color: var(--ink);
+    border: 1.5px solid var(--text); color: var(--text);
     font: 500 .8rem/1 var(--mono);
   }
   .slots .what { min-width: 0; }
   .slots .what b { font-weight: 600; }
-  .slots .what .sub { display: block; color: var(--ink-soft); font: .78rem/1.5 var(--mono); overflow-wrap: anywhere; }
+  .slots .what .sub { display: block; color: var(--text-soft); font: .78rem/1.5 var(--mono); overflow-wrap: anywhere; }
   .slots .what .sub.chg { color: var(--accent-text); }
   /* the firmware picker: drawn like a key, with the firmware's colour down
      its left edge and a chevron of our own */
   .slots select {
     appearance: none; -webkit-appearance: none;
-    width: 100%; font: inherit; font-size: .92rem; font-weight: 500; color: var(--ink-strong);
+    width: 100%; font: inherit; font-size: .92rem; font-weight: 500; color: var(--text-strong);
     background:
       linear-gradient(45deg, transparent 50%, currentColor 50%) right 17px center / 5px 5px no-repeat,
       linear-gradient(-45deg, transparent 50%, currentColor 50%) right 12px center / 5px 5px no-repeat,
       var(--field);
-    border: 1.5px solid var(--line); border-left: 5px solid var(--sw, var(--line)); border-radius: 3px;
+    border: 1.5px solid var(--edge); border-left: 5px solid var(--sw, var(--edge)); border-radius: 3px;
     padding: 7px 34px 7px 10px; cursor: pointer;
   }
-  .slots select:not(:disabled):hover { border-color: var(--ink); border-left-color: var(--sw, var(--ink)); }
-  .slots select:disabled { color: var(--ink-soft); cursor: default; }
+  .slots select:not(:disabled):hover { border-color: var(--text); border-left-color: var(--sw, var(--text)); }
+  .slots select:disabled { color: var(--text-soft); cursor: default; }
   .slots li.changed select { border-color: var(--accent); border-left-color: var(--sw, var(--accent)); }
   .slots .swatch { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .45em; vertical-align: .08em; background: var(--sw, transparent); }
   .slots .state { grid-column: 2 / -1; font: 500 .8rem/1.4 var(--mono); }
@@ -242,45 +242,45 @@
 
   .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; }
 
-  /* ---- catalogue: columns under a coloured rule --------------------------- */
-  h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; margin: 40px 0 4px; color: var(--ink-strong); }
+  /* ---- catalogue: columns beside a coloured rule ------------------------ */
+  h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; margin: 40px 0 4px; color: var(--text-strong); }
   .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 32px 32px; margin-top: 20px; }
   .fw {
     display: flex; flex-direction: column; gap: 6px;
-    border-top: 3px solid var(--sw); padding-top: 12px;
+    border-left: 3px solid var(--sw); padding: 2px 0 2px 14px;
   }
   .fw .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .fw .t { font-weight: 700; font-size: 1.15rem; color: var(--ink-strong); }
-  .fw .v { color: var(--ink-soft); font: .82rem var(--mono); }
-  .chip { font: 500 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; border: 1px solid currentColor; border-radius: 3px; padding: 3px 6px; color: var(--ink-soft); }
+  .fw .t { font-weight: 700; font-size: 1.15rem; color: var(--text-strong); }
+  .fw .v { color: var(--text-soft); font: .82rem var(--mono); }
+  .chip { font: 500 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; border: 1px solid currentColor; border-radius: 3px; padding: 3px 6px; color: var(--text-soft); }
   .chip.beta  { color: var(--tab-3); }
   .chip.alpha { color: var(--tab-2); }
-  .fw .by { font-size: .88rem; color: var(--ink-soft); }
+  .fw .by { font-size: .88rem; color: var(--text-soft); }
   .fw .s { font-size: .95rem; margin: 0; }
-  .fw .note { font-size: .85rem; color: var(--ink-soft); margin: 0; }
+  .fw .note { font-size: .85rem; color: var(--text-soft); margin: 0; }
   .fw .acts { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 6px; }
   .fw .acts a { font-size: .9rem; }
-  .fw .on { font: .78rem var(--mono); color: var(--ink-soft); }
+  .fw .on { font: .78rem var(--mono); color: var(--text-soft); }
 
   .changes { margin: 0 0 14px; padding-left: 1.3em; }
   .changes li { margin: 2px 0; }
   .changes .warn { display: block; color: var(--coral); font-weight: 600; font-size: .92rem; }
-  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--ink-soft); font-size: .95rem; }
+  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--text-soft); font-size: .95rem; }
   .notes:empty { display: none; }
-  .slots .what .sub.upd { color: var(--ink); }
-  .speed { color: var(--ink-soft); font: .85rem var(--mono); margin-top: 6px; }
+  .slots .what .sub.upd { color: var(--text); }
+  .speed { color: var(--text-soft); font: .85rem var(--mono); margin-top: 6px; }
   #launcher-update { margin-top: 14px; }
   #launcher-update p { margin: 0 0 8px; }
 
-  details.log { margin-top: 48px; border-top: 1px solid var(--rule); padding-top: 14px; }
-  details.log summary { cursor: pointer; color: var(--ink-soft); font: 13px var(--mono); letter-spacing: .04em; }
+  details.log { margin-top: 48px; border-top: 1px solid var(--hair); padding-top: 14px; }
+  details.log summary { cursor: pointer; color: var(--text-soft); font: 13px var(--mono); letter-spacing: .04em; }
   details.log pre {
     max-height: 280px; overflow: auto;
     font: .78rem var(--mono);
-    background: var(--surface); border-radius: 3px;
+    background: var(--panel); border-radius: 3px;
     padding: 12px; white-space: pre-wrap; word-break: break-all;
   }
-  footer { margin-top: 24px; border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-soft); font-size: .9rem; }
+  footer { margin-top: 24px; border-top: 1px solid var(--hair); padding-top: 18px; color: var(--text-soft); font-size: .9rem; }
   footer p { max-width: 52em; margin: 0 0 6px; }
 
   @media (max-width: 760px) {
@@ -308,39 +308,39 @@
     .key[data-led="amber"]::before { animation: write 0.9s ease-in-out infinite alternate; }
   }
   /* choosing a file is a quiet button: the filled ones are Connect and Send */
-  label.act { display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--ink); border-radius: 3px; padding: 8px 16px; background: transparent; color: var(--ink-strong); font-weight: 500; cursor: pointer; }
+  label.act { display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--text); border-radius: 3px; padding: 8px 16px; background: transparent; color: var(--text-strong); font-weight: 500; cursor: pointer; }
   label.act:hover { border-color: var(--accent); color: var(--accent-text); }
   label.act:focus-within { outline: 2px solid var(--tab-3); outline-offset: 2px; }
   .drop {
-    border: 1.5px dashed var(--line); border-radius: 3px;
+    border: 1.5px dashed var(--edge); border-radius: 3px;
     padding: 16px 18px; margin-bottom: 14px;
   }
   .drop p { margin: 0 0 10px; }
-  .drop.over { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--paper)); }
+  .drop.over { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--page)); }
   .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
   button.stock {
-    border: 1.5px solid var(--line); border-radius: 3px;
-    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--edge); border-radius: 3px;
+    background: transparent; color: var(--text);
     padding: 7px 14px; font: inherit; font-size: .95rem; font-weight: 500; cursor: pointer;
   }
   button.stock:hover { border-color: var(--accent); color: var(--accent-text); }
   button.stock[aria-pressed="true"] { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--on-accent); }
-  .chosen { font: 500 .92em var(--mono); color: var(--ink-strong); }
+  .chosen { font: 500 .92em var(--mono); color: var(--text-strong); }
   input[type="text"] {
-    font: 500 .95rem var(--mono); color: var(--ink-strong);
+    font: 500 .95rem var(--mono); color: var(--text-strong);
     background: var(--field);
-    border: 1.5px solid var(--line); border-radius: 3px;
+    border: 1.5px solid var(--edge); border-radius: 3px;
     padding: 8px 12px; width: 13em; text-transform: uppercase; letter-spacing: .04em;
   }
-  input[type="text"]:hover { border-color: var(--ink); }
+  input[type="text"]:hover { border-color: var(--text); }
   input:focus-visible { outline: 2px solid var(--tab-3); outline-offset: 2px; }
-  .field { display: grid; gap: 6px; font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+  .field { display: grid; gap: 6px; font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-soft); }
   .warn { color: var(--accent-text); font-weight: 600; }
-  details.setup { margin: 0 0 40px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 12px 0; }
-  details.setup summary { cursor: pointer; font-weight: 600; color: var(--ink-strong); }
+  details.setup { margin: 0 0 40px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); padding: 12px 0; }
+  details.setup summary { cursor: pointer; font-weight: 600; color: var(--text-strong); }
   details.setup summary::marker { color: var(--accent); }
   details.setup ol { margin: 12px 0 4px; padding-left: 1.4em; display: grid; gap: 8px; max-width: 46em; }
-  details.setup li::marker { font-family: var(--mono); color: var(--ink-soft); }
+  details.setup li::marker { font-family: var(--mono); color: var(--text-soft); }
 </style>
 </head>
 <body>
