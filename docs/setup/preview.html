@@ -77,7 +77,11 @@
   .eyebrow a { text-decoration: none; }
   .eyebrow a:hover { color: var(--ink); }
   .masthead { margin: 0 0 14px; }
-  h1 { font-size: clamp(2.4rem, 6vw, 3.8rem); line-height: 1; font-weight: 700; letter-spacing: -.03em; margin: 0; color: var(--ink-strong); }
+  h1 { font-size: clamp(3rem, 8.5vw, 5.4rem); line-height: .95; font-weight: 800; letter-spacing: -.04em; margin: 0; color: var(--ink-strong); }
+  h1 .brand { color: var(--coral); }
+  /* a row of key LEDs in the firmwares' colours, the page's one bit of fun */
+  .leds { display: inline-flex; gap: 5px; margin-right: 12px; vertical-align: -1px; }
+  .leds i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
   .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.12rem; }
   .credit { max-width: 40em; margin: 0; color: var(--ink-soft); font-size: .95rem; }
   .facts { font: 13px/1.7 var(--mono); color: var(--ink-soft); margin: 14px 0 0; }
@@ -176,7 +180,7 @@
     font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
   }
   button.act:not(:disabled):hover, button.soft:not(:disabled):hover { background: var(--amber); border-color: var(--amber); color: #24211E; }
-  button.act.big { font-size: 1.1rem; padding: 13px 26px; }
+  button.act.big { font-size: 1.1rem; padding: 13px 26px; background: var(--coral); border-color: var(--coral); color: #FFFFFF; }
   button.act:disabled { opacity: .3; cursor: not-allowed; }
   button.soft {
     border: 1.5px solid var(--line); border-radius: 3px;
@@ -282,9 +286,9 @@
 <main>
   <div class="head">
     <div>
-      <p class="eyebrow"><a href="../">CHOMPI firmwares</a> / setup</p>
+      <p class="eyebrow"><span class="leds" aria-hidden="true"><i style="--c: var(--tab-1)"></i><i style="--c: var(--tab-2)"></i><i style="--c: var(--tab-3)"></i><i style="--c: var(--tab-4)"></i><i style="--c: var(--amber)"></i></span><a href="../">CHOMPI firmwares</a> / setup</p>
       <div class="masthead">
-        <h1>Set up your CHOMPI</h1>
+        <h1>Set up your <span class="brand">CHOMPI</span></h1>
       </div>
       <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
       <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each one below links to its release.</p>
