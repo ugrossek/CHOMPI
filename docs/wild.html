@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed the CHOMPI (wild)</title>
+<meta name="robots" content="noindex">
+<script src="setup/demo.js?v=2026-10-10"></script>
+<meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Wild look (experiment): confetti paper, stacked letters, stickers,
+     chunky outlines with hard shadows. Same page underneath. */
+  :root {
+    --page: #FFF6E5;
+    --text: #2A1B4F;
+    --text-soft: #5E4F86;
+    --outline: #2A1B4F;
+    --pop-pink: #FF4F9A;
+    --pop-orange: #FF8A1F;
+    --pop-yellow: #FFD23F;
+    --pop-green: #2FCB7A;
+    --pop-blue: #3D8BFF;
+    --pop-violet: #9B5CFF;
+    --cyan: #18C2CF;
+    --amber: #F0A320;
+    --pink: #E8497F;
+    --green: #2FCB7A;
+    --coral: #E5352B;
+    --tint: 22%;
+    --field: #FFFFFF;
+    --display: "Bungee", "Arial Black", sans-serif;
+    --shade: "Bungee Shade", "Bungee", "Arial Black", sans-serif;
+    --mono: "Space Mono", ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #170F2E;
+      --text: #FFF1DC;
+      --text-soft: #C8B8EC;
+      --outline: #FFF1DC;
+      --tint: 30%;
+      --field: #241845;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--text);
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    background-color: var(--page);
+    /* confetti: a few dot grids in different colours, offset from each other */
+    background-image:
+      radial-gradient(circle, var(--pop-pink) 2.5px, transparent 3px),
+      radial-gradient(circle, var(--pop-blue) 2px, transparent 2.5px),
+      radial-gradient(circle, var(--pop-yellow) 3px, transparent 3.5px),
+      radial-gradient(circle, var(--pop-green) 2px, transparent 2.5px);
+    background-size: 173px 151px, 211px 197px, 263px 229px, 137px 181px;
+    background-position: 11px 23px, 97px 61px, 40px 140px, 120px 9px;
+    overflow-x: hidden;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px 120px; position: relative; }
+  a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: var(--pop-pink); }
+  a:hover { background: var(--pop-yellow); color: #2A1B4F; text-decoration-color: currentColor; }
+  code { font: .85em var(--mono); background: color-mix(in oklab, var(--pop-yellow) 45%, var(--page)); border-radius: 6px; padding: 1px 6px; }
+
+  /* ---- the spine: CHOMPI stacked down the left edge ----------------------- */
+  .spine {
+    position: fixed; left: 18px; top: 50%; translate: 0 -50%;
+    writing-mode: vertical-rl; text-orientation: upright;
+    font: 64px/1 var(--display); letter-spacing: -.12em;
+    pointer-events: none; user-select: none; z-index: 0;
+  }
+  .spine span { display: inline-block; }
+  .spine span:nth-child(1) { color: var(--pop-pink);   rotate: -8deg; }
+  .spine span:nth-child(2) { color: var(--pop-orange); rotate: 6deg; }
+  .spine span:nth-child(3) { color: var(--pop-yellow); rotate: -4deg; -webkit-text-stroke: 2px var(--outline); }
+  .spine span:nth-child(4) { color: var(--pop-green);  rotate: 10deg; }
+  .spine span:nth-child(5) { color: var(--pop-blue);   rotate: -6deg; }
+  .spine span:nth-child(6) { color: var(--pop-violet); rotate: 5deg; }
+
+  /* ---- top ---------------------------------------------------------------- */
+  .head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 28px 48px; align-items: center; padding-bottom: 40px; position: relative; }
+  .eyebrow {
+    display: inline-block; margin: 0 0 22px;
+    font: 700 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+    background: var(--pop-yellow); color: #2A1B4F;
+    border: 2.5px solid var(--outline); border-radius: 999px; padding: 7px 14px;
+    rotate: -3deg; box-shadow: 3px 3px 0 var(--outline);
+  }
+  h1 { margin: 0 0 18px; line-height: .9; font-weight: 400; }
+  h1 .feed {
+    display: inline-block; font: clamp(1.8rem, 5vw, 3rem)/1 var(--display);
+    background: var(--pop-blue); color: #fff; padding: 6px 14px 2px; border: 3px solid var(--outline);
+    rotate: -4deg; box-shadow: 5px 5px 0 var(--outline); margin-bottom: 10px;
+  }
+  h1 .brand { display: block; white-space: nowrap; font: clamp(2.6rem, 9.5vw, 5.6rem)/.95 var(--shade); letter-spacing: -.02em; }
+  h1 .brand span { display: inline-block; transition: rotate .2s, translate .2s; }
+  h1 .brand span:nth-child(1) { color: var(--pop-pink);   rotate: -6deg; }
+  h1 .brand span:nth-child(2) { color: var(--pop-orange); rotate: 4deg; translate: 0 6px; }
+  h1 .brand span:nth-child(3) { color: var(--pop-green);  rotate: -3deg; }
+  h1 .brand span:nth-child(4) { color: var(--pop-blue);   rotate: 7deg; translate: 0 -4px; }
+  h1 .brand span:nth-child(5) { color: var(--pop-violet); rotate: -5deg; translate: 0 4px; }
+  h1 .brand span:nth-child(6) { color: var(--pop-orange); rotate: 9deg; }
+  @media (prefers-reduced-motion: no-preference) {
+    h1 .brand span:hover { rotate: 0deg; translate: 0 -12px; }
+    @keyframes bob { 50% { translate: 0 -6px; } }
+    .eyebrow { animation: bob 3s ease-in-out infinite; }
+  }
+  .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.18rem; font-weight: 500; }
+  .credit { max-width: 40em; margin: 0; color: var(--text-soft); font-size: .95rem; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+  .facts li { font: 700 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; border: 2px solid var(--outline); border-radius: 999px; background: var(--page); }
+  .facts li:nth-child(1) { rotate: 2deg; background: color-mix(in oklab, var(--pop-green) 40%, var(--page)); }
+  .facts li:nth-child(2) { rotate: -2deg; background: color-mix(in oklab, var(--pop-pink) 35%, var(--page)); }
+  .facts li:nth-child(3) { rotate: 1deg; background: color-mix(in oklab, var(--pop-blue) 35%, var(--page)); }
+
+  /* notices: sticky notes */
+  .notice {
+    --c: var(--pop-yellow);
+    background: color-mix(in oklab, var(--c) 70%, var(--page)); color: #2A1B4F;
+    border: 2.5px solid var(--outline); border-radius: 4px 18px 4px 18px;
+    padding: 14px 18px; margin: 0 0 20px; font-size: .95rem;
+    rotate: 1.5deg; box-shadow: 6px 6px 0 var(--outline);
+  }
+  .notice + .notice { --c: var(--cyan); rotate: -2deg; margin-left: 24px; }
+  .notice a:hover { background: #fff; }
+  .notice strong { font: 14px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; display: block; margin-bottom: 8px; }
+  .notice p { margin: 0 0 10px; }
+  .notice p:last-child { margin: 0; }
+  #demo-note { --c: var(--pop-violet); }
+
+  /* ---- the instrument: candy keys ------------------------------------------- */
+  .chompi {
+    border: 3px solid var(--outline); border-radius: 22px;
+    padding: 14px 14px 16px; margin: 6px 0 18px;
+    background: color-mix(in oklab, var(--pop-violet) 18%, var(--page));
+    box-shadow: 6px 6px 0 var(--outline);
+  }
+  .screen {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 40px; padding: 6px 14px; margin-bottom: 14px;
+    background: #1B1238; color: #9CFFCF;
+    border: 2.5px solid var(--outline); border-radius: 12px;
+    font: 14px/1.4 var(--mono);
+  }
+  .screen .dot { width: 11px; height: 11px; border-radius: 50%; background: #3B2E66; flex: none; }
+  .screen[data-mood="ok"]   .dot { background: var(--cyan);  box-shadow: 0 0 10px var(--cyan); }
+  .screen[data-mood="busy"] .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .screen[data-mood="bad"]  .dot { background: var(--pink);  box-shadow: 0 0 10px var(--pink); }
+
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 6px; }
+  .key {
+    --cap: var(--pop-yellow);
+    position: relative; appearance: none; margin: 0; padding: 0; aspect-ratio: 1;
+    border: 2.5px solid var(--outline); border-radius: 10px;
+    background: color-mix(in oklab, var(--cap) 55%, #fff);
+    box-shadow: 0 3px 0 var(--outline);
+    cursor: pointer; font: inherit; color: #2A1B4F;
+    transition: translate .08s, box-shadow .08s;
+  }
+  .key:nth-child(5n+1) { --cap: var(--pop-pink); }
+  .key:nth-child(5n+2) { --cap: var(--pop-orange); }
+  .key:nth-child(5n+3) { --cap: var(--pop-yellow); }
+  .key:nth-child(5n+4) { --cap: var(--pop-green); }
+  .key:nth-child(5n)   { --cap: var(--pop-blue); }
+  .key:disabled { cursor: default; }
+  .key:not(:disabled):hover { translate: 0 -2px; box-shadow: 0 5px 0 var(--outline); }
+  .key:not(:disabled):active { translate: 0 2px; box-shadow: 0 1px 0 var(--outline); }
+  .key .n { position: absolute; left: 0; right: 0; bottom: 10%; font: 700 clamp(.55rem, 1.6vw, .8rem)/1 var(--mono); }
+  .key::before {
+    content: ""; position: absolute; left: 50%; top: 16%;
+    width: 28%; aspect-ratio: 1; translate: -50% 0; border-radius: 50%;
+    border: 2px solid #2A1B4F; background: var(--led, #fff);
+    box-shadow: 0 0 0 0 var(--led, transparent);
+  }
+  .key[data-led]::before, .key[data-busy]::before { box-shadow: 0 0 8px 2px var(--led); }
+  .key[data-busy="send"]  { --led: var(--cyan); }
+  .key[data-busy="store"] { --led: var(--amber); }
+  .key[data-busy="done"]  { --led: var(--green); }
+  .key[data-busy="fail"]  { --led: var(--pink); }
+  .key[aria-pressed="true"] { background: var(--cap); translate: 0 -4px; rotate: -4deg; box-shadow: 0 7px 0 var(--outline); }
+  .key.changed .n::after { content: "★"; margin-left: 1px; }
+  .key:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
+    @keyframes write { to { opacity: .35; } }
+  }
+
+  /* ---- steps: tilted coloured cards ------------------------------------------ */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 56px; }
+  .steps > li {
+    position: relative;
+    background: color-mix(in oklab, var(--tab) var(--tint), var(--page));
+    border: 3px solid var(--outline); border-radius: 24px;
+    padding: 30px 28px 26px 28px;
+    box-shadow: 8px 8px 0 var(--shadow);
+  }
+  .steps > li:nth-child(1) { --tab: var(--pop-orange); --shadow: var(--pop-pink);   rotate: -.6deg; }
+  .steps > li:nth-child(2) { --tab: var(--pop-pink);   --shadow: var(--pop-blue);   rotate: .7deg; }
+  .steps > li:nth-child(3) { --tab: var(--pop-blue);   --shadow: var(--pop-green);  rotate: -.4deg; }
+  .steps > li:nth-child(4) { --tab: var(--pop-green);  --shadow: var(--pop-violet); rotate: .5deg; }
+  /* a vertical STEP label on each card's right edge */
+  .steps > li::after {
+    content: "STEP"; position: absolute; right: -16px; top: 26px;
+    writing-mode: vertical-rl; text-orientation: upright;
+    font: 15px/1 var(--display); letter-spacing: -.05em;
+    background: var(--outline); color: var(--page);
+    padding: 10px 5px; border-radius: 8px;
+  }
+  .steps h2 {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin: 0 0 14px; font: clamp(1.3rem, 3.4vw, 1.9rem)/1.1 var(--display); letter-spacing: -.01em;
+  }
+  .steps h2 .num {
+    display: inline-grid; place-items: center; flex: none;
+    width: 2.1em; height: 2.1em; border-radius: 50%;
+    background: var(--tab); color: #fff; border: 3px solid var(--outline);
+    font: 1.25em/1 var(--display); rotate: -10deg;
+    box-shadow: 3px 3px 0 var(--outline);
+    -webkit-text-stroke: 1px #2A1B4F;
+  }
+  #step-connect[data-conn="off"]  { --conn: var(--coral); }
+  #step-connect[data-conn="busy"] { --conn: var(--amber); }
+  #step-connect[data-conn="on"]   { --conn: var(--green); }
+  .steps h2 .conn {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
+    font: 700 12px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase;
+    background: var(--page); border: 2px solid var(--outline); border-radius: 999px; padding: 6px 10px; rotate: 3deg;
+  }
+  .steps h2 .conn::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--conn); box-shadow: 0 0 6px var(--conn); }
+  /* done: a big star sticker on the number */
+  .steps > li.done h2 .num { position: relative; }
+  .steps > li.done h2 .num::after {
+    content: ""; position: absolute; right: -12px; top: -12px;
+    width: 26px; height: 26px;
+    background: var(--pop-yellow) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Cpath d=%27M5 10.5l3.2 3.2L15 6.5%27 fill=%27none%27 stroke=%27%232A1B4F%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center / 18px no-repeat; color: #2A1B4F; border: 2px solid var(--outline); border-radius: 50%; rotate: 10deg;
+  }
+  .steps .inner { padding: 0; }
+  .steps p { margin: 0 0 12px; max-width: 40em; }
+  .hint { color: var(--text-soft); font-size: .95rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  button.act, a.act, label.act {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 3px solid var(--outline); border-radius: 999px; padding: 11px 24px;
+    background: var(--pop-pink); color: #fff;
+    font: 17px/1 var(--display); letter-spacing: .02em; cursor: pointer; text-decoration: none;
+    box-shadow: 4px 4px 0 var(--outline); transition: translate .08s, box-shadow .08s;
+  }
+  button.act:not(:disabled):hover { translate: -2px -2px; box-shadow: 6px 6px 0 var(--outline); background: var(--pop-violet); }
+  button.act:not(:disabled):active { translate: 3px 3px; box-shadow: 1px 1px 0 var(--outline); }
+  button.act.big { font-size: 1.5rem; padding: 16px 40px; rotate: -2deg; background: var(--pop-orange); }
+  button.act:disabled { opacity: .35; cursor: not-allowed; }
+  button.soft {
+    border: 2.5px solid var(--outline); border-radius: 999px;
+    background: var(--page); color: var(--text);
+    padding: 7px 16px; font: inherit; font-size: .95rem; font-weight: 700; cursor: pointer;
+    box-shadow: 3px 3px 0 var(--outline);
+  }
+  button.soft:not(:disabled):hover { background: var(--pop-yellow); color: #2A1B4F; }
+  button.soft:disabled { opacity: .4; cursor: not-allowed; }
+  button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+
+  .result { margin-top: 16px; font-weight: 700; display: inline-block; background: var(--page); border: 2px solid var(--outline); border-radius: 10px; padding: 6px 12px; }
+  .result[hidden] { display: none; }
+  .result.bad { color: var(--coral); }
+
+  /* ---- front page bits --------------------------------------------------------- */
+  .key[data-led="cyan"]  { --led: var(--cyan); }
+  .key[data-led="amber"] { --led: var(--amber); }
+  .key[data-led="white"] { --led: var(--green); }
+  .key[data-led="pink"]  { --led: var(--pink); }
+  @media (prefers-reduced-motion: no-preference) {
+    .key[data-led="amber"]::before { animation: write 0.9s ease-in-out infinite alternate; }
+  }
+  label.act { background: var(--pop-blue); }
+  label.act:hover { translate: -2px -2px; box-shadow: 6px 6px 0 var(--outline); }
+  label.act:focus-within { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+  .drop {
+    border: 3px dashed var(--outline); border-radius: 18px;
+    padding: 18px 20px; margin-bottom: 16px;
+    background: repeating-linear-gradient(-45deg, transparent 0 14px, color-mix(in oklab, var(--page) 55%, transparent) 14px 28px);
+  }
+  .drop p { margin: 0 0 10px; font-weight: 700; }
+  .drop.over { background: var(--pop-yellow); color: #2A1B4F; rotate: -1deg; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  button.stock {
+    border: 2.5px solid var(--outline); border-radius: 10px;
+    background: var(--page); color: var(--text);
+    padding: 8px 16px; font: 15px/1 var(--display); cursor: pointer;
+    box-shadow: 3px 3px 0 var(--outline);
+  }
+  #stock button.stock:nth-child(1) { rotate: -3deg; }
+  #stock button.stock:nth-child(2) { rotate: 2deg; }
+  #stock button.stock:nth-child(3) { rotate: -1deg; }
+  #stock button.stock:nth-child(4) { rotate: 3deg; }
+  button.stock:hover { background: var(--pop-yellow); color: #2A1B4F; }
+  button.stock[aria-pressed="true"] { background: var(--pop-pink); color: #fff; rotate: 0deg; }
+  .chosen { font: 700 .92em var(--mono); background: var(--pop-yellow); color: #2A1B4F; padding: 1px 6px; border-radius: 6px; }
+  input[type="text"] {
+    font: 700 1rem var(--mono); color: var(--text);
+    background: var(--field);
+    border: 3px solid var(--outline); border-radius: 12px;
+    padding: 9px 14px; width: 13em; text-transform: uppercase; letter-spacing: .04em;
+    box-shadow: inset 3px 3px 0 color-mix(in oklab, var(--outline) 15%, transparent);
+  }
+  input:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+  .field { display: grid; gap: 8px; font: 13px/1 var(--display); letter-spacing: .02em; }
+  .warn { color: var(--coral); font-weight: 700; }
+  details.setup {
+    margin: 0 0 48px; padding: 14px 20px;
+    background: var(--page); border: 3px solid var(--outline); border-radius: 16px;
+    box-shadow: 5px 5px 0 var(--pop-yellow), 5px 5px 0 3px var(--outline);
+  }
+  details.setup summary { cursor: pointer; font: 17px/1.3 var(--display); }
+  details.setup summary::marker { color: var(--pop-pink); }
+  details.setup ol { margin: 12px 0 4px; padding-left: 1.6em; display: grid; gap: 8px; max-width: 46em; }
+  details.setup li::marker { font-family: var(--display); color: var(--pop-pink); }
+
+  details.log { margin-top: 56px; }
+  details.log summary { cursor: pointer; font: 14px var(--display); }
+  details.log pre {
+    max-height: 280px; overflow: auto; font: .78rem var(--mono);
+    background: #1B1238; color: #9CFFCF; border: 2.5px solid var(--outline); border-radius: 12px;
+    padding: 12px; white-space: pre-wrap; word-break: break-all;
+  }
+  footer {
+    margin-top: 28px; padding-top: 26px; color: var(--text-soft); font-size: .92rem;
+    /* zigzag ribbon on top */
+    background:
+      linear-gradient(135deg, var(--pop-pink) 25%, transparent 25%) 0 0 / 20px 12px repeat-x,
+      linear-gradient(225deg, var(--pop-pink) 25%, transparent 25%) 0 0 / 20px 12px repeat-x;
+  }
+
+  @media (max-width: 900px) {
+    main { padding-left: 20px; }
+    .spine { position: absolute; left: auto; right: 4px; top: 30px; translate: none; font-size: 40px; opacity: .9; }
+  }
+  @media (max-width: 760px) {
+    .head { grid-template-columns: minmax(0, 1fr); }
+    .notice + .notice { margin-left: 12px; }
+  }
+  @media (max-width: 560px) {
+    main { padding: 28px 16px 64px; }
+    .spine { font-size: 30px; right: 2px; top: 16px; }
+    .steps > li { padding: 24px 18px 20px; rotate: 0deg !important; box-shadow: 5px 5px 0 var(--shadow); }
+    .steps > li::after { right: -10px; font-size: 12px; }
+    .chompi { padding: 10px 8px 12px; border-radius: 14px; }
+    .keys { gap: 3px; }
+    .key { border-width: 1.5px; border-radius: 5px; box-shadow: 0 2px 0 var(--outline); }
+    .key::before { top: 3px; width: 56%; height: 4px; aspect-ratio: auto; border-radius: 2px; border-width: 1px; }
+    .key .n { bottom: 18%; }
+  }
+</style>
+</head>
+<body>
+<div class="spine" aria-hidden="true"><span>C</span><span>H</span><span>O</span><span>M</span><span>P</span><span>I</span></div>
+<main>
+  <div class="head">
+    <div>
+      <p class="eyebrow">CHOMPI firmwares • one at a time</p>
+      <h1><span class="feed">Feed the</span> <span class="brand" aria-label="CHOMPI"><span>C</span><span>H</span><span>O</span><span>M</span><span>P</span><span>I</span></span></h1>
+      <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
+      <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. Firmware upload over USB is part of it since <a href="https://github.com/sfaber02/CHOMPI/releases/latest">launcher v1.1</a>.</p>
+      <ul class="facts"><li>4 steps</li><li>one firmware at a time</li><li>Chrome or Edge</li></ul>
+    </div>
+    <div>
+      <aside class="notice">
+        <p><strong>Use at your own risk</strong>This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
+      </aside>
+      <aside class="notice">
+        <p><strong>Several at once?</strong>The <a href="setup/">setup page</a> puts firmwares on all fifteen keys in one go.</p>
+      </aside>
+    </div>
+  </div>
+
+  <details class="setup" id="setup">
+    <summary>First time? Set up the card</summary>
+    <ol>
+      <li>Back up your SD card: copy everything on it to your computer.</li>
+      <li>Download <code>chompi-multi-firmware-card.zip</code> from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest launcher release</a> and unzip it.</li>
+      <li>Format a microSD card as FAT32 (32 GB or smaller).</li>
+      <li>Copy everything inside <code>chompi-multi-firmware-card/</code> to the top level of the card.</li>
+      <li>Put the card in CHOMPI and switch it on. The first start shows a rainbow while the launcher is installed, then the picker: key 1 TAPE, key 2 TEMPO, key 3 WAVE, key 15 USB storage.</li>
+      <li>Plug CHOMPI into this computer and continue below.</li>
+    </ol>
+  </details>
+
+  <ol class="steps">
+    <li id="step-connect" data-conn="off">
+      <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
+      <div class="inner">
+        <p>Turn CHOMPI on with the launcher showing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself whenever it opens.</p>
+        <div class="row">
+          <button class="act" id="connect">Connect CHOMPI</button>
+          <select id="port" hidden aria-label="MIDI device"></select>
+        </div>
+        <p class="result" id="connect-result" hidden></p>
+      </div>
+    </li>
+
+    <li id="step-firmware">
+      <h2><span class="num">2</span>Choose a firmware</h2>
+      <div class="inner">
+        <div class="drop" id="drop">
+          <p>Drop a <code>.bin</code> here, or</p>
+          <div class="row">
+            <label class="act">Choose a file<input type="file" id="file" accept=".bin,application/octet-stream"></label>
+          </div>
+        </div>
+        <p class="hint">Or send one of the firmwares from the <a href="https://github.com/sfaber02/CHOMPI/releases/tag/launcher-v1.1">launcher v1.1 release card</a>:</p>
+        <div class="row" id="stock"></div>
+        <p class="result" id="firmware-result" hidden></p>
+      </div>
+    </li>
+
+    <li id="step-slot">
+      <h2><span class="num">3</span>Pick a slot and a name</h2>
+      <div class="inner">
+        <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+        <section class="chompi" aria-label="CHOMPI keybed: the slots">
+          <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
+            <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
+          </div>
+          <div class="keys" id="keys"></div>
+        </section>
+        <div class="row">
+          <label class="field">Name on the card
+            <input type="text" id="name" maxlength="16" spellcheck="false" autocomplete="off" placeholder="TAPE-DEV">
+          </label>
+        </div>
+        <p class="hint" id="target">The file will be called <span class="chosen" id="target-file">NN_NAME.bin</span>. Use A–Z, 0–9, - and _.</p>
+        <p class="warn" id="slot-warn" hidden></p>
+      </div>
+    </li>
+
+    <li id="step-send">
+      <h2><span class="num">4</span>Send it</h2>
+      <div class="inner">
+        <p>CHOMPI's keys fill cyan as the firmware arrives and amber while it's written to the card. Then it starts.</p>
+        <button class="act big" id="send" disabled>Send</button>
+        <p class="result" id="send-result" hidden></p>
+      </div>
+    </li>
+  </ol>
+
+  <details class="log">
+    <summary>Message log</summary>
+    <pre id="log"></pre>
+  </details>
+
+  <footer>
+    Works in Chrome and Edge. Safari can't talk MIDI to CHOMPI. Needs launcher v1.1 or later on the card.
+    The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/midi-firmware-load/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
+    <br>Get the launcher from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest release</a>, see <a href="#setup">setup</a>.
+  </footer>
+</main>
+
+<script type="module">
+import { Launcher, ProtocolError, NAME_RE, defaultName } from "./chompi-midi.js?v=2026-10-10";
+
+const SLOTS_DEFAULT = 15;
+/* The firmwares on the launcher-v1.1 release card, unchanged (sha256 of the
+   release zip checked), served from this site so the page can fetch them. */
+const STOCK = [
+  { label: "TAPE", name: "TAPE", slot: 1, path: "firmware/launcher-v1.1/01_TAPE.bin" },
+  { label: "TEMPO", name: "TEMPO", slot: 2, path: "firmware/launcher-v1.1/02_TEMPO.bin" },
+  { label: "WAVE", name: "WAVE", slot: 3, path: "firmware/launcher-v1.1/03_WAVE.bin" },
+  { label: "USB storage", name: "USB_STORAGE", slot: 15, path: "firmware/launcher-v1.1/15_USB_STORAGE.bin" },
+];
+/* what the launcher-v1.1 release card holds, for the overwrite warning */
+const STANDARD = Object.fromEntries(STOCK.map((s) => [s.slot, s]));
+
+const $ = (id) => document.getElementById(id);
+const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false,
+                connecting: false, autoTimer: 0 };
+
+/* ---- keybed ------------------------------------------------------------ */
+const keys = [];
+function buildKeys(n) {
+  $("keys").replaceChildren();
+  keys.length = 0;
+  for (let i = 1; i <= n; i++) {
+    const k = document.createElement("button");
+    k.className = "key";
+    k.type = "button";
+    k.setAttribute("aria-pressed", "false");
+    k.setAttribute("aria-label", `Slot ${i}`);
+    k.innerHTML = `<span class="n">${i}</span>`;
+    k.addEventListener("click", () => pickSlot(i));
+    $("keys").append(k);
+    keys.push(k);
+  }
+}
+function paintKeys(color, fraction) {
+  const lit = Math.round(fraction * keys.length);
+  keys.forEach((k, i) => { if (i < lit) k.dataset.led = color; else delete k.dataset.led; });
+}
+function screen(text, mood = "idle") {
+  $("screen-text").textContent = text;
+  $("screen").dataset.mood = mood;
+}
+
+/* ---- log --------------------------------------------------------------- */
+const logLines = [];
+function log(dir, bytes) {
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0").toUpperCase());
+  const shown = hex.length > 24 ? hex.slice(0, 16).join(" ") + ` … (${hex.length} bytes)` : hex.join(" ");
+  logLines.push(`${dir === "out" ? "→" : "←"} ${shown}`);
+  if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
+  if ($("log").closest("details").open) $("log").textContent = logLines.join("\n");
+}
+$("log").closest("details").addEventListener("toggle", () => { $("log").textContent = logLines.join("\n"); });
+
+function show(id, text, bad = false) {
+  const el = $(id);
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.classList.toggle("bad", bad);
+}
+
+/* ---- connect ----------------------------------------------------------- */
+/** Pair each output with the input of the same device. Names usually match,
+ *  but systems differ, so fall back to the manufacturer, then to "the only
+ *  input there is". */
+/* Chrome keeps unplugged devices in the port lists, marked "disconnected",
+   so only connected ones count. */
+const live = (p) => p && p.state === "connected";
+
+function portsByName() {
+  const outs = [...state.access.outputs.values()].filter(live);
+  const ins = [...state.access.inputs.values()].filter(live);
+  const base = (n) => (n || "").toLowerCase().replace(/\b(in|out|input|output|port)\b|\d+$/g, "").trim();
+  return outs.map((o) => {
+    const i = ins.find((i) => i.name === o.name)
+      || ins.find((i) => base(i.name) === base(o.name))
+      || ins.find((i) => i.manufacturer && i.manufacturer === o.manufacturer)
+      || (ins.length === 1 && outs.length === 1 ? ins[0] : null);
+    return { name: o.name, out: o, in: i };
+  }).filter((p) => p.in);
+}
+
+function seenPorts() {
+  const list = (m) => [...m.values()].map((p) => `"${p.name}"`).join(", ") || "none";
+  return `inputs: ${list(state.access.inputs)}; outputs: ${list(state.access.outputs)}`;
+}
+
+function adapter(pair) {
+  return {
+    send: (bytes) => pair.out.send(bytes),
+    onMessage: (fn) => { pair.in.onmidimessage = (e) => fn(e.data); },
+  };
+}
+
+/** Ping the launcher on this pair. quiet: an automatic attempt, which
+ *  doesn't show its failure as an error. True if a launcher answered. */
+async function connectTo(pair, quiet = false) {
+  if (state.pair?.in) state.pair.in.onmidimessage = null;
+  state.pair = pair;
+  state.connecting = true;
+  paintConnection();
+  screen(`Knocking on ${pair.name}…`, "busy");
+  let ok = false;
+  try {
+    /* a fresh connection: after a power cycle the old one is dead */
+    await Promise.all([pair.in.open(), pair.out.open()]);
+    state.launcher = new Launcher(adapter(pair), log);
+    state.info = await state.launcher.ping();
+    buildKeys(state.info.slots);
+    if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
+    screen(`Connected to ${pair.name}. Pick a slot.`, "ok");
+    show("connect-result", `Connected. The launcher has ${state.info.slots} slots.`);
+    $("step-connect").classList.add("done");
+    ok = true;
+  } catch (e) {
+    state.info = null;
+    $("step-connect").classList.remove("done");
+    if (!quiet) {
+      screen(e.message, "bad");
+      show("connect-result", e.message, true);
+    }
+  } finally {
+    state.connecting = false;
+  }
+  update();
+  return ok;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** CHOMPI (re)appeared: connect by itself. The launcher may need a moment
+ *  after the USB port shows up, so try a few times. A running firmware
+ *  (not the launcher) doesn't answer; then say how to get the launcher. */
+async function autoConnect() {
+  if (state.info || state.busy || state.connecting) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const pairs = portsByName();
+    if (!pairs.length || state.info || state.busy) return;
+    const pair = pairs[Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)))];
+    if (await connectTo(pair, true)) return;
+    await sleep(1000);
+  }
+  if (!state.info && !state.busy)
+    screen("CHOMPI is there, but the launcher isn't answering. Power-cycle it with the launcher showing; this page connects by itself.", "idle");
+}
+
+/** user: from the Connect button; otherwise by itself on opening the page,
+ *  which only happens once MIDI is allowed and stays quiet about failures */
+async function startMidi(user) {
+  if (!navigator.requestMIDIAccess) {
+    if (user) show("connect-result", "This browser can't talk MIDI. Open this page in Chrome or Edge.", true);
+    return;
+  }
+  if (!state.access) {
+    try {
+      state.access = await navigator.requestMIDIAccess({ sysex: true });
+    } catch {
+      if (user) show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
+      return;
+    }
+    state.access.onstatechange = () => refreshPorts(false);
+  }
+  refreshPorts(true, !user);
+}
+$("connect").addEventListener("click", () => startMidi(true));
+
+/* MIDI allowed on an earlier visit: connect right away, no click needed
+   (the first time the browser has to ask, and that needs a click) */
+(async () => {
+  try {
+    if (!navigator.permissions || !navigator.requestMIDIAccess) return;
+    const p = await navigator.permissions.query({ name: "midi", sysex: true });
+    if (p.state === "granted") startMidi(false);
+  } catch { /* no permissions API for MIDI here: the button it is */ }
+})();
+
+function refreshPorts(connectNow, quiet = false) {
+  const pairs = portsByName();
+  const sel = $("port");
+  sel.replaceChildren(...pairs.map((p, i) => new Option(p.name, i)));
+  sel.hidden = pairs.length < 2;
+  if (!connectNow) {
+    /* a device came or went (one event per port, so wait for them to settle) */
+    if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
+      state.info = null;
+      $("step-connect").classList.remove("done");
+      show("connect-result", "");
+      screen("CHOMPI went away. Turn it on with the launcher showing; this page connects by itself.", "idle");
+      update();
+    }
+    clearTimeout(state.autoTimer);
+    if (!state.info && pairs.length) state.autoTimer = setTimeout(autoConnect, 500);
+    return;
+  }
+  if (!pairs.length) {
+    if (quiet) {
+      screen("Waiting for CHOMPI. Turn it on with the launcher showing and plug it in.", "idle");
+      return; // it connects when it shows up
+    }
+    show("connect-result", `No MIDI device found that can both send and receive. Is CHOMPI on, showing the launcher, and plugged in? (The browser sees ${seenPorts()}.)`, true);
+    logLines.push(`ports seen: ${seenPorts()}`);
+    return;
+  }
+  logLines.push(`ports seen: ${seenPorts()}`);
+  const guess = Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)));
+  sel.value = guess;
+  connectTo(pairs[guess], quiet);
+}
+$("port").addEventListener("change", (e) => connectTo(portsByName()[e.target.value]));
+
+/* ---- firmware ---------------------------------------------------------- */
+function setImage(bytes, label, name) {
+  state.image = bytes;
+  state.fileLabel = label;
+  show("firmware-result", `${label}, ${(bytes.length / 1024).toFixed(0)} KB.`);
+  $("step-firmware").classList.add("done");
+  if (name) $("name").value = name;
+  update();
+}
+
+async function fromFile(file) {
+  if (!file) return;
+  document.querySelectorAll("button.stock").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const name = $("name").value && file.name === "CHOMPI.bin" ? null : defaultName(file.name);
+  setImage(bytes, file.name, name);
+}
+$("file").addEventListener("change", (e) => fromFile(e.target.files[0]));
+const drop = $("drop");
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); fromFile(e.dataTransfer.files[0]); });
+
+for (const s of STOCK) {
+  const b = document.createElement("button");
+  b.className = "stock";
+  b.type = "button";
+  b.textContent = s.label;
+  b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", async () => {
+    document.querySelectorAll("button.stock").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    show("firmware-result", `Fetching ${s.label}…`);
+    try {
+      const res = await fetch(s.path);
+      if (!res.ok) throw new Error(res.status);
+      setImage(new Uint8Array(await res.arrayBuffer()), `${s.label} (launcher v1.1)`, s.name);
+      if (!state.slotChosen) pickSlot(s.slot, false); /* suggest its own slot */
+    } catch {
+      show("firmware-result", `Couldn't download ${s.label}. Check the connection and try again.`, true);
+    }
+  });
+  $("stock").append(b);
+}
+
+/* ---- slot & name ------------------------------------------------------- */
+/* chosen: pressed by the user, which a firmware button then leaves alone */
+function pickSlot(n, chosen = true) {
+  if (state.busy) return;
+  state.slot = n;
+  state.slotChosen ||= chosen;
+  keys.forEach((k, i) => k.setAttribute("aria-pressed", String(i + 1 === n)));
+  update();
+}
+$("name").addEventListener("input", (e) => {
+  const pos = e.target.selectionStart;
+  e.target.value = e.target.value.toUpperCase().replace(/\s/g, "-").replace(/[^A-Z0-9_-]/g, "");
+  e.target.setSelectionRange(pos, pos);
+  update();
+});
+
+/** the Connect tab's colour and words */
+function paintConnection() {
+  const conn = state.connecting ? "busy" : state.info ? "on" : "off";
+  $("step-connect").dataset.conn = conn;
+  $("conn-state").textContent = conn === "on" ? "connected" : conn === "busy" ? "connecting…" : "not connected";
+}
+
+function update() {
+  paintConnection();
+  const name = $("name").value;
+  const nn = state.slot ? String(state.slot).padStart(2, "0") : "NN";
+  $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
+  const std = STANDARD[state.slot];
+  show("slot-warn", std && name !== std.name ? `On the release card, slot ${state.slot} holds ${std.label}. Sending replaces it.` : "");
+  $("step-slot").classList.toggle("done", !!state.slot && NAME_RE.test(name));
+
+  const ready = state.info && state.image && state.slot && NAME_RE.test(name) && !state.busy;
+  $("send").disabled = !ready;
+  $("send").textContent = state.slot ? `Send to slot ${state.slot}` : "Send";
+  keys.forEach((k) => { k.disabled = state.busy; });
+}
+
+/* ---- send -------------------------------------------------------------- */
+$("send").addEventListener("click", async () => {
+  const name = $("name").value;
+  state.busy = true;
+  update();
+  show("send-result", "");
+  $("step-send").classList.remove("done");
+  paintKeys("cyan", 0);
+  screen("Chomping…", "busy");
+  try {
+    await state.launcher.upload(state.image, state.slot, name, state.info.maxChunk, (phase, done, total) => {
+      if (phase === "send") {
+        paintKeys("cyan", done / total);
+        screen(`Chomping… ${Math.floor((100 * done) / total)}%`, "busy");
+      } else {
+        paintKeys("amber", 1);
+        screen("Writing to the card…", "busy");
+      }
+    });
+    paintKeys("white", 1);
+    const file = `${String(state.slot).padStart(2, "0")}_${name}.bin`;
+    screen(`Stored as ${file}. CHOMPI is starting it.`, "ok");
+    show("send-result", `Stored in slot ${state.slot} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI with the launcher showing; this page connects by itself.`);
+    $("step-send").classList.add("done");
+    state.info = null; // the launcher is gone until the next power-on
+    $("step-connect").classList.remove("done");
+  } catch (e) {
+    paintKeys("pink", 1);
+    const msg = e instanceof ProtocolError ? e.message : `Something went wrong: ${e.message}`;
+    screen(msg, "bad");
+    show("send-result", msg, true);
+  } finally {
+    state.busy = false;
+    update();
+  }
+});
+
+/* A link to #setup should land on it open. */
+function openSetup() { if (location.hash === "#setup") $("setup").open = true; }
+window.addEventListener("hashchange", openSetup);
+openSetup();
+
+buildKeys(SLOTS_DEFAULT);
+update();
+</script>
+</body>
+</html>
