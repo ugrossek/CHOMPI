@@ -126,11 +126,13 @@ namespace chompi
        (yellow leans orange, or the LEDs show it greenish) */
     static const float sing_yellow[3] = {1.f, .50f, 0.f};
     static const float sing_blue[3]   = {.08f, .25f, 1.f};
+    static const float sing_green[3]  = {.05f, 1.f, .2f};
 
-    /* knobs 4 and 6: page 1 red, page 2 blue (yellow is Toy's) */
+    /* knobs 4 and 6: page 1 red, page 2 blue, page 3 (the cloud) green
+       (yellow is Toy's) */
     static inline const float *SingPageColour(int page)
     {
-        return page == 1 ? sing_blue : sing_red;
+        return page == 2 ? sing_green : page == 1 ? sing_blue : sing_red;
     }
 
     /** a knob ring: the page's colour, brighter as the value goes up, never
@@ -192,8 +194,8 @@ namespace chompi
     }
 
     /* SING: knobs 1-3 and 5 have one page and a chompi layer (MenuPage);
-       knob 4 (space, filter) and knob 6 (volume, input gain) have two */
-    static const uint8_t knob_num_pages[6] = {1, 1, 1, 2, 1, 2};
+       knob 4 has three (space, filter, cloud), knob 6 two (volume, input gain) */
+    static const uint8_t knob_num_pages[6] = {1, 1, 1, 3, 1, 2};
 
     class NormalPage : public daisy::UiPage
     {
@@ -486,10 +488,15 @@ namespace chompi
                             SingPageRing(0, value, r, g, b); // SING: space, page 1 red
                         }
                     }
-                    else // SING: page 2, filter: low-pass left, off in the middle, high-pass right
+                    else if (page == 1) // SING: page 2, filter: low-pass left, off in the middle, high-pass right
                     {
                         fx_->SetFilter(value);
                         SingPageRing(1, fabsf(value - .5f) * 2.f, r, g, b);
+                    }
+                    else // SING: page 3, the glitter cloud: off left, dense right
+                    {
+                        fx_->SetCloud(value);
+                        SingPageRing(2, value, r, g, b);
                     }
 
 

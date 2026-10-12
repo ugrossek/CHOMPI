@@ -42,8 +42,8 @@ through unchanged: for children that's around the middle, for most grown-ups low
 
 ## Knobs
 
-One page each, except the effects (knob 4) and the volume (knob 6), which have two, as in TAPE:
-press them to switch. Every knob has a second control: **hold the chompi key and turn**.
+One page each, except the effects (knob 4, three pages) and the volume (knob 6, two), as in
+TAPE: press them to switch. Every knob has a second control: **hold the chompi key and turn**.
 
 | Knob | Turn | Chompi + turn | Chompi + press |
 |---|---|---|---|
@@ -52,9 +52,14 @@ press them to switch. Every knob has a second control: **hold the chompi key and
 | **3** | **character** (below) | **doubler**: a thicker, chorused sound | reset |
 | **4**, page 1 (red) | **space**: reverb to the left, echo to the right, off in the middle | **echo time** | reset the effects |
 | **4**, page 2 (blue) | **filter**: low-pass to the left, high-pass to the right, off in the middle | **resonance** | reset the effects |
+| **4**, page 3 (green) | **cloud**: off to the left, a denser cloud of glitter to the right | **glitter**: plain copies ← → sparkle an octave up | reset the effects |
 | **5** | the big wheel: **time wheel** (above) | **envelope**: short and plucky ← → slow and swelling | |
 | **6**, page 1 (red) | **output volume** | | |
 | **6**, page 2 (blue) | **input gain** | **compression** | |
+
+**Cloud** sprays your sound into tiny grains from the last half second, scattered left and
+right. Glitter starts in the middle; turned right, more grains jump an octave up (and some higher),
+shorter and brighter. Freeze a vowel and turn the cloud up for a shimmering chord.
 
 Size, character and pitch start in the middle; all effects start off. You hear only the
 harmonies, not your own voice. **Character** means:
@@ -82,7 +87,7 @@ play, warm white the human and what's in tune.
   tune, red when off (a tuner). Middle C dim white. Turn a knob and the white keys show its
   position for a moment (transpose: from the middle outwards).
 - **Knob rings:** pitch, size and character are warm white in the middle and red the further out.
-  Knobs 4 and 6 show their page: **page 1 red, page 2 blue**. While the chompi key is held, the
+  Knobs 4 and 6 show their page: **page 1 red, page 2 blue, page 3 green**. While the chompi key is held, the
   rings show the second controls in white. The bar on the white keys shows the value you're
   turning, for a moment.
 - **Big wheel's LEDs** while frozen: red for how far back, warm white for "now".
@@ -130,9 +135,14 @@ Every start begins from the defaults; SING doesn't save knob settings.
 - **Human's freeze** ([`VoiceFreeze.h`](code/src/VoiceFreeze.h)): a 2.7-second recording of the
   voice; frozen, two overlapping grains, each a whole number of the voice's periods and lined up
   by cross-correlation, repeat the moment seamlessly.
+- **Cloud** ([`Cloud.h`](code/src/Cloud.h)): the harmonies go into a 1.4-second ring buffer; up to
+  ten Hann-windowed grains (45–180 ms) play from random moments of the last ~0.4 s, panned at
+  random, 5 to 40 per second. Glitter is the chance that a grain plays an octave up (past the
+  middle, sometimes an octave and a fifth or two octaves); plain grains are detuned a few cents.
+  It sits before echo and reverb.
 
 The DSP parts have no libDaisy and are tested on a PC: [`code/test/`](code/test/) (pitch detector,
-vocoder, voice freeze, freeze quality). Each builds with
+vocoder, voice freeze, freeze quality, cloud). Each builds with
 `g++ -std=c++14 -O2 -I../src <name>_test.cpp`.
 
 ## Install

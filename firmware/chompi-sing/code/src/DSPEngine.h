@@ -10,6 +10,7 @@
 #include "MicFilter.h"
 #include "Harmonizer.h"
 #include "PitchDetector.h"
+#include "Cloud.h"
 
 /* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
@@ -132,6 +133,7 @@ namespace daisy
 
             mic_filter_.Init(samplerate);
             harmonizer.Init(samplerate);
+            cloud_.Init(samplerate, chompi::cloud_mem);
 
             /* SING: TAPE's saturation stays neutral (factor 1); the lo-fi page
                drives Speak & Spell instead. Set here: until now only the
@@ -209,6 +211,10 @@ namespace daisy
                 // wow and flutter
                 warble_.Process(outl[i], outr[i], &outl[i], &outr[i]);
             }
+
+            /* SING: the glitter cloud, before echo and reverb so they wash
+               over the grains */
+            cloud_.Process(outl, outr, size);
 
             // delay, in its own block to optimize SDRAM access
             for(size_t i = 0; i < size; i++)
@@ -550,6 +556,9 @@ namespace daisy
         inline void SetWarble(float val) { warble_.SetFreq(val); }
 
         inline void SetFilter(float val) { cutoff_target_ = val; }
+        /* SING: knob 4 page 3, the glitter cloud: amount | glitter (chompi) */
+        inline void SetCloud(float val) { cloud_.SetAmount(val); }
+        inline void SetCloudGlitter(float val) { cloud_.SetGlitter(val); }
         void ToggleFreeze()
         {
             harmonizer.SetFreeze(!harmonizer.Frozen());
@@ -657,6 +666,7 @@ namespace daisy
         int   gate_hold_ = 0;
         float gate_env_  = 0.f;
         DjFilter filter_;
+        chompi::Cloud cloud_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;
         Warble warble_;

@@ -40,6 +40,7 @@ float DSY_SDRAM_BSS chompi::chorus_mem[2][chompi::kChorusLen];
 float DSY_SDRAM_BSS chompi::vocoder_hist[chompi::Vocoder::kHistFrames][chompi::Vocoder::kBands];
 float DSY_SDRAM_BSS chompi::voice_audio[chompi::VoiceFreeze::kLen];
 float DSY_SDRAM_BSS chompi::voice_pitch[chompi::VoiceFreeze::kFrames];
+float DSY_SDRAM_BSS chompi::cloud_mem[chompi::kCloudLen];
 
 /* The heap, for the few things that malloc -- chiefly the USB serial port,
  *  which calloc's ~550 bytes when a computer configures the device.

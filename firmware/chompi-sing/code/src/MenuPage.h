@@ -33,10 +33,12 @@ namespace chompi
             delay_time = .5f;
             resonance = 0.f;
             warble = 0.f;
+            glitter = kGlitterDefault;
             fx_->SetFinalComp(final_comp);
             fx_->SetFilterResonance(resonance);
             fx_->SetDelayTime(delay_time);
             fx_->SetWarble(warble);
+            fx_->SetCloudGlitter(glitter);
 
         }
 
@@ -90,9 +92,13 @@ namespace chompi
                 {
                     SetPthLedFloat(4, delay_time, delay_time, delay_time);
                 }
-                else // filter: resonance
+                else if(knob_page[3] == 1) // filter: resonance
                 {
                     SetPthLedFloat(4, resonance, resonance, resonance);
+                }
+                else // cloud: glitter
+                {
+                    SetPthLedFloat(4, glitter, glitter, glitter);
                 }
 
                 if(input_toggled)
@@ -284,10 +290,15 @@ namespace chompi
                         delay_time = fclamp(delay_time + inc, 0.f, 1.f);
                         fx_->SetDelayTime(delay_time);
                     }
-                    else // filter: resonance
+                    else if(page == 1) // filter: resonance
                     {
                         resonance = fclamp(resonance + inc, 0.f, 1.f);
                         fx_->SetFilterResonance(resonance);
+                    }
+                    else // cloud: glitter
+                    {
+                        glitter = fclamp(glitter + inc, 0.f, 1.f);
+                        fx_->SetCloudGlitter(glitter);
                     }
                     break;
                 case 4: fx_->SetEnvelope(layer(4)); break; // envelope
@@ -374,14 +385,17 @@ namespace chompi
                     fx_->SetReverb(enc_values[0][3]);
                     fx_->SetDelayFeedback(enc_values[0][3]);
                     fx_->SetFilter(enc_values[1][3]); // SING: filter is page 2
+                    fx_->SetCloud(enc_values[2][3]);  // SING: the cloud is page 3
 
                     delay_time = .5f;
                     resonance = 0.f;
                     warble = 0.f;
+                    glitter = kGlitterDefault;
 
                     fx_->SetFilterResonance(resonance);
                     fx_->SetDelayTime(delay_time);
                     fx_->SetWarble(warble);
+                    fx_->SetCloudGlitter(glitter);
 
                     if (split_delay_) {
                         enc_values[0][3] = .5f;
@@ -480,6 +494,8 @@ namespace chompi
         uint32_t last_blink;
 
         float delay_time, resonance, warble;
+        float glitter; // SING: the cloud's chompi layer, plain .. sparkle
+        static constexpr float kGlitterDefault = .5f;
         float final_comp;
 
         bool fx_reset = false;

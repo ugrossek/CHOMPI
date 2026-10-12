@@ -17,7 +17,8 @@ namespace chompi
            page 1: pitch (.5 = 0), size, character (centred), space (.5 =
                    off: reverb left, echo right), -, volume
            page 2: -, -, -, filter (.5 = off), -, input gain
-           chompi layer (MenuPage): -, width, doubler, -, envelope, mix (.5) */
+           chompi layer (MenuPage): -, width, doubler, -, envelope, mix (.5);
+           knob 4's row 2 is its page 3, the cloud (0 = off) */
         {.5f, .5f, .5f, .5f, .75f, .84f},
         {0.f, 0.f, 0.f, .5f, 0.f, .75f},
         {0.f, 0.f, 0.f, 0.f, .4f, .5f},
