@@ -9,7 +9,7 @@
 <meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <style>
   /* Wild look (experiment): confetti paper, stacked letters, stickers,
      chunky outlines with hard shadows. Same page underneath. */
@@ -33,6 +33,7 @@
     --field: #FFFFFF;
     --display: "Bungee", "Arial Black", sans-serif;
     --shade: "Bungee Shade", "Bungee", "Arial Black", sans-serif;
+    --hand: "Caveat", "Comic Sans MS", cursive;
     --mono: "Space Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
   }
@@ -126,7 +127,7 @@
   /* notices: sticky notes */
   .notice {
     --c: var(--pop-yellow);
-    background: color-mix(in oklab, var(--c) 70%, var(--page)); color: #2A1B4F;
+    background: color-mix(in oklab, var(--c) 70%, #fff); color: #2A1B4F;
     border: 2.5px solid var(--outline); border-radius: 4px 18px 4px 18px;
     padding: 14px 18px; margin: 0 0 20px; font-size: .95rem;
     rotate: 1.5deg; box-shadow: 6px 6px 0 var(--outline);
@@ -208,14 +209,6 @@
   .steps > li:nth-child(2) { --tab: var(--pop-pink);   --shadow: var(--pop-blue);   rotate: .7deg; }
   .steps > li:nth-child(3) { --tab: var(--pop-blue);   --shadow: var(--pop-green);  rotate: -.4deg; }
   .steps > li:nth-child(4) { --tab: var(--pop-green);  --shadow: var(--pop-violet); rotate: .5deg; }
-  /* a vertical STEP label on each card's right edge */
-  .steps > li::after {
-    content: "STEP"; position: absolute; right: -16px; top: 26px;
-    writing-mode: vertical-rl; text-orientation: upright;
-    font: 15px/1 var(--display); letter-spacing: -.05em;
-    background: var(--outline); color: var(--page);
-    padding: 10px 5px; border-radius: 8px;
-  }
   .steps h2 {
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     margin: 0 0 14px; font: clamp(1.3rem, 3.4vw, 1.9rem)/1.1 var(--display); letter-spacing: -.01em;
@@ -341,6 +334,101 @@
       linear-gradient(225deg, var(--pop-pink) 25%, transparent 25%) 0 0 / 20px 12px repeat-x;
   }
 
+
+  /* ---- the CHOMPI creature: its teeth are keys, it eats what you feed it ---- */
+  .critter { position: relative; display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; margin: -20px 0 26px; }
+  .critter svg { width: 190px; height: auto; flex: none; overflow: visible; }
+  .critter .outline { stroke: var(--outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+  .critter .body { fill: var(--pop-orange); }
+  .critter .belly { fill: color-mix(in oklab, var(--pop-yellow) 70%, #fff); }
+  .critter .cheek { fill: var(--pop-pink); opacity: .55; }
+  .critter .eye { fill: #fff; }
+  .critter .pupil { fill: #2A1B4F; }
+  .critter .happy-eye { fill: none; stroke: #2A1B4F; stroke-width: 5; stroke-linecap: round; opacity: 0; }
+  .critter .mouth { fill: #1B1238; }
+  .critter .tongue { fill: var(--pop-pink); }
+  .critter .tooth { fill: #fff; stroke: var(--outline); stroke-width: 3; }
+  .critter .led { stroke: none; }
+  .critter .knob { fill: var(--pop-violet); }
+  .critter .crumb { fill: var(--pop-yellow); stroke: var(--outline); stroke-width: 2.5; opacity: 0; }
+  .critter .mouth { transform-origin: 110px 120px; transform: scaleY(.25); }
+  .critter .lids { transform-origin: 110px 84px; transform: scaleY(0); fill: var(--pop-orange); }
+  .critter .knob-g { transform-origin: 110px 30px; }
+  .critter .pupils { transform-origin: 113px 86px; }
+
+  /* what it says, in handwriting */
+  .bubble {
+    position: relative; align-self: flex-start; margin-top: 10px;
+    font: 700 1.55rem/1.05 var(--hand); color: var(--text);
+    background: var(--page); border: 3px solid var(--outline); border-radius: 22px 22px 6px 22px;
+    padding: 10px 16px 12px; rotate: -4deg; max-width: 11em; text-align: center;
+    box-shadow: 4px 4px 0 var(--pop-pink);
+  }
+  .bubble::before { content: "feed me!"; }
+  .bubble::after {
+    content: ""; position: absolute; right: -14px; bottom: 6px; width: 18px; height: 14px;
+    background: var(--page); border: solid var(--outline); border-width: 3px 3px 0 0;
+    transform: skewY(30deg); border-radius: 0 4px 0 0;
+  }
+  body:has(#step-connect.done) .bubble::before  { content: "hi! got a snack for me?"; }
+  body:has(#step-firmware.done) .bubble::before { content: "ooh, tasty… now pick a key"; }
+  body:has(#step-slot.done) .bubble::before     { content: "ready when you are!"; }
+  body:has(#drop.over) .bubble::before          { content: "AAAAH"; }
+  body:has(#keys .key[data-led="cyan"]) .bubble::before,
+  body:has(#keys .key[data-led="amber"]) .bubble::before { content: "nom nom nom"; }
+  body:has(#step-send.done) .bubble::before     { content: "*burp* thank you!"; }
+  body:has(#screen[data-mood="bad"]) .bubble::before { content: "bleh. try again?"; }
+
+  /* hungry once there is food: mouth a little open, looking down at it */
+  body:has(#step-firmware.done) .critter .mouth { transform: scaleY(.6); }
+  body:has(#step-firmware.done) .critter .pupils { transform: translate(-3px, 4px); }
+  /* a file over the drop area: wide open */
+  body:has(#drop.over) .critter .mouth { transform: scaleY(1.35); }
+  body:has(#drop.over) .critter .pupils { transform: translate(0, -3px) scale(1.15); }
+  /* done: happy eyes and a crumb */
+  body:has(#step-send.done) .critter .pupils,
+  body:has(#step-send.done) .critter .eye { opacity: 0; }
+  body:has(#step-send.done) .critter .happy-eye { opacity: 1; }
+  body:has(#step-send.done) .critter .crumb { opacity: 1; }
+  body:has(#step-send.done) .critter .mouth { transform: scaleY(.35); }
+  body:has(#screen[data-mood="bad"]) .critter .pupils { transform: translate(0, 5px); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .critter svg { animation: sway 4s ease-in-out infinite; transform-origin: 50% 100%; }
+    @keyframes sway { 50% { transform: rotate(-3deg); } }
+    .critter .lids { animation: blink 5s infinite; }
+    @keyframes blink { 0%, 93%, 100% { transform: scaleY(0); } 96% { transform: scaleY(1); } }
+    .critter .knob-g { animation: wobble 2.6s ease-in-out infinite; }
+    @keyframes wobble { 50% { transform: rotate(12deg); } }
+    body:has(#keys .key[data-led="cyan"]) .critter .mouth,
+    body:has(#keys .key[data-led="amber"]) .critter .mouth { animation: chew-m .35s ease-in-out infinite alternate; }
+    body:has(#keys .key[data-led="amber"]) .critter .jaw { animation: chew-j .35s ease-in-out infinite alternate; }
+    @keyframes chew-m { from { transform: scaleY(.2); } to { transform: scaleY(1.1); } }
+    body:has(#keys .key[data-led="cyan"]) .critter svg,
+    body:has(#keys .key[data-led="amber"]) .critter svg { animation: munch .35s ease-in-out infinite alternate; }
+    @keyframes munch { to { transform: scale(1.04, .96); } }
+    body:has(#step-send.done) .critter svg { animation: hop .6s ease-in-out 3; }
+    @keyframes hop { 50% { transform: translateY(-14px); } }
+  }
+
+  /* ---- notes in the margin, in handwriting ------------------------------------ */
+  .steps > li::after {
+    position: absolute; z-index: 1; pointer-events: none;
+    font: 700 1.45rem/1 var(--hand); color: var(--note, var(--text));
+    padding-bottom: 34px; white-space: nowrap;
+    background: var(--arrow) left bottom / 46px 34px no-repeat;
+  }
+  .steps > li:nth-child(1)::after { content: "it'll ask about MIDI: say yes!"; right: 40px; bottom: 30px; rotate: -3deg; }
+  .steps > li:nth-child(2)::after { content: "any .bin from the community"; right: 50px; top: 34px; rotate: 3deg; }
+  .steps > li:nth-child(3)::after { content: "the keys really are the slots"; right: 40px; top: 30px; rotate: -2deg; }
+  .steps > li:nth-child(4)::after { content: "takes a few seconds, promise"; left: 300px; bottom: 44px; rotate: -5deg; }
+  .steps > li::after { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF4F9A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  @media (max-width: 760px) {
+    .critter { justify-content: center; margin: 0 0 20px; }
+    .critter svg { width: 150px; }
+    .steps > li::after { position: static; display: block; white-space: normal; margin-top: 14px; padding: 0 0 0 52px; background-position: left center; font-size: 1.3rem; }
+  }
+
   @media (max-width: 900px) {
     main { padding-left: 20px; }
     .spine { position: absolute; left: auto; right: 4px; top: 30px; translate: none; font-size: 40px; opacity: .9; }
@@ -351,9 +439,8 @@
   }
   @media (max-width: 560px) {
     main { padding: 28px 16px 64px; }
-    .spine { font-size: 30px; right: 2px; top: 16px; }
+    .spine { font-size: 30px; right: 10px; top: 16px; }
     .steps > li { padding: 24px 18px 20px; rotate: 0deg !important; box-shadow: 5px 5px 0 var(--shadow); }
-    .steps > li::after { right: -10px; font-size: 12px; }
     .chompi { padding: 10px 8px 12px; border-radius: 14px; }
     .keys { gap: 3px; }
     .key { border-width: 1.5px; border-radius: 5px; box-shadow: 0 2px 0 var(--outline); }
@@ -374,6 +461,33 @@
       <ul class="facts"><li>4 steps</li><li>one firmware at a time</li><li>Chrome or Edge</li></ul>
     </div>
     <div>
+      <div class="critter" aria-hidden="true">
+        <p class="bubble"></p>
+        <svg viewBox="0 0 220 210">
+          <g class="knob-g"><path class="outline" d="M110 30V12" fill="none"/><circle class="knob outline" cx="110" cy="10" r="9"/></g>
+          <rect class="body outline" x="48" y="182" width="38" height="20" rx="9"/>
+          <rect class="body outline" x="134" y="182" width="38" height="20" rx="9"/>
+          <path class="body outline" d="M22 120c-14 4-16 22-4 26M198 120c14 4 16 22 4 26" fill="none"/>
+          <rect class="body outline" x="20" y="28" width="180" height="162" rx="42"/>
+          <circle class="eye outline" cx="80" cy="82" r="20"/>
+          <circle class="eye outline" cx="140" cy="82" r="20"/>
+          <g class="pupils"><circle class="pupil" cx="83" cy="86" r="8"/><circle class="pupil" cx="143" cy="86" r="8"/><circle cx="86" cy="83" r="2.5" fill="#fff"/><circle cx="146" cy="83" r="2.5" fill="#fff"/></g>
+          <g class="lids"><rect x="58" y="60" width="44" height="44" rx="22"/><rect x="118" y="60" width="44" height="44" rx="22"/></g>
+          <path class="happy-eye" d="M66 88q14-16 28 0M126 88q14-16 28 0"/>
+          <ellipse class="cheek" cx="50" cy="114" rx="12" ry="7"/>
+          <ellipse class="cheek" cx="170" cy="114" rx="12" ry="7"/>
+          <g class="mouth"><rect x="56" y="120" width="108" height="40" rx="18"/><ellipse class="tongue" cx="110" cy="154" rx="28" ry="9"/></g>
+          <g>
+            <rect class="tooth" x="62" y="112" width="17" height="17" rx="4"/><circle class="led" cx="70.5" cy="118" r="3" fill="#FF4F9A"/>
+            <rect class="tooth" x="82" y="112" width="17" height="17" rx="4"/><circle class="led" cx="90.5" cy="118" r="3" fill="#FF8A1F"/>
+            <rect class="tooth" x="102" y="112" width="17" height="17" rx="4"/><circle class="led" cx="110.5" cy="118" r="3" fill="#FFD23F"/>
+            <rect class="tooth" x="122" y="112" width="17" height="17" rx="4"/><circle class="led" cx="130.5" cy="118" r="3" fill="#2FCB7A"/>
+            <rect class="tooth" x="142" y="112" width="17" height="17" rx="4"/><circle class="led" cx="150.5" cy="118" r="3" fill="#3D8BFF"/>
+          </g>
+          <rect class="crumb" x="168" y="136" width="9" height="9" rx="2" transform="rotate(20 172 140)"/>
+          <rect class="crumb" x="180" y="152" width="6" height="6" rx="1.5" transform="rotate(-15 183 155)"/>
+        </svg>
+      </div>
       <aside class="notice">
         <p><strong>Use at your own risk</strong>This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
       </aside>
