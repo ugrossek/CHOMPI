@@ -39,8 +39,8 @@
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     /* the page's own colour: the title word, buttons, the risk note.
        Red (--coral) is kept for things that went wrong. */
-    --accent: #1F8C88;
-    --accent-deep: #18716E;
+    --accent: #D9772B;
+    --accent-deep: #B5601C;
     --on-accent: #FFFFFF;
     --accent-text: color-mix(in oklab, var(--accent) 80%, var(--ink));
     color-scheme: light;
@@ -185,7 +185,9 @@
     background: var(--accent-deep); color: var(--on-accent);
     font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
   }
-  button.act:not(:disabled):hover, button.soft:not(:disabled):hover { background: var(--amber); border-color: var(--amber); color: #24211E; }
+  /* hover: darker for the orange buttons, an orange edge for the quiet ones */
+  button.act:not(:disabled):hover { background: color-mix(in oklab, var(--accent-deep) 82%, #000); border-color: color-mix(in oklab, var(--accent-deep) 82%, #000); }
+  button.soft:not(:disabled):hover { border-color: var(--accent); color: var(--accent-text); }
   button.act.big { font-size: 1.1rem; padding: 13px 26px; }
   button.act:disabled { opacity: .3; cursor: not-allowed; }
   button.soft {
