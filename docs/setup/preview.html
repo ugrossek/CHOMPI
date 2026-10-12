@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Set up your CHOMPI (preview)</title>
+<meta name="description" content="Pick firmwares for your CHOMPI's keys and write them all in one go over USB.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!-- ?v= names this version of the scripts, so a browser never pairs this page
+     with an older copy it kept. Change it whenever demo.js or chompi-midi.js change. -->
+<script src="demo.js?v=2026-10-10"></script>
+<style>
+  /* Sober look (preview): warm grey paper, soft ink, thin rules, line-drawn
+     keys. Colour only marks things: a step's top rule, a firmware's LED. */
+  :root {
+    --paper: #F3EFE9;
+    --surface: #ECE7E0;
+    --ink: #3D3935;
+    --ink-strong: #24211E;
+    --ink-soft: #7A736B;
+    --line: #B7B0A7;
+    --rule: #D6D0C8;
+    --coral: #D2553F;
+    --tab-1: #E08A3C;
+    --tab-2: #D45C74;
+    --tab-3: #3E86C6;
+    --tab-4: #4E9E62;
+    --key: #F3EFE9;
+    --key-off: #E2DCD4;
+    --cyan: #18C2CF;
+    --amber: #F0A320;
+    --pink: #E8497F;
+    --green: #4E9E62;
+    --field: #F8F5F1;
+    --changed: #F6ECDA;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #22201D;
+      --surface: #2A2724;
+      --ink: #D2CCC4;
+      --ink-strong: #EEE9E2;
+      --ink-soft: #9A938A;
+      --line: #6A645D;
+      --rule: #3C3834;
+      --key: #22201D;
+      --key-off: #3A3632;
+      --field: #1D1B19;
+      --changed: #3A3123;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Schibsted Grotesk", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px; }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--line); }
+  a:hover { text-decoration-color: currentColor; }
+  code { font: .85em var(--mono); background: var(--surface); border-radius: 3px; padding: 1px 5px; }
+
+  /* ---- top: title left, the small print right ---------------------------- */
+  .head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 24px 56px; align-items: end; padding-bottom: 36px; }
+  .eyebrow { font: 500 13px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 18px; }
+  .eyebrow a { text-decoration: none; }
+  .eyebrow a:hover { color: var(--ink); }
+  .masthead { margin: 0 0 14px; }
+  h1 { font-size: clamp(2.4rem, 6vw, 3.8rem); line-height: 1; font-weight: 700; letter-spacing: -.03em; margin: 0; color: var(--ink-strong); }
+  .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.12rem; }
+  .credit { max-width: 40em; margin: 0; color: var(--ink-soft); font-size: .95rem; }
+  .facts { font: 13px/1.7 var(--mono); color: var(--ink-soft); margin: 14px 0 0; }
+
+  .notice { border-left: 2px solid var(--coral); padding: 2px 0 2px 16px; margin: 0 0 16px; font-size: .95rem; }
+  .notice strong { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--coral); display: block; margin-bottom: 6px; }
+  .notice p { margin: 0 0 10px; }
+  .notice p:last-child { margin: 0; }
+  #demo-note { border-left-color: var(--tab-3); }
+  #demo-note strong { color: var(--tab-3); }
+
+  /* ---- the instrument, drawn in lines ------------------------------------ */
+  .chompi {
+    border: 1.5px solid var(--ink);
+    border-radius: 8px;
+    padding: 14px 14px 16px;
+    margin: 6px 0 18px;
+  }
+  .screen {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 38px; padding: 6px 12px; margin-bottom: 14px;
+    border: 1px solid var(--line); border-radius: 3px;
+    font: 14px/1.4 var(--mono);
+  }
+  .screen .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line); flex: none; }
+  .screen[data-mood="ok"]   .dot { background: var(--cyan);  border-color: var(--cyan); }
+  .screen[data-mood="busy"] .dot { background: var(--amber); border-color: var(--amber); }
+  .screen[data-mood="bad"]  .dot { background: var(--pink);  border-color: var(--pink); }
+
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 6px; }
+  .key {
+    position: relative;
+    appearance: none; margin: 0; padding: 0;
+    aspect-ratio: 1;
+    border: 1.5px solid var(--ink); border-radius: 3px;
+    background: var(--key);
+    cursor: pointer; font: inherit; color: var(--ink-soft);
+  }
+  .key:disabled { cursor: default; }
+  .key:not(:disabled):hover { background: var(--surface); }
+  .key .n { position: absolute; left: 0; right: 0; bottom: 12%; font: 500 clamp(.55rem, 1.6vw, .75rem)/1 var(--mono); }
+  /* the LED: an empty ring when off, filled with the firmware's colour */
+  .key::before {
+    content: ""; position: absolute; left: 50%; top: 18%;
+    width: 26%; aspect-ratio: 1; translate: -50% 0;
+    border-radius: 50%;
+    border: 1px solid var(--led, var(--line));
+    background: var(--led, transparent);
+  }
+  .key[data-busy="send"]  { --led: var(--cyan); }
+  .key[data-busy="store"] { --led: var(--amber); }
+  .key[data-busy="done"]  { --led: var(--green); }
+  .key[data-busy="fail"]  { --led: var(--pink); }
+  .key[aria-pressed="true"] { background: color-mix(in oklab, var(--amber) 16%, var(--paper)); border-color: color-mix(in oklab, var(--amber) 60%, var(--ink)); color: var(--ink-strong); }
+  .key.changed .n::after { content: "•"; color: var(--coral); margin-left: 1px; }
+  .key:focus-visible { outline: 2px solid var(--tab-3); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
+    @keyframes write { to { opacity: .35; } }
+  }
+
+  /* ---- steps: a coloured rule on top, no boxes ---------------------------- */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 44px; }
+  .steps > li { border-top: 3px solid var(--tab); padding-top: 14px; }
+  .steps > li:nth-child(1) { --tab: var(--tab-1); }
+  .steps > li:nth-child(2) { --tab: var(--tab-2); }
+  .steps > li:nth-child(3) { --tab: var(--tab-3); }
+  .steps h2 {
+    display: flex; align-items: baseline; gap: 12px;
+    margin: 0 0 12px;
+    font-size: 1.55rem; font-weight: 700; letter-spacing: -.015em; color: var(--ink-strong);
+  }
+  .steps h2 .num { font: 500 1.2rem/1 var(--mono); color: color-mix(in oklab, var(--tab) 75%, var(--ink)); }
+  #step-connect[data-conn="off"]  { --conn: var(--coral); }
+  #step-connect[data-conn="busy"] { --conn: var(--amber); }
+  #step-connect[data-conn="on"]   { --conn: var(--green); }
+  .steps h2 .conn {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
+    font: 500 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .steps h2 .conn::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--conn); }
+  /* done: a tick after the number, drawn (the font has no ✓) */
+  .steps > li.done h2 .num::after {
+    content: ""; display: inline-block; width: 5px; height: 10px; margin: 0 0 2px 8px;
+    border: solid currentColor; border-width: 0 2px 2px 0; rotate: 45deg;
+  }
+  .steps .inner { padding: 0; }
+  .steps p { margin: 0 0 12px; max-width: 40em; }
+  .hint { color: var(--ink-soft); font-size: .95rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+  button.act, a.act {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1.5px solid var(--ink-strong); border-radius: 3px; padding: 10px 18px;
+    background: var(--ink-strong); color: var(--paper);
+    font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+  }
+  button.act:not(:disabled):hover, button.soft:not(:disabled):hover { background: var(--amber); border-color: var(--amber); color: #24211E; }
+  button.act.big { font-size: 1.1rem; padding: 13px 26px; }
+  button.act:disabled { opacity: .3; cursor: not-allowed; }
+  button.soft {
+    border: 1.5px solid var(--line); border-radius: 3px;
+    background: transparent; color: var(--ink);
+    padding: 7px 14px; font: inherit; font-size: .95rem; font-weight: 500; cursor: pointer;
+  }
+  button.soft:disabled { opacity: .4; cursor: not-allowed; }
+  button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--tab-3); outline-offset: 2px; }
+
+  .result { margin-top: 14px; font-weight: 600; }
+  .result.bad { color: var(--coral); }
+
+  /* ---- the key list: ruled rows ------------------------------------------ */
+  .slots { list-style: none; margin: 4px 0 14px; padding: 0; border-top: 1px solid var(--line); }
+  .slots li {
+    display: grid; grid-template-columns: 2.4em 1fr minmax(9em, 15em); gap: 4px 14px; align-items: center;
+    padding: 7px 8px; border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .slots li:hover { background: var(--surface); }
+  .slots li.selected { box-shadow: inset 3px 0 0 var(--amber); background: color-mix(in oklab, var(--amber) 9%, var(--paper)); }
+  .slots li.changed { background: var(--changed); }
+  .slots li.selected.changed { background: color-mix(in oklab, var(--amber) 14%, var(--changed)); }
+  .slots .kn {
+    display: inline-grid; place-items: center;
+    width: 1.9em; height: 1.9em; border-radius: 3px;
+    border: 1.5px solid var(--ink); color: var(--ink);
+    font: 500 .8rem/1 var(--mono);
+  }
+  .slots .what { min-width: 0; }
+  .slots .what b { font-weight: 600; }
+  .slots .what .sub { display: block; color: var(--ink-soft); font: .78rem/1.5 var(--mono); overflow-wrap: anywhere; }
+  .slots .what .sub.chg { color: var(--coral); }
+  .slots select {
+    width: 100%; font: inherit; font-size: .92rem; color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px;
+  }
+  .slots .swatch { display: inline-block; width: .6em; height: .6em; border-radius: 50%; margin-right: .45em; vertical-align: .08em; background: var(--sw, transparent); }
+  .slots .state { grid-column: 2 / -1; font: 500 .8rem/1.4 var(--mono); }
+  .slots .state:empty { display: none; }
+  .slots .state.bad { color: var(--coral); }
+
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; }
+
+  /* ---- catalogue: columns under a coloured rule --------------------------- */
+  h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; margin: 40px 0 4px; color: var(--ink-strong); }
+  .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 32px 32px; margin-top: 20px; }
+  .fw {
+    display: flex; flex-direction: column; gap: 6px;
+    border-top: 3px solid var(--sw); padding-top: 12px;
+  }
+  .fw .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .fw .t { font-weight: 700; font-size: 1.15rem; color: var(--ink-strong); }
+  .fw .v { color: var(--ink-soft); font: .82rem var(--mono); }
+  .chip { font: 500 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; border: 1px solid currentColor; border-radius: 3px; padding: 3px 6px; color: var(--ink-soft); }
+  .chip.beta  { color: var(--tab-3); }
+  .chip.alpha { color: var(--tab-2); }
+  .fw .by { font-size: .88rem; color: var(--ink-soft); }
+  .fw .s { font-size: .95rem; margin: 0; }
+  .fw .note { font-size: .85rem; color: var(--ink-soft); margin: 0; }
+  .fw .acts { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 6px; }
+  .fw .acts a { font-size: .9rem; }
+  .fw .on { font: .78rem var(--mono); color: var(--ink-soft); }
+
+  .changes { margin: 0 0 14px; padding-left: 1.3em; }
+  .changes li { margin: 2px 0; }
+  .changes .warn { display: block; color: var(--coral); font-weight: 600; font-size: .92rem; }
+  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--ink-soft); font-size: .95rem; }
+  .notes:empty { display: none; }
+  .slots .what .sub.upd { color: var(--ink); }
+  .speed { color: var(--ink-soft); font: .85rem var(--mono); margin-top: 6px; }
+  #launcher-update { margin-top: 14px; }
+  #launcher-update p { margin: 0 0 8px; }
+
+  details.log { margin-top: 48px; border-top: 1px solid var(--rule); padding-top: 14px; }
+  details.log summary { cursor: pointer; color: var(--ink-soft); font: 13px var(--mono); letter-spacing: .04em; }
+  details.log pre {
+    max-height: 280px; overflow: auto;
+    font: .78rem var(--mono);
+    background: var(--surface); border-radius: 3px;
+    padding: 12px; white-space: pre-wrap; word-break: break-all;
+  }
+  footer { margin-top: 24px; border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-soft); font-size: .9rem; }
+  footer p { max-width: 52em; margin: 0 0 6px; }
+
+  @media (max-width: 760px) {
+    .head { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  }
+  @media (max-width: 560px) {
+    main { padding: 32px 16px 64px; }
+    .chompi { padding: 10px 8px 12px; }
+    .keys { gap: 3px; }
+    .key { border-width: 1px; }
+    .key::before { top: 3px; width: 56%; height: 3px; aspect-ratio: auto; border-radius: 2px; }
+    .key .n { bottom: 20%; }
+    .slots li { grid-template-columns: 2.4em 1fr; }
+    .slots select { grid-column: 2; }
+    .steps h2 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <div>
+      <p class="eyebrow"><a href="../">CHOMPI firmwares</a> / setup</p>
+      <div class="masthead">
+        <h1>Set up your CHOMPI</h1>
+      </div>
+      <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
+      <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each one below links to its release.</p>
+      <p class="facts">3 steps · launcher 1.5 · Chrome or Edge</p>
+    </div>
+    <div>
+      <aside class="notice" id="demo-note" hidden>
+        <p><strong>Demo</strong>No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
+      </aside>
+      <aside class="notice">
+        <p><strong>Use at your own risk</strong>This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. It writes to your SD card and replaces what is on the keys you change, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
+        <p>Needs launcher 1.5. Step 1 tells you if yours is older and how to update it. More firmwares join the list as their authors add them; <a href="https://github.com/ugrossek/CHOMPI-firmwares#readme">here's how to add yours</a>.</p>
+      </aside>
+    </div>
+  </div>
+
+  <ol class="steps">
+    <li id="step-connect" data-conn="off">
+      <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
+      <div class="inner">
+        <p>Switch CHOMPI on so its keys are breathing white, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself.</p>
+        <div class="row">
+          <button class="act" id="connect">Connect CHOMPI</button>
+          <select id="port" hidden aria-label="MIDI device"></select>
+        </div>
+        <p class="result" id="connect-result" hidden></p>
+        <div id="launcher-update" hidden>
+          <p id="launcher-update-text"></p>
+          <button class="soft" id="update-launcher" type="button">Update the launcher</button>
+        </div>
+        <div id="old-launcher" hidden>
+          <p class="result bad" id="old-launcher-why">This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:</p>
+          <ol>
+            <li>Download <a id="launcher-download" href="launcher/CHOMPI.bin" download>CHOMPI.bin</a>, the new launcher.</li>
+            <li>Switch CHOMPI off, take out the SD card and put it in your computer.</li>
+            <li>Replace the <code>CHOMPI.bin</code> at the top level of the card with the downloaded one. Leave the <code>FIRMWARE</code> folder alone.</li>
+            <li>Put the card back and switch CHOMPI on. A rainbow shows while it installs the new launcher.</li>
+          </ol>
+          <p id="old-launcher-alt" hidden>Until then, this launcher can still take one firmware at a time from the <a href="../">firmware page</a>.</p>
+        </div>
+      </div>
+    </li>
+
+    <li id="step-choose">
+      <h2><span class="num">2</span>Choose firmwares</h2>
+      <div class="inner">
+        <p>Each white key on CHOMPI can hold one firmware. Tap a key, then choose what goes on it. Or tap <b>Put on key</b> on a firmware below.</p>
+        <section class="chompi" aria-label="CHOMPI keybed">
+          <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
+            <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
+          </div>
+          <div class="keys" id="keys"></div>
+        </section>
+        <div class="tools">
+          <button class="soft" id="stock-setup" type="button">Standard setup</button>
+          <button class="soft" id="undo" type="button">Undo my changes</button>
+          <button class="soft" id="update-all" type="button" hidden>Update all</button>
+        </div>
+        <p class="hint" id="tools-hint">Standard setup: TAPE on 1, TEMPO on 2, WAVE on 3, USB storage on 15. Other keys stay as they are.</p>
+        <ul class="slots" id="slots"></ul>
+
+        <h3>The firmwares</h3>
+        <p class="hint">Stock ones come with CHOMPI. Beta and alpha ones are new and still changing; read their release notes to learn how to play them.</p>
+        <div class="catalog" id="catalog"></div>
+      </div>
+    </li>
+
+    <li id="step-write">
+      <h2><span class="num">3</span>Write to CHOMPI</h2>
+      <div class="inner">
+        <p id="summary">Nothing to write yet.</p>
+        <ul class="changes" id="changes"></ul>
+        <ul class="notes" id="notes"></ul>
+        <button class="act big" id="write" disabled>Write to CHOMPI</button>
+        <p class="hint">CHOMPI's keys fill cyan as each firmware arrives and amber while it's written to the card. Keep it plugged in until this page says it's done.</p>
+        <p class="result" id="write-result" hidden></p>
+        <p class="speed" id="speed" hidden></p>
+        <div id="speedtest" hidden>
+          <h3>Speed test</h3>
+          <p class="hint">Sends 1 MB of random data at each message size and times it. CHOMPI's keys fill cyan, but nothing is written to the card.</p>
+          <button class="soft" id="run-speedtest" type="button">Run speed test</button>
+          <pre id="speedtest-result"></pre>
+          <h3>Start a key</h3>
+          <p class="hint">Starts the firmware on a key from here, as pressing the key would. Needs launcher 1.5.</p>
+          <label>Key <input id="run-key" type="number" min="1" max="15" value="1" style="width: 4em"></label>
+          <button class="soft" id="run-key-start" type="button">Start</button>
+          <pre id="run-result"></pre>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <details class="log">
+    <summary>Message log</summary>
+    <pre id="log"></pre>
+  </details>
+
+  <footer>
+    Works in Chrome and Edge on a computer, and Chrome on Android. Safari can't talk MIDI to CHOMPI.
+    The protocol is described in <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/blob/main/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
+    To send a single firmware file of your own, use the <a href="../">firmware page</a>.
+  </footer>
+</main>
+
+<script type="module">
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-10";
+
+const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:";
+const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the launcher:";
+/* ?chunk=N: send at most N bytes per message, for comparing speeds */
+const CHUNK = Math.max(0, parseInt(new URLSearchParams(location.search).get("chunk"), 10) || 0);
+const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.info.maxChunk);
+const NEEDED = FEATURE.LIST | FEATURE.CLEAR | FEATURE.STAY;
+const SLOTS = 15;
+const CATALOG_FAILED = "Couldn't load the list of firmwares. Check your internet connection and reload the page.";
+/* one colour per firmware, for its key's LED */
+const SWATCH = ["#FF9431", "#FF5C7C", "#3FAEFF", "#39D27E", "#B57BFF", "#FFD23F",
+                "#18D2DF", "#FF7AD9", "#9BE15D", "#FF6B3D", "#7AA2FF", "#E0C097"];
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  access: null, pair: null, launcher: null, info: null,
+  connecting: false, busy: false, autoTimer: 0,
+  catalog: [], byId: {},
+  newLauncher: null,     // catalog.json's launcher: { version, file, size, sha256 }
+  launcherUpdate: null,  // { to } while CHOMPI restarts into a new launcher
+  current: [],   // per key (index 0 = key 1): { file, size, id } or null before reading
+  plan: [],      // per key: "empty", "keep", or a catalogue id
+  selected: 0,
+  progress: {},  // per key: { phase, text, bad }
+};
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---- log --------------------------------------------------------------- */
+const logLines = [];
+function log(dir, bytes) {
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0").toUpperCase());
+  const shown = hex.length > 24 ? hex.slice(0, 16).join(" ") + ` … (${hex.length} bytes)` : hex.join(" ");
+  logLines.push(`${dir === "out" ? "→" : dir === "in" ? "←" : "·"} ${shown}`);
+  if (logLines.length > 600) logLines.splice(0, logLines.length - 600);
+  if ($("log").closest("details").open) $("log").textContent = logLines.join("\n");
+}
+const note = (text) => { logLines.push(`· ${text}`); };
+$("log").closest("details").addEventListener("toggle", () => { $("log").textContent = logLines.join("\n"); });
+
+function show(id, text, bad = false) {
+  const el = $(id);
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.classList.toggle("bad", bad);
+}
+function screen(text, mood = "idle") {
+  $("screen-text").textContent = text;
+  $("screen").dataset.mood = mood;
+}
+
+/* ---- catalogue --------------------------------------------------------- */
+/* The firmware list; ?catalog=URL tries another one. Its file paths are
+   relative to it. */
+const CATALOG_URL = new URL(new URLSearchParams(location.search).get("catalog")
+  || "https://ugrossek.github.io/CHOMPI-firmwares/catalog.json", location.href);
+async function loadCatalog() {
+  const res = await fetch(CATALOG_URL, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`catalog.json: ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data.firmwares) || !data.firmwares.length) throw new Error("catalog.json: no firmwares");
+  for (const f of [...data.firmwares, data.launcher].filter(Boolean)) f.file = new URL(f.file, CATALOG_URL).href;
+  state.catalog = data.firmwares;
+  state.newLauncher = data.launcher || null;
+  if (data.launcher) $("launcher-download").href = data.launcher.file;
+  state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
+}
+
+/** Which catalogue firmware a file on the card is, by name and size:
+ *  { id } for the current version, { prev: { id, version } } for an earlier
+ *  one, {} if it isn't in the list. */
+function identify(file, size) {
+  const m = /^\d\d_(.+)\.bin$/i.exec(file) || /^(.+)\.bin$/i.exec(file);
+  if (!m) return {};
+  const card = m[1].toUpperCase();
+  const f = state.catalog.find((f) => f.card === card && f.size === size);
+  if (f) return { id: f.id };
+  for (const f of state.catalog.filter((f) => f.card === card)) {
+    const old = (f.previous || []).find((p) => p.size === size);
+    if (old) return { prev: { id: f.id, version: old.version } };
+  }
+  return {};
+}
+
+/* ---- what a key holds, in words --------------------------------------- */
+function describeCurrent(i) {
+  const c = state.current[i];
+  if (!c) return "—";
+  if (!c.file) return "empty";
+  if (c.id) return `${state.byId[c.id].title} ${state.byId[c.id].version}`;
+  if (c.prev) return `${state.byId[c.prev.id].title} ${c.prev.version}`;
+  return c.file;
+}
+/** A file the page can't put back: not in the list, not an earlier version. */
+const unknownFile = (c) => c && c.file && !c.id && !c.prev;
+function initialPlan(i) {
+  const c = state.current[i];
+  if (!c || !c.file) return "empty";
+  return c.id || "keep";
+}
+const changed = (i) => state.current[i] && state.plan[i] !== initialPlan(i);
+
+function planLabel(i) {
+  const p = state.plan[i];
+  if (p === "empty") return "Nothing";
+  if (p === "keep") return describeCurrent(i);
+  const f = state.byId[p];
+  return `${f.title} ${f.version}`;
+}
+function planColor(i) {
+  const p = state.plan[i];
+  if (p === "empty") return null;
+  if (p === "keep") return state.current[i].prev ? state.byId[state.current[i].prev.id].color : "#FFFFFF";
+  return state.byId[p].color;
+}
+
+/* ---- keybed ------------------------------------------------------------ */
+const keys = [];
+function buildKeys() {
+  $("keys").replaceChildren();
+  for (let i = 1; i <= SLOTS; i++) {
+    const k = document.createElement("button");
+    k.className = "key";
+    k.type = "button";
+    k.innerHTML = `<span class="n">${i}</span>`;
+    k.addEventListener("click", () => select(i));
+    $("keys").append(k);
+    keys.push(k);
+  }
+}
+
+/* ---- the key list ------------------------------------------------------ */
+const rows = [];
+function buildRows() {
+  $("slots").replaceChildren();
+  for (let i = 1; i <= SLOTS; i++) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="kn">${i}</span>
+      <span class="what"><b></b><span class="sub"></span></span>
+      <select aria-label="Firmware for key ${i}"></select>
+      <span class="state" aria-live="polite"></span>`;
+    li.addEventListener("click", (e) => { if (e.target.tagName !== "SELECT") select(i); });
+    const sel = li.querySelector("select");
+    sel.addEventListener("focus", () => select(i, false));
+    sel.addEventListener("change", () => { state.plan[i - 1] = sel.value; render(); });
+    $("slots").append(li);
+    rows.push(li);
+  }
+}
+
+function fillOptions(sel, i) {
+  const c = state.current[i];
+  /* only rebuild when the choices change: rebuilding an open list closes it */
+  const sig = `${c.file}|${c.id}|${c.prev?.id}|${state.catalog.length}`;
+  if (sel.dataset.sig === sig) { sel.value = state.plan[i]; return; }
+  sel.dataset.sig = sig;
+  const opts = [new Option("Nothing", "empty")];
+  if (c.file && !c.id) opts.push(new Option(`Keep ${describeCurrent(i)}${c.prev ? " (older)" : ""}`, "keep"));
+  const groups = [["Stock", (f) => f.stage === "stock"], ["Community", (f) => f.stage !== "stock"]];
+  const els = [...opts];
+  for (const [label, test] of groups) {
+    const g = document.createElement("optgroup");
+    g.label = label;
+    for (const f of state.catalog.filter(test)) g.append(new Option(`${f.title} ${f.version}`, f.id));
+    els.push(g);
+  }
+  sel.replaceChildren(...els);
+  sel.value = state.plan[i];
+}
+
+function select(n, scroll = true) {
+  if (state.busy) return;
+  state.selected = n;
+  render();
+  if (scroll) rows[n - 1].scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+/* ---- render everything from state ------------------------------------- */
+function render() {
+  const known = state.current.length === SLOTS;
+  paintConnection();
+
+  for (let i = 0; i < SLOTS; i++) {
+    const k = keys[i], li = rows[i];
+    const color = known ? planColor(i) : null;
+    if (color) { k.dataset.led = ""; k.style.setProperty("--led", color); }
+    else { delete k.dataset.led; k.style.removeProperty("--led"); }
+    const pr = state.progress[i + 1];
+    if (pr) k.dataset.busy = pr.phase; else delete k.dataset.busy;
+    k.classList.toggle("changed", known && changed(i));
+    k.setAttribute("aria-pressed", String(state.selected === i + 1));
+    k.setAttribute("aria-label", known ? `Key ${i + 1}: ${planLabel(i)}` : `Key ${i + 1}`);
+    k.disabled = state.busy;
+
+    li.classList.toggle("selected", state.selected === i + 1);
+    li.classList.toggle("changed", known && changed(i));
+    const sel = li.querySelector("select");
+    const b = li.querySelector(".what b"), sub = li.querySelector(".what .sub");
+    if (!known) {
+      b.textContent = "—";
+      sub.textContent = "";
+      sel.disabled = true;
+      sel.dataset.sig = "";
+      sel.replaceChildren(new Option("Connect first"));
+    } else {
+      fillOptions(sel, i);
+      sel.disabled = state.busy;
+      const sw = planColor(i);
+      b.innerHTML = (sw ? `<span class="swatch" style="--sw:${sw}"></span>` : "") + esc(planLabel(i));
+      if (changed(i)) {
+        const now = describeCurrent(i);
+        sub.textContent = now === "empty" ? "new" : state.plan[i] === "empty" ? `${now} will be removed` : `replaces ${now}`;
+        sub.classList.add("chg");
+        sub.classList.remove("upd");
+      } else {
+        const c = state.current[i];
+        const upd = state.plan[i] === "keep" && c.prev;
+        sub.textContent = state.plan[i] === "empty" ? ""
+          : upd ? `on CHOMPI now · ${state.byId[c.prev.id].version} is available` : "on CHOMPI now";
+        sub.classList.remove("chg");
+        sub.classList.toggle("upd", !!upd);
+      }
+    }
+    const st = li.querySelector(".state");
+    st.textContent = pr ? pr.text : "";
+    st.classList.toggle("bad", !!(pr && pr.bad));
+  }
+
+  renderCatalogState();
+  renderSummary();
+  $("stock-setup").disabled = !known || state.busy;
+  $("undo").disabled = !known || state.busy || !state.plan.some((_, i) => changed(i));
+  const outdated = known ? state.current.filter((c, i) => c.prev && state.plan[i] === "keep").length : 0;
+  $("update-all").hidden = !outdated;
+  $("update-all").textContent = `Update ${outdated === 1 ? "the older firmware" : `all ${outdated} older firmwares`}`;
+  $("update-all").disabled = state.busy;
+}
+
+/* ---- catalogue cards --------------------------------------------------- */
+function buildCatalog() {
+  $("catalog").replaceChildren();
+  for (const f of state.catalog) {
+    const el = document.createElement("article");
+    el.className = "fw";
+    el.style.setProperty("--sw", f.color);
+    const shared = f.folder && f.folder !== f.card && f.id !== "tape"
+      ? `<p class="note">Uses TAPE's samples and settings (/${esc(f.folder)}).</p>` : "";
+    el.innerHTML = `
+      <div class="top"><span class="t">${esc(f.title)}</span><span class="v">${esc(f.version)}</span>
+        <span class="chip ${esc(f.stage)}">${esc(f.stage)}</span></div>
+      <span class="by">by <a href="${esc(f.authorUrl)}" target="_blank" rel="noopener">${esc(f.author)}</a></span>
+      <p class="s">${esc(f.summary)}</p>${shared}
+      <div class="acts">
+        <button class="soft put" type="button"></button>
+        <a href="${esc(f.url)}" target="_blank" rel="noopener">Release notes</a>
+      </div>
+      <span class="on"></span>`;
+    el.querySelector(".put").addEventListener("click", () => put(f.id));
+    el.dataset.id = f.id;
+    $("catalog").append(el);
+  }
+}
+
+/** The key "Put on key" means: the selected one, else the first empty one. */
+function targetKey() {
+  if (state.selected) return state.selected;
+  const i = state.plan.findIndex((p) => p === "empty");
+  return i < 0 ? 0 : i + 1;
+}
+
+function put(id) {
+  const n = targetKey();
+  if (!n) return;
+  state.plan[n - 1] = id;
+  state.selected = 0; // next "Put on key" goes to the next free one
+  render();
+}
+
+function renderCatalogState() {
+  const known = state.current.length === SLOTS;
+  const n = known ? targetKey() : 0;
+  for (const el of $("catalog").children) {
+    const id = el.dataset.id;
+    const btn = el.querySelector(".put");
+    btn.textContent = n ? `Put on key ${n}` : known ? "Choose a key first" : "Put on key";
+    btn.disabled = !known || !n || state.busy;
+    const on = known ? state.plan.map((p, i) => (p === id ? i + 1 : 0)).filter(Boolean) : [];
+    el.querySelector(".on").textContent = on.length ? `On key ${on.join(", ")}` : "";
+  }
+}
+
+/* ---- what will happen -------------------------------------------------- */
+function plannedOps() {
+  const ops = [];
+  for (let i = 0; i < SLOTS; i++) {
+    if (!changed(i)) continue;
+    const c = state.current[i], p = state.plan[i];
+    /* A file without a number has no key of its own: replaced, it would only
+       move to the next free key, so it goes. */
+    const loose = c.file && !/^\d\d_/.test(c.file) ? c.file : null;
+    if (p === "empty") ops.push({ key: i + 1, kind: "clear", loose });
+    else ops.push({ key: i + 1, kind: "write", fw: state.byId[p], loose });
+  }
+  return ops;
+}
+
+function renderSummary() {
+  const known = state.current.length === SLOTS;
+  const ops = known ? plannedOps() : [];
+  const list = $("changes");
+  const planned = (id) => state.plan.some((p, i) => p === id || (p === "keep" && state.current[i]?.prev?.id === id));
+  list.replaceChildren(...ops.map((op) => {
+    const li = document.createElement("li");
+    const c = state.current[op.key - 1];
+    const was = describeCurrent(op.key - 1);
+    li.textContent = op.kind === "clear"
+      ? `Key ${op.key}: remove ${was}`
+      : `Key ${op.key}: ${op.fw.title} ${op.fw.version}` + (was === "empty" ? "" : ` (replaces ${was})`);
+    const warn = [];
+    if (unknownFile(c))
+      warn.push(`${c.file} isn't in the firmware list. Once it's gone, you need your own copy of it to put it back.`);
+    if ((c.id || c.prev?.id) === "usb-storage" && !planned("usb-storage"))
+      warn.push("Without USB storage, copying samples to CHOMPI means taking the SD card out.");
+    for (const w of warn) {
+      const s = document.createElement("span");
+      s.className = "warn";
+      s.textContent = w;
+      li.append(s);
+    }
+    return li;
+  }));
+
+  /* things worth knowing about the plan as a whole */
+  const notes = [];
+  if (ops.length) {
+    const onKeys = {};
+    state.plan.forEach((p, i) => { if (state.byId[p]) (onKeys[p] ||= []).push(i + 1); });
+    for (const [id, ks] of Object.entries(onKeys))
+      if (ks.length > 1) notes.push(`${state.byId[id].title} is on keys ${ks.slice(0, -1).join(", ")} and ${ks.at(-1)}. That works, but one key would do.`);
+    const byFolder = {};
+    state.plan.forEach((p, i) => {
+      const id = state.byId[p] ? p : p === "keep" ? state.current[i]?.prev?.id : null;
+      const f = state.byId[id];
+      if (f?.folder) (byFolder[f.folder] ||= new Set()).add(f.title);
+    });
+    for (const [folder, titles] of Object.entries(byFolder))
+      if (titles.size > 1) {
+        const t = [...titles];
+        notes.push(`${t.slice(0, -1).join(", ")} and ${t.at(-1)} share one folder on the card (/${folder}): the same samples, settings and presets.`);
+      }
+  }
+  $("notes").replaceChildren(...notes.map((t) => { const li = document.createElement("li"); li.textContent = t; return li; }));
+  const writes = ops.filter((o) => o.kind === "write").length;
+  const clears = ops.length - writes;
+  const parts = [];
+  if (writes) parts.push(`${writes} firmware${writes > 1 ? "s" : ""} to write`);
+  if (clears) parts.push(`${clears} key${clears > 1 ? "s" : ""} to empty`);
+  $("summary").textContent = !known ? "Connect CHOMPI first: this page reads what's on it."
+    : ops.length ? `${parts.join(", ")}. Every other key stays as it is.` : "Nothing to write yet: choose firmwares in step 2.";
+  $("write").disabled = !known || !ops.length || state.busy || !state.info;
+  $("write").textContent = ops.length ? `Write ${ops.length} change${ops.length > 1 ? "s" : ""} to CHOMPI` : "Write to CHOMPI";
+  $("step-choose").classList.toggle("done", known && ops.length > 0);
+}
+
+/* ---- buttons ------------------------------------------------------------ */
+$("stock-setup").addEventListener("click", () => {
+  for (const f of state.catalog) if (f.slot) state.plan[f.slot - 1] = f.id;
+  render();
+});
+$("undo").addEventListener("click", () => {
+  state.plan = state.current.map((_, i) => initialPlan(i));
+  render();
+});
+$("update-all").addEventListener("click", () => {
+  state.current.forEach((c, i) => { if (c.prev && state.plan[i] === "keep") state.plan[i] = c.prev.id; });
+  render();
+});
+
+/* ---- launcher version --------------------------------------------------- */
+/** -1, 0, 1 for "1.4.1" vs "1.4.2"; null counts as oldest. */
+function cmpVersion(a, b) {
+  const pa = (a || "0").split(".").map(Number), pb = (b || "0").split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0) ? -1 : 1;
+  return 0;
+}
+
+/** Offer the newer launcher from catalog.json: over USB if this one can
+ *  update itself, else the steps to install it by hand. */
+function offerLauncher(info) {
+  $("launcher-update").hidden = true;
+  const nl = state.newLauncher;
+  if (!nl || cmpVersion(info.launcherVersion, nl.version) >= 0) return;
+  const have = info.launcherVersion ? `CHOMPI has ${info.launcherVersion}` : "CHOMPI has an older one";
+  if (info.features & FEATURE.LAUNCHER) {
+    $("launcher-update-text").textContent = `A newer launcher is available: ${nl.version} (${have}). Updating takes a few seconds. CHOMPI then restarts and shows a rainbow while it installs it.`;
+    $("launcher-update").hidden = false;
+  } else {
+    $("old-launcher-why").textContent = `A newer launcher is available: ${nl.version} (${have}). This one can't update itself, so it goes on by hand once. After that, this page updates it for you:`;
+    $("old-launcher").hidden = false;
+  }
+}
+
+$("update-launcher").addEventListener("click", async () => {
+  const nl = state.newLauncher;
+  if (!nl || state.busy || !state.info) return;
+  state.busy = true;
+  $("update-launcher").disabled = true;
+  render();
+  try {
+    screen("Downloading the launcher…", "busy");
+    const img = await fetchImage({ id: "_launcher", title: "the launcher", file: nl.file, size: nl.size, sha256: nl.sha256 });
+    await state.launcher.upload(img, LAUNCHER_SLOT, "LAUNCHER", chunkSize(), (phase, done, total) => {
+      screen(phase === "send" ? `Sending the launcher… ${Math.floor((100 * done) / total)}%` : "Writing the launcher to the card…", "busy");
+    });
+    state.launcherUpdate = { to: nl.version };
+    state.info = null;
+    $("launcher-update").hidden = true;
+    $("step-connect").classList.remove("done");
+    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then breathe white again. This page reconnects by itself.";
+    screen(msg, "busy");
+    show("connect-result", msg);
+  } catch (e) {
+    screen(e.message, "bad");
+    show("connect-result", e.message, true);
+  } finally {
+    state.busy = false;
+    $("update-launcher").disabled = false;
+    render();
+  }
+});
+
+/* ---- connect ----------------------------------------------------------- */
+/* Chrome keeps unplugged devices in the port lists, marked "disconnected". */
+const live = (p) => p && p.state === "connected";
+
+function portsByName() {
+  const outs = [...state.access.outputs.values()].filter(live);
+  const ins = [...state.access.inputs.values()].filter(live);
+  const base = (n) => (n || "").toLowerCase().replace(/\b(in|out|input|output|port)\b|\d+$/g, "").trim();
+  return outs.map((o) => {
+    const i = ins.find((i) => i.name === o.name)
+      || ins.find((i) => base(i.name) === base(o.name))
+      || ins.find((i) => i.manufacturer && i.manufacturer === o.manufacturer)
+      || (ins.length === 1 && outs.length === 1 ? ins[0] : null);
+    return { name: o.name, out: o, in: i };
+  }).filter((p) => p.in);
+}
+function seenPorts() {
+  const list = (m) => [...m.values()].map((p) => `"${p.name}"`).join(", ") || "none";
+  return `inputs: ${list(state.access.inputs)}; outputs: ${list(state.access.outputs)}`;
+}
+function adapter(pair) {
+  return {
+    send: (bytes) => pair.out.send(bytes),
+    onMessage: (fn) => { pair.in.onmidimessage = (e) => fn(e.data); },
+  };
+}
+
+function paintConnection() {
+  const conn = state.connecting ? "busy" : state.info ? "on" : "off";
+  $("step-connect").dataset.conn = conn;
+  $("conn-state").textContent = conn === "on" ? "connected" : conn === "busy" ? "connecting…" : "not connected";
+}
+
+/** Read every key off the card. */
+async function readCard(talk = true) {
+  await catalogReady;
+  /* Without the list every firmware would look unknown, and the page would
+     offer to remove TAPE as a stranger. */
+  if (!state.catalog.length) throw new ProtocolError(CATALOG_FAILED);
+  const current = [];
+  for (let n = 1; n <= SLOTS; n++) {
+    if (talk) screen(`Looking at key ${n} of ${SLOTS}…`, "busy");
+    const { file, size } = await state.launcher.list(n);
+    current.push({ file, size, ...(file ? identify(file, size) : {}) });
+  }
+  return current;
+}
+
+async function connectTo(pair, quiet = false) {
+  if (state.pair?.in) state.pair.in.onmidimessage = null;
+  state.pair = pair;
+  state.connecting = true;
+  $("old-launcher").hidden = true;
+  $("old-launcher-alt").hidden = true;
+  render();
+  screen(`Knocking on ${pair.name}…`, "busy");
+  let ok = false;
+  try {
+    await Promise.all([pair.in.open(), pair.out.open()]);
+    state.launcher = new Launcher(adapter(pair), log);
+    const info = await state.launcher.ping();
+    note(`launcher ${info.launcherVersion || "(no version)"}, features ${info.features}`);
+    if ((info.features & NEEDED) !== NEEDED) {
+      state.info = null;
+      $("old-launcher-why").textContent = OLD_LAUNCHER;
+      $("old-launcher-alt").hidden = false;
+      $("old-launcher").hidden = false;
+      show("connect-result", "");
+      screen("This launcher is too old for this page. See step 1.", "bad");
+      return true; // a launcher did answer: stop trying
+    }
+    const before = state.current.length === SLOTS ? state.plan.slice() : null;
+    const hadChanges = before && state.plan.some((_, i) => changed(i));
+    state.current = await readCard();
+    /* keep what the user planned across a reconnect */
+    state.plan = hadChanges ? before : state.current.map((_, i) => initialPlan(i));
+    state.info = info;
+    const n = state.current.filter((c) => c.file).length;
+    screen(`Connected. ${n} key${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} a firmware.`, "ok");
+    const lv = info.launcherVersion ? ` (launcher ${info.launcherVersion})` : "";
+    if (state.launcherUpdate) {
+      const ok = info.launcherVersion === state.launcherUpdate.to;
+      show("connect-result", ok
+        ? `Launcher updated to ${info.launcherVersion}. Step 2 shows what's on your CHOMPI now.`
+        : `CHOMPI came back with launcher ${info.launcherVersion || "(unknown)"}, not ${state.launcherUpdate.to}: the update didn't take. Try again, or install it by hand.`, !ok);
+      state.launcherUpdate = null;
+    } else {
+      show("connect-result", `Connected${lv}. Step 2 shows what's on your CHOMPI now.`);
+    }
+    offerLauncher(info);
+    $("step-connect").classList.add("done");
+    ok = true;
+  } catch (e) {
+    state.info = null;
+    $("step-connect").classList.remove("done");
+    if (e.message === CATALOG_FAILED) {
+      screen(CATALOG_FAILED, "bad");
+      show("connect-result", CATALOG_FAILED, true);
+      return true; // retrying won't help
+    }
+    if (!quiet) {
+      screen(e.message, "bad");
+      show("connect-result", e.message, true);
+    }
+  } finally {
+    state.connecting = false;
+    render();
+  }
+  return ok;
+}
+
+async function autoConnect() {
+  if (state.info || state.busy || state.connecting) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const pairs = portsByName();
+    if (!pairs.length || state.info || state.busy) return;
+    const pair = pairs[Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)))];
+    if (await connectTo(pair, true)) return;
+    await sleep(1000);
+  }
+  if (!state.info && !state.busy && $("old-launcher").hidden && state.catalog.length) {
+    screen("CHOMPI is there, but the launcher isn't answering. Maybe a firmware is running: switch CHOMPI off and on so its keys breathe white, and this page connects by itself.", "idle");
+    /* Still nothing a while later: maybe there is no launcher at all. A
+       stock CHOMPI starts TAPE every time, so off and on won't change it. */
+    clearTimeout(state.noLauncherTimer);
+    state.noLauncherTimer = setTimeout(() => {
+      if (state.info || state.busy || !$("old-launcher").hidden) return;
+      $("old-launcher-why").textContent = NO_LAUNCHER;
+      $("old-launcher").hidden = false;
+    }, 20000);
+  }
+}
+
+async function startMidi(user) {
+  if (!navigator.requestMIDIAccess) {
+    if (user) show("connect-result", NO_MIDI, true);
+    return;
+  }
+  if (!state.access) {
+    try {
+      state.access = await navigator.requestMIDIAccess({ sysex: true });
+    } catch {
+      if (user) show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
+      return;
+    }
+    state.access.onstatechange = () => refreshPorts(false);
+  }
+  refreshPorts(true, !user);
+}
+$("connect").addEventListener("click", () => startMidi(true));
+
+/* No browser on iPhone or iPad has Web MIDI, Chrome included. iPadOS says it's a Mac. */
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const NO_MIDI = IOS
+  ? "iPhone and iPad can't talk MIDI to CHOMPI from a web page, in any browser. Use a computer with Chrome or Edge, or an Android phone with Chrome."
+  : "This browser can't talk MIDI. Open this page in Chrome or Edge.";
+if (!navigator.requestMIDIAccess) show("connect-result", NO_MIDI, true);
+
+(async () => {
+  try {
+    if (!navigator.permissions || !navigator.requestMIDIAccess) return;
+    const p = await navigator.permissions.query({ name: "midi", sysex: true });
+    if (p.state === "granted") startMidi(false);
+  } catch { /* the button it is */ }
+})();
+
+function refreshPorts(connectNow, quiet = false) {
+  const pairs = portsByName();
+  const sel = $("port");
+  sel.replaceChildren(...pairs.map((p, i) => new Option(p.name, i)));
+  sel.hidden = pairs.length < 2;
+  if (!connectNow) {
+    if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
+      state.info = null;
+      $("step-connect").classList.remove("done");
+      $("launcher-update").hidden = true;
+      if (!state.launcherUpdate) {
+        screen("CHOMPI went away. Switch it on and plug it in; this page connects by itself.", "idle");
+        show("connect-result", "");
+      }
+      render();
+    }
+    clearTimeout(state.autoTimer);
+    if (!state.info && pairs.length) state.autoTimer = setTimeout(autoConnect, 500);
+    return;
+  }
+  if (!pairs.length) {
+    if (quiet) { screen("Waiting for CHOMPI. Switch it on and plug it in. If a firmware is running, switch CHOMPI off and on to get back to the launcher.", "idle"); return; }
+    show("connect-result", `No MIDI device found that can both send and receive. Is CHOMPI on and plugged in? (The browser sees ${seenPorts()}.)`, true);
+    note(`ports seen: ${seenPorts()}`);
+    return;
+  }
+  note(`ports seen: ${seenPorts()}`);
+  const guess = Math.max(0, pairs.findIndex((p) => /chompi/i.test(p.name)));
+  sel.value = guess;
+  /* no answer: keep trying, and say so, rather than sit on "Knocking…" */
+  connectTo(pairs[guess], quiet).then((ok) => { if (!ok) autoConnect(); });
+}
+$("port").addEventListener("change", (e) => connectTo(portsByName()[e.target.value]));
+
+/* ---- speed test (?speedtest) ------------------------------------------- */
+$("speedtest").hidden = !new URLSearchParams(location.search).has("speedtest");
+$("run-speedtest").addEventListener("click", async () => {
+  if (state.busy || !state.info) return;
+  state.busy = true;
+  $("run-speedtest").disabled = true;
+  render();
+  const out = $("speedtest-result");
+  const lines = [];
+  const print = (t) => { lines.push(t); out.textContent = lines.join("\n"); };
+  const ROUND = 512 * 1024;                 // the most the launcher holds
+  const img = new Uint8Array(ROUND);
+  for (let o = 0; o < ROUND; o += 65536) crypto.getRandomValues(img.subarray(o, o + 65536));
+  try {
+    for (const chunk of [256, 512, 1024, 2048].filter((c) => c <= state.info.maxChunk)) {
+      let ms = 0;
+      for (let r = 0; r < 2; r++) {
+        const t = await state.launcher.upload(img, 1, "SPEEDTEST", chunk, (phase, done, total) => {
+          screen(`Speed test, ${chunk}-byte messages: ${Math.floor((100 * (r * total + done)) / (2 * total))}%`, "busy");
+        }, { end: false });
+        ms += t.sendMs;
+      }
+      print(`${String(chunk).padStart(4)}-byte messages: 1 MB in ${(ms / 1000).toFixed(1)} s = ${kbs(2 * ROUND, ms)} KB/s`);
+      note(`speed test: ${chunk} bytes -> ${kbs(2 * ROUND, ms)} KB/s`);
+    }
+    screen("Speed test done. Nothing was written to the card.", "ok");
+  } catch (e) {
+    print(`stopped: ${e.message}`);
+    screen(e.message, "bad");
+  } finally {
+    state.busy = false;
+    $("run-speedtest").disabled = false;
+    render();
+  }
+});
+
+/* ---- start a key (?speedtest, RUN) ------------------------------------- */
+$("run-key-start").addEventListener("click", async () => {
+  const out = $("run-result");
+  if (state.busy || !state.info) { out.textContent = "Connect CHOMPI first."; return; }
+  if (!(state.info.features & FEATURE.RUN)) { out.textContent = "This launcher can't start keys from here (needs 1.5)."; return; }
+  const key = parseInt($("run-key").value, 10);
+  try {
+    await state.launcher.run(key);
+    out.textContent = `Key ${key} started.`;
+    note(`run key ${key}: started`);
+  } catch (e) {
+    out.textContent = `Key ${key}: ${e.message}`;
+    note(`run key ${key}: ${e.message}`);
+  }
+});
+
+/* ---- write -------------------------------------------------------------- */
+const images = {};
+/** The firmware file, checked against the catalogue's size and checksum. */
+async function fetchImage(fw) {
+  if (images[fw.id]) return images[fw.id];
+  if (window.CHOMPI_DEMO) return (images[fw.id] = new Uint8Array(fw.size)); /* the pretend CHOMPI takes anything */
+  const res = await fetch(fw.file);
+  if (!res.ok) throw new Error(`Couldn't download ${fw.title} (${res.status}). Check your internet connection and try again.`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length !== fw.size) throw new Error(`The download of ${fw.title} came out the wrong size. Try again.`);
+  if (crypto.subtle) {
+    const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    if (hash !== fw.sha256) throw new Error(`The download of ${fw.title} doesn't match the list. Try again.`);
+  }
+  return (images[fw.id] = bytes);
+}
+
+function progress(key, phase, text, bad = false) {
+  state.progress[key] = { phase, text, bad };
+  render();
+}
+
+$("write").addEventListener("click", async () => {
+  const ops = plannedOps();
+  if (!ops.length) return;
+  state.busy = true;
+  state.selected = 0;
+  state.progress = {};
+  show("write-result", "");
+  $("step-write").classList.remove("done");
+  for (const op of ops) progress(op.key, "", "waiting");
+  $("speed").hidden = true;
+  const timings = [];
+  let failed = null;
+  const awake = await keepAwake();
+  try {
+    /* Download everything first, so a bad connection fails before CHOMPI is touched. */
+    screen("Downloading firmwares…", "busy");
+    for (const op of ops) if (op.kind === "write") await fetchImage(op.fw);
+
+    /* Files without a number go first. They sit on whatever key is free, so
+       each removal can move the others: look up where each one is right
+       before removing it. Then the numbered keys to empty, then the writes. */
+    for (const op of ops.filter((o) => o.loose)) {
+      failed = op;
+      screen(`Removing ${op.loose}…`, "busy");
+      progress(op.key, "store", "emptying…");
+      const now = await readCard(false);
+      const at = now.findIndex((c) => c.file === op.loose);
+      if (at >= 0) await state.launcher.clear(at + 1, op.loose);
+      if (op.kind === "clear") progress(op.key, "done", "done");
+    }
+    const ordered = [...ops.filter((o) => o.kind === "clear" && !o.loose), ...ops.filter((o) => o.kind === "write")];
+    for (const [i, op] of ordered.entries()) {
+      const step = `${i + 1} of ${ordered.length}`;
+      failed = op;
+      if (op.kind === "clear") {
+        screen(`${step}: emptying key ${op.key}…`, "busy");
+        progress(op.key, "store", "emptying…");
+        /* named, so a resend can't take a file that moved onto the key */
+        await state.launcher.clear(op.key, state.current[op.key - 1].file);
+      }
+      if (op.kind === "write") {
+        const img = images[op.fw.id];
+        const t = await state.launcher.upload(img, op.key, op.fw.card, chunkSize(), (phase, done, total) => {
+          if (phase === "send") {
+            const pct = Math.floor((100 * done) / total);
+            screen(`${step}: ${op.fw.title} to key ${op.key}… ${pct}%`, "busy");
+            progress(op.key, "send", `sending ${pct}%`);
+          } else {
+            screen(`${step}: writing ${op.fw.title} to the card…`, "busy");
+            progress(op.key, "store", "writing to the card…");
+          }
+        }, { stay: true });
+        timings.push({ bytes: img.length, ...t });
+        note(`key ${op.key}: ${img.length} bytes sent in ${(t.sendMs / 1000).toFixed(1)} s (${kbs(img.length, t.sendMs)} KB/s), card write ${(t.storeMs / 1000).toFixed(1)} s`);
+      }
+      progress(op.key, "done", "done");
+      note(`key ${op.key}: ${op.kind === "clear" ? "emptied" : op.fw.title + " written"}`);
+    }
+    failed = null;
+
+    /* Read the card back: that is what CHOMPI will offer. */
+    const expected = state.plan.slice();
+    const before = state.current;
+    state.current = await readCard();
+    state.plan = state.current.map((_, i) => initialPlan(i));
+    const off = expected.map((p, i) => (p !== state.plan[i] ? i + 1 : 0)).filter(Boolean);
+    if (off.length) {
+      /* most likely a file without a number that moved to a freed key */
+      const loose = (f) => f && !/^\d\d_/.test(f);
+      const wasOn = (f) => before.findIndex((c) => c.file === f) + 1;
+      const nowOn = (f) => state.current.some((c) => c.file === f);
+      const moved = off.flatMap((n) => {
+        const c = state.current[n - 1], was = before[n - 1];
+        if (loose(c.file)) return [wasOn(c.file) ? `${c.file} moved from key ${wasOn(c.file)} to key ${n}` : `${c.file} is now on key ${n}`];
+        if (loose(was.file) && nowOn(was.file)) return []; // the key it left
+        return [`key ${n} looks different`];
+      });
+      screen("Written, but the card looks a little different from the plan.", "bad");
+      show("write-result", `Written. But ${moved.join(", ")}: firmwares without a number in front of their file name take the first free key. Check the list above and write again if you like.`, true);
+    } else {
+      screen("All done. Press a lit key on CHOMPI to start that firmware.", "ok");
+      show("write-result", "All done. Press a lit key on CHOMPI to start that firmware. To come back to the keys, switch CHOMPI off and on.");
+      $("step-write").classList.add("done");
+    }
+    state.progress = {};
+  } catch (e) {
+    const msg = e instanceof ProtocolError || e instanceof Error ? e.message : String(e);
+    /* what is on the card now, so a second try only does what's left */
+    try {
+      const planned = state.plan.slice();
+      state.current = await readCard(false);
+      state.plan = planned;
+    } catch (e2) { note(`couldn't read the card back: ${e2.message}`); /* the reconnect will */ }
+    if (failed) progress(failed.key, "fail", msg, true);
+    screen(msg, "bad");
+    show("write-result", `${msg} Keys marked done are written; press Write again to do the rest.`, true);
+  } finally {
+    awake?.release().catch(() => {});
+    showSpeed(timings);
+    state.busy = false;
+    render();
+  }
+});
+
+const kbs = (bytes, ms) => (bytes / 1024 / (ms / 1000)).toFixed(0);
+
+/** How fast it went, for the curious (and for us: MIDI is the slow part). */
+function showSpeed(timings) {
+  if (!timings.length) return;
+  const bytes = timings.reduce((a, t) => a + t.bytes, 0);
+  const send = timings.reduce((a, t) => a + t.sendMs, 0);
+  const store = timings.reduce((a, t) => a + t.storeMs, 0);
+  $("speed").textContent = `${timings.length} firmware${timings.length > 1 ? "s" : ""}, ${(bytes / 1024).toFixed(0)} KB: `
+    + `sending took ${(send / 1000).toFixed(1)} s (${kbs(bytes, send)} KB/s, ${chunkSize()}-byte chunks), writing to the card ${(store / 1000).toFixed(1)} s.`;
+  $("speed").hidden = false;
+}
+
+/* Phones pause a page when the screen turns off, which would stall a write. */
+async function keepAwake() {
+  try { return await navigator.wakeLock?.request("screen"); } catch { return null; }
+}
+
+/* Leaving mid-write leaves the card half done: ask first. */
+addEventListener("beforeunload", (e) => {
+  if (!state.busy) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+/* ---- start --------------------------------------------------------------- */
+$("demo-note").hidden = !window.CHOMPI_DEMO;
+buildKeys();
+buildRows();
+const catalogReady = loadCatalog().then(() => { buildCatalog(); render(); }).catch((e) => {
+  note(`couldn't load the firmware list: ${e.message}`);
+  $("catalog").textContent = CATALOG_FAILED;
+  screen(CATALOG_FAILED, "bad");
+});
+render();
+</script>
+</body>
+</html>
