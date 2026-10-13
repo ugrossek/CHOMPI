@@ -8,47 +8,45 @@
 <meta name="description" content="Pick firmwares for your CHOMPI's keys and write them all in one go over USB.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <!-- ?v= names this version of the scripts, so a browser never pairs this page
      with an older copy it kept. Change it whenever demo.js or chompi-midi.js change. -->
 <script src="demo.js?v=2026-10-10"></script>
 <style>
+  /* Setup page: crumb-strewn paper, a CHOMPI creature that eats firmware, handwritten notes,
+     steps printed like the lines on CHOMPI's panel (see the end of this block). */
   :root {
-    --paper: #FAF6F0;
-    --card: #FFFFFF;
-    --ink: #1B1815;
-    --ink-soft: #6E655B;
-    --line: #EAE1D5;
-    --coral: #E5564A;
-    --tab-1: #FF9431;
-    --tab-2: #FF5C7C;
-    --tab-3: #3FAEFF;
-    --tab-4: #39D27E;
-    --body: #2B2723;
-    --body-edge: #171411;
-    --screen: #171411;
-    --screen-ink: #F4EADC;
-    --key: #FFFDF8;
-    --key-shade: #D8CFC2;
-    --cyan: #18D2DF;
-    --amber: #FFAE1F;
-    --pink: #FF4F8B;
-    --green: #39D27E;
+    --page: #FFF6E5;
+    --text: #2A1B4F;
+    --text-soft: #5E4F86;
+    --outline: #2A1B4F;
+    --pop-pink: #FF4F9A;
+    --pop-orange: #FF8A1F;
+    --pop-yellow: #FFD23F;
+    --pop-green: #2FCB7A;
+    --pop-blue: #3D8BFF;
+    --pop-violet: #9B5CFF;
+    --cyan: #18C2CF;
+    --amber: #F0A320;
+    --pink: #E8497F;
+    --green: #2FCB7A;
+    --coral: #E5352B;
+    --tint: 22%;
     --field: #FFFFFF;
-    --changed: #FFF3DC;
+    --display: "Bungee", "Arial Black", sans-serif;
+    --shade: "Bungee Shade", "Bungee", "Arial Black", sans-serif;
+    --hand: "Caveat", "Comic Sans MS", cursive;
+    --mono: "Space Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #1A1714;
-      --card: #24201C;
-      --ink: #F4EDE3;
-      --ink-soft: #B3A898;
-      --line: #3A342D;
-      --body: #120F0D;
-      --body-edge: #000000;
-      --field: #1A1714;
-      --changed: #3A2E1A;
+      --page: #170F2E;
+      --text: #FFF1DC;
+      --text-soft: #C8B8EC;
+      --outline: #FFF1DC;
+      --tint: 30%;
+      --field: #241845;
       color-scheme: dark;
     }
   }
@@ -57,255 +55,601 @@
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: "Schibsted Grotesk", system-ui, sans-serif;
+    color: var(--text);
+    font-family: "Space Grotesk", system-ui, sans-serif;
     font-size: 17px;
     line-height: 1.55;
+    background-color: var(--page);
+    /* crumbs: it has been eating here */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='290'%3E%3Cpath d='M20 30l8-4 4 7-5 5-7-2z' fill='%23FF4F9A'/%3E%3Cpath d='M152 72l6 1 1 6-7 2z' fill='%233D8BFF'/%3E%3Cpath d='M232 18l9-2 2 8-8 3-4-4z' fill='%23FFD23F'/%3E%3Cpath d='M88 158l5-5 6 4-3 7-7-1z' fill='%232FCB7A'/%3E%3Cpath d='M214 196l7 0 2 6-6 3-4-3z' fill='%23FF8A1F'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='530' height='450'%3E%3Cpath d='M60 40l3-2v12' fill='none' stroke='%233D8BFF' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cellipse cx='330' cy='120' rx='3.2' ry='5' fill='none' stroke='%23FF4F9A' stroke-width='2.2'/%3E%3Cellipse cx='150' cy='300' rx='3.2' ry='5' fill='none' stroke='%232FCB7A' stroke-width='2.2'/%3E%3Cpath d='M390 330l3-2v12' fill='none' stroke='%23FF8A1F' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M250 250l6-2 3 6-5 3z' fill='%239B5CFF'/%3E%3Cpath d='M30 220l5 1 1 5-6 1z' fill='%23FFD23F'/%3E%3C/svg%3E");
+    background-position: 0 0, 97px 61px;
+    overflow-x: hidden;
   }
-  main { max-width: 820px; margin: 0 auto; padding: 48px 16px 96px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px; position: relative; }
+  a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: var(--pop-pink); }
+  a:hover { background: var(--pop-yellow); color: #2A1B4F; text-decoration-color: currentColor; }
+  code { font: .85em var(--mono); background: color-mix(in oklab, var(--pop-yellow) 45%, var(--page)); border-radius: 6px; padding: 1px 6px; }
 
-  .masthead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 18px; }
-  h1 { font-size: clamp(2.4rem, 8.5vw, 4.2rem); line-height: .95; font-weight: 900; letter-spacing: -.035em; margin: 0; }
-  .badge {
-    display: inline-flex; align-items: center;
-    background: var(--coral); color: #FFFFFF;
-    border-radius: 10px; padding: 7px 14px;
-    font-weight: 700; font-size: 1.02rem;
-    box-shadow: 0 3px 0 color-mix(in srgb, var(--coral) 70%, #000);
+  /* ---- top ---------------------------------------------------------------- */
+  .head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 28px 48px; align-items: center; padding-bottom: 40px; position: relative; }
+  .eyebrow { margin: 0 0 18px; font: 700 13px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
+  .eyebrow a { text-decoration: none; }
+  h1 { margin: 0 0 18px; line-height: .9; font-weight: 400; }
+  h1 .feed {
+    display: inline-block; font: clamp(1.8rem, 5vw, 3rem)/1 var(--display);
+    background: var(--pop-blue); color: #fff; padding: 6px 14px 2px; border: 3px solid var(--outline);
+    rotate: -4deg; box-shadow: 5px 5px 0 var(--outline); margin-bottom: 10px;
   }
-  .lede { max-width: 34em; margin: 0 0 14px; font-size: 1.14rem; }
-  .credit { max-width: 40em; margin: 0 0 28px; color: var(--ink-soft); font-size: .98rem; }
-  a { color: inherit; }
+  h1 .brand { display: block; white-space: nowrap; font: clamp(2.6rem, 9.5vw, 5.6rem)/.95 var(--shade); letter-spacing: -.02em; }
+  h1 .brand span { display: inline-block; transition: rotate .2s, translate .2s; }
+  h1 .brand span:nth-child(1) { color: var(--pop-pink);   rotate: -6deg; }
+  h1 .brand span:nth-child(2) { color: var(--pop-orange); rotate: 4deg; translate: 0 6px; }
+  h1 .brand span:nth-child(3) { color: var(--pop-green);  rotate: -3deg; }
+  h1 .brand span:nth-child(4) { color: var(--pop-blue);   rotate: 7deg; translate: 0 -4px; }
+  h1 .brand span:nth-child(5) { color: var(--pop-violet); rotate: -5deg; translate: 0 4px; }
+  h1 .brand span:nth-child(6) { color: var(--pop-orange); rotate: 9deg; }
+  @media (prefers-reduced-motion: no-preference) {
+    h1 .brand span:hover { rotate: 0deg; translate: 0 -12px; }
+    @keyframes bob { 50% { translate: 0 -6px; } }
+  }
+  .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.18rem; font-weight: 500; }
+  .credit { max-width: 40em; margin: 0; color: var(--text-soft); font-size: .95rem; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+  .facts li { font: 700 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; border: 2px solid var(--outline); border-radius: 999px; background: var(--page); }
+  .facts li:nth-child(1) { rotate: 2deg; background: color-mix(in oklab, var(--pop-green) 40%, var(--page)); }
+  .facts li:nth-child(2) { rotate: -2deg; background: color-mix(in oklab, var(--pop-pink) 35%, var(--page)); }
+  .facts li:nth-child(3) { rotate: 1deg; background: color-mix(in oklab, var(--pop-blue) 35%, var(--page)); }
 
+  /* notices: sticky notes */
   .notice {
-    background: color-mix(in srgb, var(--coral) 8%, var(--card));
-    border: 1px solid color-mix(in srgb, var(--coral) 40%, var(--line));
-    border-radius: 14px;
-    padding: 14px 18px; margin: 0 0 18px;
+    --c: var(--pop-yellow);
+    background: color-mix(in oklab, var(--c) 70%, #fff); color: #2A1B4F;
+    border: 2.5px solid var(--outline); border-radius: 4px 18px 4px 18px;
+    padding: 14px 18px; margin: 0 0 20px; font-size: .95rem;
+    rotate: 1.5deg; box-shadow: 6px 6px 0 var(--outline);
   }
-  .notice strong { color: var(--coral); }
-  .notice p { margin: 0 0 8px; }
+  .notice + .notice { --c: var(--cyan); rotate: -2deg; margin-left: 24px; }
+  .notice a:hover { background: #fff; }
+  .notice strong { font: 14px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; display: block; margin-bottom: 8px; }
+  .notice p { margin: 0 0 10px; }
   .notice p:last-child { margin: 0; }
+  #demo-note { --c: var(--pop-violet); }
 
-  /* ---- the instrument -------------------------------------------------- */
+  /* ---- the instrument: candy keys ------------------------------------------- */
   .chompi {
-    background: var(--body);
-    border-radius: 20px 20px 30px 30px;
-    padding: 18px 18px 22px;
-    box-shadow: 0 6px 0 var(--body-edge);
-    margin: 4px 0 18px;
+    border: 3px solid var(--outline); border-radius: 22px;
+    padding: 14px 14px 16px; margin: 6px 0 18px;
+    background: color-mix(in oklab, var(--pop-violet) 18%, var(--page));
+    box-shadow: 6px 6px 0 var(--outline);
   }
   .screen {
     display: flex; align-items: center; gap: 10px;
-    min-height: 44px; padding: 8px 14px; margin-bottom: 16px;
-    border-radius: 10px;
-    background: var(--screen); color: var(--screen-ink);
-    font-size: .98rem;
+    min-height: 40px; padding: 6px 14px; margin-bottom: 14px;
+    background: #1B1238; color: #9CFFCF;
+    border: 2.5px solid var(--outline); border-radius: 12px;
+    font: 14px/1.4 var(--mono);
   }
-  .screen .dot { width: 10px; height: 10px; border-radius: 50%; background: #4D463F; flex: none; }
+  .screen .dot { width: 11px; height: 11px; border-radius: 50%; background: #3B2E66; flex: none; }
   .screen[data-mood="ok"]   .dot { background: var(--cyan);  box-shadow: 0 0 10px var(--cyan); }
   .screen[data-mood="busy"] .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
   .screen[data-mood="bad"]  .dot { background: var(--pink);  box-shadow: 0 0 10px var(--pink); }
 
-  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 5px; }
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 6px; }
   .key {
-    position: relative;
-    appearance: none; border: 0; margin: 0; padding: 0;
-    aspect-ratio: 1;
-    border-radius: 7px;
-    background: var(--key);
-    box-shadow: inset 0 -4px 0 var(--key-shade), inset 0 0 0 1px var(--key-shade);
-    cursor: pointer; font: inherit; color: #857B6F;
-    transition: transform .08s;
+    --cap: var(--pop-yellow);
+    position: relative; appearance: none; margin: 0; padding: 0; aspect-ratio: 1;
+    border: 2.5px solid var(--outline); border-radius: 10px;
+    background: color-mix(in oklab, var(--cap) 55%, #fff);
+    box-shadow: 0 3px 0 var(--outline);
+    cursor: pointer; font: inherit; color: #2A1B4F;
+    transition: translate .08s, box-shadow .08s;
   }
+  .key:nth-child(5n+1) { --cap: var(--pop-pink); }
+  .key:nth-child(5n+2) { --cap: var(--pop-orange); }
+  .key:nth-child(5n+3) { --cap: var(--pop-yellow); }
+  .key:nth-child(5n+4) { --cap: var(--pop-green); }
+  .key:nth-child(5n)   { --cap: var(--pop-blue); }
   .key:disabled { cursor: default; }
-  .key:not(:disabled):active { transform: translateY(2px); }
-  .key .n { position: absolute; left: 0; right: 0; bottom: 14%; font-size: clamp(.55rem, 1.9vw, .8rem); font-weight: 700; line-height: 1; }
+  .key:not(:disabled):hover { translate: 0 -2px; box-shadow: 0 5px 0 var(--outline); }
+  .key:not(:disabled):active { translate: 0 2px; box-shadow: 0 1px 0 var(--outline); }
+  .key .n { position: absolute; left: 0; right: 0; bottom: 10%; font: 700 clamp(.55rem, 1.6vw, .8rem)/1 var(--mono); }
   .key::before {
     content: ""; position: absolute; left: 50%; top: 16%;
-    width: 30%; aspect-ratio: 1; translate: -50% 0;
-    border-radius: 50%;
-    background: var(--led, #E6DDD0);
-    box-shadow: 0 0 var(--glow, 0) var(--led, transparent);
+    width: 28%; aspect-ratio: 1; translate: -50% 0; border-radius: 50%;
+    border: 2px solid #2A1B4F; background: var(--led, #fff);
+    box-shadow: 0 0 0 0 var(--led, transparent);
   }
-  .key[data-led] { --glow: 10px; }
-  .key[data-busy="send"]  { --led: var(--cyan);  --glow: 12px; }
-  .key[data-busy="store"] { --led: var(--amber); --glow: 12px; }
-  .key[data-busy="done"]  { --led: var(--green); --glow: 12px; }
-  .key[data-busy="fail"]  { --led: var(--pink);  --glow: 12px; }
-  .key[aria-pressed="true"] { background: #FFF6E5; box-shadow: inset 0 -4px 0 var(--amber), 0 0 0 3px var(--amber); color: #1B1815; }
-  .key.changed .n::after { content: "•"; color: var(--coral); margin-left: 1px; }
-  .key:focus-visible { outline: 3px solid var(--tab-3); outline-offset: 3px; }
+  .key[data-led]::before, .key[data-busy]::before { box-shadow: 0 0 8px 2px var(--led); }
+  .key[data-busy="send"]  { --led: var(--cyan); }
+  .key[data-busy="store"] { --led: var(--amber); }
+  .key[data-busy="done"]  { --led: var(--green); }
+  .key[data-busy="fail"]  { --led: var(--pink); }
+  .key[aria-pressed="true"] { background: var(--cap); translate: 0 -4px; rotate: -4deg; box-shadow: 0 7px 0 var(--outline); }
+  .key.changed .n::after { content: "*"; margin-left: 1px; }
+  .key:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
   @media (prefers-reduced-motion: no-preference) {
-    .key[data-busy="store"], .key[data-busy="send"] { animation: write 0.9s ease-in-out infinite alternate; }
-    @keyframes write { to { --glow: 2px; filter: brightness(.9); } }
+    .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
+    @keyframes write { to { opacity: .35; } }
   }
 
-  /* ---- steps ------------------------------------------------------------ */
-  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
-  .steps > li { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
-  .steps > li:nth-child(1) { --tab: var(--tab-1); }
-  .steps > li:nth-child(2) { --tab: var(--tab-2); }
-  .steps > li:nth-child(3) { --tab: var(--tab-3); }
+  /* ---- steps: tilted coloured cards ------------------------------------------ */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 56px; }
+  .steps > li {
+    position: relative;
+    background: color-mix(in oklab, var(--tab) var(--tint), var(--page));
+    border: 3px solid var(--outline); border-radius: 24px;
+    padding: 30px 28px 26px 28px;
+    box-shadow: 8px 8px 0 var(--shadow);
+  }
+  .steps > li:nth-child(1) { --tab: var(--pop-orange); --shadow: var(--pop-pink);   rotate: -.6deg; }
+  .steps > li:nth-child(2) { --tab: var(--pop-pink);   --shadow: var(--pop-blue);   rotate: .7deg; }
+  .steps > li:nth-child(3) { --tab: var(--pop-blue);   --shadow: var(--pop-green);  rotate: -.4deg; }
+  .steps > li:nth-child(4) { --tab: var(--pop-green);  --shadow: var(--pop-violet); rotate: .5deg; }
   .steps h2 {
-    display: flex; align-items: center; gap: 12px;
-    margin: 0; padding: 10px 16px;
-    background: var(--tab); color: #1B1815;
-    font-size: 1.2rem; font-weight: 800; letter-spacing: -.01em;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin: 0 0 14px; font: clamp(1.3rem, 3.4vw, 1.9rem)/1.1 var(--display); letter-spacing: -.01em;
   }
   .steps h2 .num {
-    display: inline-grid; place-items: center;
-    width: 30px; height: 30px; border-radius: 8px;
-    background: #1B1815; color: #FFFFFF; font-size: 1rem; font-weight: 800;
+    display: inline-grid; place-items: center; flex: none;
+    width: 2.1em; height: 2.1em; border-radius: 50%;
+    background: var(--tab); color: #fff; border: 3px solid var(--outline);
+    font: 1.25em/1 var(--display); rotate: -10deg;
+    box-shadow: 3px 3px 0 var(--outline);
+    -webkit-text-stroke: 1px #2A1B4F;
   }
-  #step-connect[data-conn="off"]  { --tab: #F2685A; }
-  #step-connect[data-conn="busy"] { --tab: #FFB43A; }
-  #step-connect[data-conn="on"]   { --tab: var(--tab-4); }
-  .steps h2 .conn { margin-left: auto; font-size: .92rem; font-weight: 700; opacity: .85; }
-  .steps > li.done h2 .num { font-size: 0; }
+  #step-connect[data-conn="off"]  { --conn: var(--coral); }
+  #step-connect[data-conn="busy"] { --conn: var(--amber); }
+  #step-connect[data-conn="on"]   { --conn: var(--green); }
+  .steps h2 .conn {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
+    font: 700 12px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase;
+    background: var(--page); border: 2px solid var(--outline); border-radius: 999px; padding: 6px 10px; rotate: 3deg;
+  }
+  .steps h2 .conn::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--conn); box-shadow: 0 0 6px var(--conn); }
+  /* done: a big star sticker on the number */
+  .steps > li.done h2 .num { position: relative; }
   .steps > li.done h2 .num::after {
-    content: ""; width: 7px; height: 13px; margin-top: -3px;
-    border: solid #FFFFFF; border-width: 0 3px 3px 0; rotate: 45deg;
+    content: ""; position: absolute; right: -12px; top: -12px;
+    width: 26px; height: 26px;
+    background: var(--pop-yellow) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 20 20%27%3E%3Cpath d=%27M5 10.5l3.2 3.2L15 6.5%27 fill=%27none%27 stroke=%27%232A1B4F%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center / 18px no-repeat; color: #2A1B4F; border: 2px solid var(--outline); border-radius: 50%; rotate: 10deg;
   }
-  .steps .inner { padding: 18px 18px 20px; }
-  .steps p { margin: 0 0 12px; max-width: 38em; }
-  .hint { color: var(--ink-soft); font-size: .95rem; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .steps .inner { padding: 0; }
+  .steps p { margin: 0 0 12px; max-width: 40em; }
+  .hint { color: var(--text-soft); font-size: .95rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
-  button.act, a.act {
+  button.act, a.act, label.act {
     display: inline-flex; align-items: center; gap: 8px;
-    border: 0; border-radius: 12px; padding: 11px 20px;
-    background: var(--ink); color: var(--paper);
-    font: inherit; font-weight: 700; cursor: pointer; text-decoration: none;
+    border: 3px solid var(--outline); border-radius: 999px; padding: 11px 24px;
+    background: var(--pop-pink); color: #fff;
+    font: 17px/1 var(--display); letter-spacing: .02em; cursor: pointer; text-decoration: none;
+    box-shadow: 4px 4px 0 var(--outline); transition: translate .08s, box-shadow .08s;
   }
-  button.act.big {
-    background: var(--coral); color: #FFFFFF; font-size: 1.15rem; padding: 14px 28px;
-    box-shadow: 0 4px 0 color-mix(in srgb, var(--coral) 70%, #000);
-  }
-  button.act.big:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 color-mix(in srgb, var(--coral) 70%, #000); }
+  button.act:not(:disabled):hover { translate: -2px -2px; box-shadow: 6px 6px 0 var(--outline); background: var(--pop-violet); }
+  button.act:not(:disabled):active { translate: 3px 3px; box-shadow: 1px 1px 0 var(--outline); }
+  button.act.big { font-size: 1.5rem; padding: 16px 40px; rotate: -2deg; background: var(--pop-orange); }
   button.act:disabled { opacity: .35; cursor: not-allowed; }
   button.soft {
-    border: 1px solid var(--line); border-radius: 10px;
-    background: var(--card); color: var(--ink);
-    padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer;
+    border: 2.5px solid var(--outline); border-radius: 999px;
+    background: var(--page); color: var(--text);
+    padding: 7px 16px; font: inherit; font-size: .95rem; font-weight: 700; cursor: pointer;
+    box-shadow: 3px 3px 0 var(--outline);
   }
+  button.soft:not(:disabled):hover { background: var(--pop-yellow); color: #2A1B4F; }
   button.soft:disabled { opacity: .4; cursor: not-allowed; }
-  button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid var(--tab-3); outline-offset: 2px; }
+  button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
 
-  .result { margin-top: 14px; font-weight: 600; }
+  .result { margin-top: 16px; font-weight: 700; display: inline-block; background: var(--page); border: 2px solid var(--outline); border-radius: 10px; padding: 6px 12px; }
+  .result[hidden] { display: none; }
   .result.bad { color: var(--coral); }
 
-  /* ---- the key list: one row per key ------------------------------------ */
-  .slots { list-style: none; margin: 0 0 14px; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .slots li {
-    display: grid; grid-template-columns: 2.2em 1fr minmax(9em, 14em); gap: 4px 12px; align-items: center;
-    padding: 8px 12px; border-top: 1px solid var(--line);
-    cursor: pointer;
+  /* ---- front page bits --------------------------------------------------------- */
+  .key[data-led="cyan"]  { --led: var(--cyan); }
+  .key[data-led="amber"] { --led: var(--amber); }
+  .key[data-led="white"] { --led: var(--green); }
+  .key[data-led="pink"]  { --led: var(--pink); }
+  @media (prefers-reduced-motion: no-preference) {
+    .key[data-led="amber"]::before { animation: write 0.9s ease-in-out infinite alternate; }
   }
-  .slots li:first-child { border-top: 0; }
-  .slots li.selected { box-shadow: inset 4px 0 0 var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--card)); }
-  .slots li.changed { background: var(--changed); }
-  .slots li.selected.changed { background: color-mix(in srgb, var(--amber) 14%, var(--changed)); }
+  label.act { background: var(--pop-blue); }
+  label.act:hover { translate: -2px -2px; box-shadow: 6px 6px 0 var(--outline); }
+  label.act:focus-within { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+  .drop {
+    border: 3px dashed var(--outline); border-radius: 18px;
+    padding: 18px 20px; margin-bottom: 16px;
+    background: repeating-linear-gradient(-45deg, transparent 0 14px, color-mix(in oklab, var(--page) 55%, transparent) 14px 28px);
+  }
+  .drop p { margin: 0 0 10px; font-weight: 700; }
+  .drop.over { background: var(--pop-yellow); color: #2A1B4F; rotate: -1deg; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  button.stock {
+    border: 2.5px solid var(--outline); border-radius: 10px;
+    background: var(--page); color: var(--text);
+    padding: 8px 16px; font: 15px/1 var(--display); cursor: pointer;
+    box-shadow: 3px 3px 0 var(--outline);
+  }
+  #stock button.stock:nth-child(1) { rotate: -3deg; }
+  #stock button.stock:nth-child(2) { rotate: 2deg; }
+  #stock button.stock:nth-child(3) { rotate: -1deg; }
+  #stock button.stock:nth-child(4) { rotate: 3deg; }
+  button.stock:hover { background: var(--pop-yellow); color: #2A1B4F; }
+  button.stock[aria-pressed="true"] { background: var(--pop-pink); color: #fff; rotate: 0deg; }
+  .chosen { font: 700 .92em var(--mono); background: var(--pop-yellow); color: #2A1B4F; padding: 1px 6px; border-radius: 6px; }
+  input[type="text"] {
+    font: 700 1rem var(--mono); color: var(--text);
+    background: var(--field);
+    border: 3px solid var(--outline); border-radius: 12px;
+    padding: 9px 14px; width: 13em; text-transform: uppercase; letter-spacing: .04em;
+    box-shadow: inset 3px 3px 0 color-mix(in oklab, var(--outline) 15%, transparent);
+  }
+  input:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
+  .field { display: grid; gap: 8px; font: 13px/1 var(--display); letter-spacing: .02em; }
+  .warn { color: var(--coral); font-weight: 700; }
+  details.setup {
+    margin: 0 0 48px; padding: 14px 20px;
+    background: var(--page); border: 3px solid var(--outline); border-radius: 16px;
+    box-shadow: 5px 5px 0 var(--pop-yellow), 5px 5px 0 3px var(--outline);
+  }
+  details.setup summary { cursor: pointer; font: 17px/1.3 var(--display); }
+  details.setup summary::marker { color: var(--pop-pink); }
+  details.setup ol { margin: 12px 0 4px; padding-left: 1.6em; display: grid; gap: 8px; max-width: 46em; }
+  details.setup li::marker { font-family: var(--display); color: var(--pop-pink); }
+
+  details.log { margin-top: 56px; }
+  details.log summary { cursor: pointer; font: 14px var(--display); }
+  details.log pre {
+    max-height: 280px; overflow: auto; font: .78rem var(--mono);
+    background: #1B1238; color: #9CFFCF; border: 2.5px solid var(--outline); border-radius: 12px;
+    padding: 12px; white-space: pre-wrap; word-break: break-all;
+  }
+  footer {
+    margin-top: 28px; padding-top: 26px; color: var(--text-soft); font-size: .92rem;
+    /* zigzag ribbon on top */
+    background:
+      linear-gradient(135deg, var(--pop-pink) 25%, transparent 25%) 0 0 / 20px 12px repeat-x,
+      linear-gradient(225deg, var(--pop-pink) 25%, transparent 25%) 0 0 / 20px 12px repeat-x;
+  }
+
+
+  /* ---- the CHOMPI creature: its teeth are keys, it eats what you feed it ---- */
+  .critter { position: relative; display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; margin: -20px 0 26px; }
+  .critter svg { width: 190px; height: auto; flex: none; overflow: visible; }
+  .critter .outline { stroke: var(--outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+  .critter .body { fill: var(--pop-orange); }
+  .critter .belly { fill: color-mix(in oklab, var(--pop-yellow) 70%, #fff); }
+  .critter .cheek { fill: var(--pop-pink); opacity: .55; }
+  .critter .eye { fill: #fff; }
+  .critter .pupil { fill: #2A1B4F; }
+  .critter .happy-eye { fill: none; stroke: #2A1B4F; stroke-width: 5; stroke-linecap: round; opacity: 0; }
+  .critter .mouth { fill: #1B1238; }
+  .critter .tongue { fill: var(--pop-pink); }
+  .critter .tooth { fill: #fff; stroke: var(--outline); stroke-width: 3; }
+  .critter .led { stroke: none; }
+  .critter .knob { fill: var(--pop-violet); }
+  .critter .crumb { fill: var(--pop-yellow); stroke: var(--outline); stroke-width: 2.5; opacity: 0; }
+  .critter .mouth { transform-origin: 110px 120px; transform: scaleY(.25); }
+  .critter .lids { transform-origin: 110px 84px; transform: scaleY(0); fill: var(--pop-orange); }
+  .critter .knob-g { transform-origin: 110px 30px; }
+  .critter .pupils { transform-origin: 113px 86px; }
+
+  /* what it says, in handwriting */
+  .bubble {
+    position: relative; align-self: flex-start; margin-top: 10px;
+    font: 700 1.55rem/1.05 var(--hand); color: var(--text);
+    background: var(--page); border: 3px solid var(--outline); border-radius: 22px 22px 6px 22px;
+    padding: 10px 16px 12px; rotate: -4deg; max-width: 11em; text-align: center;
+    box-shadow: 4px 4px 0 var(--pop-pink);
+  }
+  .bubble::before { content: "feed me!"; }
+  .bubble::after {
+    content: ""; position: absolute; right: -14px; bottom: 6px; width: 18px; height: 14px;
+    background: var(--page); border: solid var(--outline); border-width: 3px 3px 0 0;
+    transform: skewY(30deg); border-radius: 0 4px 0 0;
+  }
+  body:has(#step-connect.done) .bubble::before  { content: "hi! got a snack for me?"; }
+  body:has(#screen[data-mood="bad"]) .bubble::before { content: "bleh. try again?"; }
+
+  /* hungry once there is food: mouth a little open, looking down at it */
+  /* a file over the drop area: wide open */
+  /* done: happy eyes and a crumb */
+  body:has(#screen[data-mood="bad"]) .critter .pupils { transform: translate(0, 5px); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .critter svg { animation: sway 4s ease-in-out infinite; transform-origin: 50% 100%; }
+    @keyframes sway { 50% { transform: rotate(-3deg); } }
+    .critter .lids { animation: blink 5s infinite; }
+    @keyframes blink { 0%, 93%, 100% { transform: scaleY(0); } 96% { transform: scaleY(1); } }
+    .critter .knob-g { animation: wobble 2.6s ease-in-out infinite; }
+    @keyframes wobble { 50% { transform: rotate(12deg); } }
+    @keyframes chew-m { from { transform: scaleY(.2); } to { transform: scaleY(1.1); } }
+    @keyframes munch { to { transform: scale(1.04, .96); } }
+    @keyframes hop { 50% { transform: translateY(-14px); } }
+  }
+
+  /* ---- notes in the margin, in handwriting ------------------------------------ */
+  .steps > li::after {
+    position: absolute; z-index: 1; pointer-events: none;
+    font: 700 1.45rem/1 var(--hand); color: var(--note, var(--text));
+    padding-bottom: 34px; white-space: nowrap;
+    background: var(--arrow) left bottom / 46px 34px no-repeat;
+  }
+  .steps > li::after { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF4F9A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  @media (max-width: 760px) {
+    .critter { justify-content: center; margin: 0 0 20px; }
+    .critter svg { width: 150px; }
+    .steps > li::after { position: static; display: block; white-space: normal; margin-top: 14px; padding: 0 0 0 52px; background-position: left center; font-size: 1.3rem; }
+  }
+
+
+  /* ---- setup page: what the creature says ------------------------------------ */
+  body:has(#step-connect.done) .bubble::before { content: "so many keys… fill them all!"; }
+  body:has(#slots li.selected) .bubble::before { content: "what goes on that key?"; }
+  body:has(#step-choose.done) .bubble::before  { content: "mmm, a whole menu!"; }
+  body:has(#step-choose.done):has(#screen[data-mood="busy"]) .bubble::before,
+  body:has(#keys .key[data-busy="send"]) .bubble::before,
+  body:has(#keys .key[data-busy="store"]) .bubble::before { content: "nom nom nom nom"; }
+  body:has(#step-write.done) .bubble::before   { content: "*burp* I'm stuffed!"; }
+  body:has(#screen[data-mood="bad"]) .bubble::before { content: "bleh. try again?"; }
+  body:has(#step-choose.done) .critter .mouth { transform: scaleY(.6); }
+  body:has(#step-choose.done) .critter .pupils { transform: translate(-3px, 4px); }
+  body:has(#step-write.done) .critter .pupils,
+  body:has(#step-write.done) .critter .eye { opacity: 0; }
+  body:has(#step-write.done) .critter .happy-eye,
+  body:has(#step-write.done) .critter .crumb { opacity: 1; }
+  body:has(#step-write.done) .critter .mouth { transform: scaleY(.35); }
+  @media (prefers-reduced-motion: no-preference) {
+    body:has(#step-choose.done):has(#screen[data-mood="busy"]) .critter .mouth,
+    body:has(#keys .key[data-busy="send"]) .critter .mouth,
+    body:has(#keys .key[data-busy="store"]) .critter .mouth { animation: chew-m .35s ease-in-out infinite alternate; }
+    body:has(#step-choose.done):has(#screen[data-mood="busy"]) .critter svg,
+    body:has(#keys .key[data-busy="send"]) .critter svg,
+    body:has(#keys .key[data-busy="store"]) .critter svg { animation: munch .35s ease-in-out infinite alternate; }
+    body:has(#step-write.done) .critter svg { animation: hop .6s ease-in-out 3; }
+  }
+  .steps > li:nth-child(1)::after { content: "keys breathing white = launcher is ready"; right: 40px; bottom: 24px; rotate: -2deg; }
+  .steps > li:nth-child(2)::after { content: "mix & match, it's your CHOMPI"; right: 50px; top: 34px; bottom: auto; rotate: 3deg; }
+  .steps > li:nth-child(3)::after { content: "good moment for a coffee"; right: 50px; top: 34px; bottom: auto; rotate: -3deg; }
+
+  button.act.big { margin: 8px 0 18px; }
+
+  /* keys wear the colour of the firmware planned for them; empty ones stay plain */
+  .key { --cap: #FFFFFF; }
+  .key[data-led] { --cap: var(--led); }
+  .key[data-led] .n { color: #2A1B4F; }
+  .key.changed .n::after { content: "*"; }
+
+  /* ---- the key list: candy rows ------------------------------------------------- */
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
+  .slots { list-style: none; margin: 8px 0 16px; padding: 0; display: grid; gap: 8px; }
+  .slots li {
+    display: grid; grid-template-columns: 2.6em 1fr minmax(9em, 15em); gap: 4px 14px; align-items: center;
+    padding: 8px 10px; cursor: pointer;
+    background: var(--page); border: 2.5px solid var(--outline); border-radius: 14px;
+    box-shadow: 3px 3px 0 var(--sw, var(--outline));
+    transition: rotate .15s, translate .15s;
+  }
+  .slots li:hover { translate: -1px -1px; }
+  .slots li.selected { background: color-mix(in oklab, var(--pop-yellow) 40%, var(--page)); rotate: -.6deg; }
+  .slots li.changed { background: color-mix(in oklab, var(--pop-pink) 18%, var(--page)); }
+  .slots li.selected.changed { background: color-mix(in oklab, var(--pop-yellow) 30%, color-mix(in oklab, var(--pop-pink) 18%, var(--page))); }
   .slots .kn {
-    display: inline-grid; place-items: center;
-    width: 1.9em; height: 1.9em; border-radius: 7px;
-    background: var(--key); color: #1B1815; font-weight: 800; font-size: .9rem;
-    box-shadow: inset 0 -3px 0 var(--key-shade), inset 0 0 0 1px var(--key-shade);
-    position: relative;
+    display: inline-grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
+    background: color-mix(in oklab, var(--sw, #fff) 70%, #fff); color: #2A1B4F;
+    border: 2.5px solid var(--outline); font: .85rem/1 var(--display);
   }
   .slots .what { min-width: 0; }
   .slots .what b { font-weight: 700; }
-  .slots .what .sub { display: block; color: var(--ink-soft); font-size: .88rem; overflow-wrap: anywhere; }
-  .slots .what .sub.chg { color: var(--coral); font-weight: 600; }
+  .slots .what .sub { display: block; color: var(--text-soft); font: .78rem/1.5 var(--mono); overflow-wrap: anywhere; }
+  .slots .what .sub.chg { color: var(--pop-pink); font-weight: 700; }
+  .slots .what .sub.upd { color: var(--text); }
   .slots select {
-    width: 100%; font: inherit; font-size: .95rem; color: var(--ink);
-    background: var(--field); border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px;
+    appearance: none; -webkit-appearance: none;
+    width: 100%; font: inherit; font-size: .92rem; font-weight: 700; color: var(--text);
+    background:
+      linear-gradient(45deg, transparent 50%, currentColor 50%) right 18px center / 6px 6px no-repeat,
+      linear-gradient(-45deg, transparent 50%, currentColor 50%) right 12px center / 6px 6px no-repeat,
+      var(--field);
+    border: 2.5px solid var(--outline); border-left: 8px solid var(--sw, var(--outline)); border-radius: 999px;
+    padding: 7px 34px 7px 12px; cursor: pointer;
   }
-  .slots .swatch { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .4em; vertical-align: .05em; background: var(--sw, transparent); }
-  .slots .state { grid-column: 2 / -1; font-size: .88rem; font-weight: 700; }
+  .slots select:disabled { color: var(--text-soft); cursor: default; }
+  .slots .swatch { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .45em; vertical-align: .05em; background: var(--sw, transparent); border: 1.5px solid var(--outline); }
+  .slots .state { grid-column: 2 / -1; font: 700 .8rem/1.4 var(--mono); }
   .slots .state:empty { display: none; }
   .slots .state.bad { color: var(--coral); }
 
-  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; }
-
-  /* ---- catalogue ------------------------------------------------------- */
-  h3 { font-size: 1.05rem; margin: 26px 0 4px; }
-  .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 10px; }
+  /* ---- the firmwares: stickers ------------------------------------------------- */
+  h3 { font: 1.25rem/1.2 var(--display); margin: 44px 0 6px; }
+  .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 26px; margin-top: 22px; }
   .fw {
     display: flex; flex-direction: column; gap: 6px;
-    border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px;
-    background: var(--paper);
-    border-top: 5px solid var(--sw);
+    background: color-mix(in oklab, var(--sw) 22%, var(--page));
+    border: 3px solid var(--outline); border-radius: 18px; padding: 14px 16px;
+    box-shadow: 5px 5px 0 var(--sw);
   }
+  .fw:nth-child(3n+1) { rotate: -1deg; }
+  .fw:nth-child(3n+2) { rotate: .8deg; }
+  .fw:nth-child(3n)   { rotate: -.4deg; }
   .fw .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .fw .t { font-weight: 800; font-size: 1.1rem; }
-  .fw .v { color: var(--ink-soft); font-size: .88rem; }
-  .chip { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; border-radius: 6px; padding: 1px 7px; }
-  .chip.stock { background: var(--ink); color: var(--paper); }
-  .chip.beta  { background: var(--tab-3); color: #1B1815; }
-  .chip.alpha { background: var(--tab-2); color: #1B1815; }
-  .chip.release { box-shadow: inset 0 0 0 1.5px currentColor; }
-  .fw .by { font-size: .88rem; color: var(--ink-soft); }
+  .fw .t { font: 1.15rem/1.1 var(--display); }
+  .fw .v { color: var(--text-soft); font: .82rem var(--mono); }
+  .chip { font: 700 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; border: 2px solid var(--outline); border-radius: 999px; padding: 3px 8px; background: var(--page); color: var(--text); }
+  .chip.beta  { background: var(--pop-blue); color: #fff; rotate: 4deg; }
+  .chip.alpha { background: var(--pop-pink); color: #fff; rotate: -5deg; }
+  .fw .by { font-size: .88rem; color: var(--text-soft); }
   .fw .s { font-size: .95rem; margin: 0; }
-  .fw .note { font-size: .85rem; color: var(--ink-soft); margin: 0; }
-  .fw .acts { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px; }
+  .fw .note { font-size: .85rem; color: var(--text-soft); margin: 0; }
+  .fw .acts { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 8px; }
   .fw .acts a { font-size: .9rem; }
-  .fw .on { font-size: .85rem; font-weight: 700; }
+  .fw .on { font: .78rem var(--mono); color: var(--text-soft); }
 
   .changes { margin: 0 0 14px; padding-left: 1.3em; }
-  .changes li { margin: 2px 0; }
-  .changes .warn { display: block; color: var(--coral); font-weight: 600; font-size: .92rem; }
-  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--ink-soft); font-size: .95rem; }
+  .changes li { margin: 3px 0; }
+  .changes li::marker { color: var(--pop-pink); }
+  .changes .warn { display: block; color: var(--coral); font-weight: 700; font-size: .92rem; }
+  .notes { margin: 0 0 14px; padding-left: 1.3em; color: var(--text-soft); font-size: .95rem; }
   .notes:empty { display: none; }
-  .slots .what .sub.upd { color: var(--ink); font-weight: 600; }
-  .speed { color: var(--ink-soft); font-size: .92rem; margin-top: 6px; }
-  #launcher-update { margin-top: 14px; }
-  #launcher-update p { margin: 0 0 8px; }
-
-  details.log { margin-top: 40px; }
-  details.log summary { cursor: pointer; color: var(--ink-soft); }
-  details.log pre {
-    max-height: 280px; overflow: auto;
-    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .78rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-    padding: 12px; white-space: pre-wrap; word-break: break-all;
-  }
-  footer { margin-top: 56px; color: var(--ink-soft); font-size: .92rem; max-width: 40em; }
+  .speed { color: var(--text-soft); font: .85rem var(--mono); margin-top: 8px; }
+  #launcher-update { margin-top: 16px; }
+  #launcher-update p { margin: 0 0 10px; }
+  #old-launcher ol { padding-left: 1.4em; display: grid; gap: 6px; }
+  #speedtest pre, #run-result { font: .78rem var(--mono); white-space: pre-wrap; }
+  #run-key { font: 700 1rem var(--mono); border: 2.5px solid var(--outline); border-radius: 10px; padding: 4px 8px; background: var(--field); color: var(--text); }
 
   @media (max-width: 560px) {
-    main { padding-top: 32px; }
-    .chompi { padding: 12px 10px 16px; border-radius: 16px 16px 24px 24px; }
-    .keys { gap: 3px; }
-    .key { border-radius: 4px; box-shadow: inset 0 -2px 0 var(--key-shade), inset 0 0 0 1px var(--key-shade); }
-    .key[aria-pressed="true"] { box-shadow: inset 0 -2px 0 var(--amber), 0 0 0 2px var(--amber); }
-    .key::before { top: 3px; width: 56%; height: 3px; aspect-ratio: auto; border-radius: 2px; }
-    .key .n { bottom: 22%; }
-    .steps .inner { padding: 14px 12px 16px; }
-    .slots li { grid-template-columns: 2.2em 1fr; }
+    .slots li { grid-template-columns: 2.6em 1fr; }
     .slots select { grid-column: 2; }
+    .fw { rotate: 0deg !important; }
+  }
+
+  @media (max-width: 900px) {
+  }
+  @media (max-width: 760px) {
+    .head { grid-template-columns: minmax(0, 1fr); }
+    .notice + .notice { margin-left: 12px; }
+  }
+  @media (max-width: 560px) {
+    main { padding: 28px 16px 64px; }
+    .steps > li { padding: 24px 18px 20px; rotate: 0deg !important; box-shadow: 5px 5px 0 var(--shadow); }
+    .chompi { padding: 10px 8px 12px; border-radius: 14px; }
+    .keys { gap: 3px; }
+    .key { border-width: 1.5px; border-radius: 5px; box-shadow: 0 2px 0 var(--outline); }
+    .key::before { top: 3px; width: 56%; height: 4px; aspect-ratio: auto; border-radius: 2px; border-width: 1px; }
+    .key .n { bottom: 18%; }
+  }
+  /* ---- the creature follows you down: it peeks over the step you're on ------ */
+  .peek { position: absolute; right: 44px; top: -75px; width: 120px; height: 72px; z-index: 2; pointer-events: none; visibility: hidden; }
+  .peek-head { position: absolute; inset: 0; overflow: hidden; }
+  .peek-head svg { display: block; width: 100%; height: 100%; }
+  .peek-paws { position: absolute; left: 0; top: calc(100% - 7px); width: 100%; height: auto; }
+  .peek .outline { stroke: var(--outline); stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; }
+  .peek .body { fill: var(--pop-orange); }
+  .peek .eye { fill: #fff; }
+  .peek .knob { fill: var(--pop-violet); }
+  .peek .pupils { fill: #2A1B4F; }
+  .peek .lids { fill: var(--pop-orange); transform-box: fill-box; transform-origin: center top; transform: scaleY(0); }
+  /* the first step that isn't done yet */
+  .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek { visibility: visible; }
+  /* a finished step leaves crumbs for the next one */
+  .steps > li.done:not(:last-child)::before {
+    content: ""; position: absolute; left: 22%; bottom: -58px; width: 84px; height: 58px; pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 48'%3E%3Cpath d='M10 2l8-2 3 7-6 4-6-3z' fill='%23FFD23F' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M34 16l6 0 2 5-5 3-4-3z' fill='%23FF4F9A' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M20 30l5-1 1 5-5 1z' fill='%233D8BFF' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M50 36l5 1 0 5-5 1-2-4z' fill='%232FCB7A' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek-head svg { animation: peek-up .45s .15s cubic-bezier(.3, 1.5, .5, 1) both; }
+    .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek-paws { animation: peek-paws .2s .5s both; }
+    .peek .lids { animation: blink 4.3s infinite; }
+    .peek .pupils { animation: look 6s ease-in-out infinite; }
+    .steps > li.done:not(:last-child)::before { animation: crumbs-fall .5s ease-in both; }
+    @keyframes peek-up { from { transform: translateY(100%); } }
+    @keyframes peek-paws { from { opacity: 0; transform: translateY(-6px); } }
+    @keyframes look { 0%, 30% { transform: translate(-4px, 0); } 40%, 70% { transform: translate(4px, 0); } 80%, 100% { transform: translate(0, 1px); } }
+    @keyframes crumbs-fall { from { opacity: 0; transform: translateY(-24px); } }
+  }
+  @media (max-width: 560px) {
+    .peek { right: 22px; width: 80px; height: 48px; top: -51px; }
+  }
+  /* ---- line art like CHOMPI's own panel ------------------------------------------
+     No cards: each step is framed by a thin printed line hanging off one rail that
+     runs down the page. The step number is a knob on the rail, with an LED above it
+     that lights up in the step's colour when the step is done. */
+  ol.steps { position: relative; gap: 64px; margin-left: 26px; }
+  ol.steps::before {
+    content: ""; position: absolute; left: 0; top: -36px; bottom: -36px;
+    border-left: 2.5px solid var(--outline);
+  }
+  ol.steps::after {
+    content: ""; position: absolute; left: -5px; bottom: -44px; width: 12px; height: 12px;
+    border: 2.5px solid var(--outline); border-radius: 50%; background: var(--page);
+  }
+  .steps > li, .steps > li:nth-child(n) {
+    rotate: 0deg; box-shadow: none;
+    background: color-mix(in oklab, var(--tab) 7%, var(--page));
+    border: 2.5px solid var(--outline); border-radius: 0 30px 30px 0;
+    padding: 30px 30px 28px 52px;
+  }
+  .steps h2 { gap: 0; }
+  .steps > li h2 .num, .steps > li.done h2 .num {
+    position: absolute; left: -27px; top: 22px;
+    width: 52px; height: 52px; rotate: 0deg;
+    background: var(--page); color: var(--tab);
+    border: 2.5px solid var(--outline); box-shadow: inset 0 0 0 5px var(--page), inset 0 0 0 7.5px var(--outline);
+    font: 1.55rem/1 var(--display); -webkit-text-stroke: 0;
+  }
+  /* the LED above the knob: a ring, dark until the step is done */
+  .steps > li h2 .num::after, .steps > li.done h2 .num::after {
+    content: ""; position: absolute; left: 50%; top: -24px; right: auto;
+    width: 12px; height: 12px; translate: -50% 0; rotate: 0deg;
+    background: color-mix(in oklab, var(--outline) 18%, var(--page)); border-radius: 50%;
+    border: 2.5px solid var(--outline); box-shadow: 0 0 0 2.5px var(--page);
+  }
+  .steps > li.done h2 .num::after { background: var(--tab); box-shadow: 0 0 0 2.5px var(--page), 0 0 12px 3px var(--tab); }
+  /* little ticks on the rail between steps, like the scale around a knob */
+  .steps > li + li h2 .num::before {
+    content: ""; position: absolute; left: 50%; top: -58px; width: 14px; height: 22px; translate: -50% 0;
+    background: repeating-linear-gradient(var(--outline) 0 2.5px, transparent 2.5px 7px) center / 14px 100% no-repeat;
+  }
+  .steps > li > .inner > .row:first-child, .steps > li h2 { min-height: 52px; }
+  @media (max-width: 560px) {
+    ol.steps { margin-left: 8px; }
+    .steps > li, .steps > li:nth-child(n) { padding: 24px 18px 22px 34px; border-radius: 0 20px 20px 0; }
+    .steps > li h2 .num, .steps > li.done h2 .num { left: -21px; width: 40px; height: 40px; font-size: 1.05rem; font-size: 1.25rem; top: 18px; box-shadow: inset 0 0 0 4px var(--page), inset 0 0 0 6px var(--outline); }
+    .steps > li h2, .steps > li h2 { min-height: 40px; }
   }
 </style>
 </head>
 <body>
 <main>
-  <div class="masthead">
-    <h1>Set up your CHOMPI</h1>
+  <div class="head">
+    <div>
+      <p class="eyebrow"><a href="../">CHOMPI firmwares</a> • setup</p>
+      <h1><span class="feed">Set up your</span> <span class="brand" aria-label="CHOMPI"><span>C</span><span>H</span><span>O</span><span>M</span><span>P</span><span>I</span></span></h1>
+      <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
+      <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each one below links to its release.</p>
+      <ul class="facts"><li>3 steps</li><li>launcher 1.5</li><li>Chrome or Edge</li></ul>
+    </div>
+    <div>
+      <div class="critter" aria-hidden="true">
+        <p class="bubble"></p>
+        <svg viewBox="0 0 220 210">
+          <g class="knob-g"><path class="outline" d="M110 30V12" fill="none"/><circle class="knob outline" cx="110" cy="10" r="9"/></g>
+          <rect class="body outline" x="48" y="182" width="38" height="20" rx="9"/>
+          <rect class="body outline" x="134" y="182" width="38" height="20" rx="9"/>
+          <path class="body outline" d="M22 120c-14 4-16 22-4 26M198 120c14 4 16 22 4 26" fill="none"/>
+          <rect class="body outline" x="20" y="28" width="180" height="162" rx="42"/>
+          <circle class="eye outline" cx="80" cy="82" r="20"/>
+          <circle class="eye outline" cx="140" cy="82" r="20"/>
+          <g class="pupils"><circle class="pupil" cx="83" cy="86" r="8"/><circle class="pupil" cx="143" cy="86" r="8"/><circle cx="86" cy="83" r="2.5" fill="#fff"/><circle cx="146" cy="83" r="2.5" fill="#fff"/></g>
+          <g class="lids"><rect x="58" y="60" width="44" height="44" rx="22"/><rect x="118" y="60" width="44" height="44" rx="22"/></g>
+          <path class="happy-eye" d="M66 88q14-16 28 0M126 88q14-16 28 0"/>
+          <ellipse class="cheek" cx="50" cy="114" rx="12" ry="7"/>
+          <ellipse class="cheek" cx="170" cy="114" rx="12" ry="7"/>
+          <g class="mouth"><rect x="56" y="120" width="108" height="40" rx="18"/><ellipse class="tongue" cx="110" cy="154" rx="28" ry="9"/></g>
+          <g>
+            <rect class="tooth" x="62" y="112" width="17" height="17" rx="4"/><circle class="led" cx="70.5" cy="118" r="3" fill="#FF4F9A"/>
+            <rect class="tooth" x="82" y="112" width="17" height="17" rx="4"/><circle class="led" cx="90.5" cy="118" r="3" fill="#FF8A1F"/>
+            <rect class="tooth" x="102" y="112" width="17" height="17" rx="4"/><circle class="led" cx="110.5" cy="118" r="3" fill="#FFD23F"/>
+            <rect class="tooth" x="122" y="112" width="17" height="17" rx="4"/><circle class="led" cx="130.5" cy="118" r="3" fill="#2FCB7A"/>
+            <rect class="tooth" x="142" y="112" width="17" height="17" rx="4"/><circle class="led" cx="150.5" cy="118" r="3" fill="#3D8BFF"/>
+          </g>
+          <rect class="crumb" x="168" y="136" width="9" height="9" rx="2" transform="rotate(20 172 140)"/>
+          <rect class="crumb" x="180" y="152" width="6" height="6" rx="1.5" transform="rotate(-15 183 155)"/>
+        </svg>
+      </div>
+      <aside class="notice" id="demo-note" hidden>
+        <p><strong>Demo</strong>No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
+      </aside>
+      <aside class="notice">
+        <p><strong>Use at your own risk</strong>This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. It writes to your SD card and replaces what is on the keys you change, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
+        <p>Needs launcher 1.5. Step 1 tells you if yours is older and how to update it. More firmwares join the list as their authors add them; <a href="https://github.com/ugrossek/CHOMPI-firmwares#readme">here's how to add yours</a>.</p>
+      </aside>
+    </div>
   </div>
-  <p class="lede">Choose which firmware goes on which key, then write them all to your CHOMPI in one go. No card reader, no files to copy.</p>
-  <p class="credit">Built on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>. The firmwares are made by people in the CHOMPI community; each card below links to its release.</p>
-
-  <aside class="notice" id="demo-note" hidden>
-    <p><strong>Demo.</strong> No CHOMPI here: this page is talking to a pretend one in your browser, so nothing is written anywhere. Reload to start over.</p>
-  </aside>
-
-  <aside class="notice">
-    <p><strong>Use at your own risk.</strong> This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. It writes to your SD card and replaces what is on the keys you change, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
-    <p><strong>Needs launcher 1.5.</strong> Step 1 tells you if yours is older and how to update it. More firmwares join the list as their authors add them; <a href="https://github.com/ugrossek/CHOMPI-firmwares#readme">here's how to add yours</a>.</p>
-  </aside>
 
   <ol class="steps">
     <li id="step-connect" data-conn="off">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
       <div class="inner">
         <p>Switch CHOMPI on so its keys are breathing white, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself.</p>
@@ -332,6 +676,7 @@
     </li>
 
     <li id="step-choose">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">2</span>Choose firmwares</h2>
       <div class="inner">
         <p>Each white key on CHOMPI can hold one firmware. Tap a key, then choose what goes on it. Or tap <b>Put on key</b> on a firmware below.</p>
@@ -356,6 +701,7 @@
     </li>
 
     <li id="step-write">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">3</span>Write to CHOMPI</h2>
       <div class="inner">
         <p id="summary">Nothing to write yet.</p>
@@ -604,6 +950,7 @@ function render() {
       fillOptions(sel, i);
       sel.disabled = state.busy;
       const sw = planColor(i);
+      if (sw) li.style.setProperty("--sw", sw); else li.style.removeProperty("--sw");
       b.innerHTML = (sw ? `<span class="swatch" style="--sw:${sw}"></span>` : "") + esc(planLabel(i));
       if (changed(i)) {
         const now = describeCurrent(i);
