@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <style>
-  /* Wild look (experiment): confetti paper, stacked letters, stickers,
+  /* Wild look (experiment): crumb-strewn paper, stacked letters, stickers,
      chunky outlines with hard shadows. Same page underneath. */
   :root {
     --page: #FFF6E5;
@@ -58,14 +58,10 @@
     font-size: 17px;
     line-height: 1.55;
     background-color: var(--page);
-    /* confetti: a few dot grids in different colours, offset from each other */
-    background-image:
-      radial-gradient(circle, var(--pop-pink) 2.5px, transparent 3px),
-      radial-gradient(circle, var(--pop-blue) 2px, transparent 2.5px),
-      radial-gradient(circle, var(--pop-yellow) 3px, transparent 3.5px),
-      radial-gradient(circle, var(--pop-green) 2px, transparent 2.5px);
-    background-size: 173px 151px, 211px 197px, 263px 229px, 137px 181px;
-    background-position: 11px 23px, 97px 61px, 40px 140px, 120px 9px;
+    /* crumbs: it has been eating here */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='290'%3E%3Cpath d='M20 30l8-4 4 7-5 5-7-2z' fill='%23FF4F9A'/%3E%3Cpath d='M152 72l6 1 1 6-7 2z' fill='%233D8BFF'/%3E%3Cpath d='M232 18l9-2 2 8-8 3-4-4z' fill='%23FFD23F'/%3E%3Cpath d='M88 158l5-5 6 4-3 7-7-1z' fill='%232FCB7A'/%3E%3Cpath d='M214 196l7 0 2 6-6 3-4-3z' fill='%23FF8A1F'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='530' height='450'%3E%3Cpath d='M60 40l3-2v12' fill='none' stroke='%233D8BFF' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cellipse cx='330' cy='120' rx='3.2' ry='5' fill='none' stroke='%23FF4F9A' stroke-width='2.2'/%3E%3Cellipse cx='150' cy='300' rx='3.2' ry='5' fill='none' stroke='%232FCB7A' stroke-width='2.2'/%3E%3Cpath d='M390 330l3-2v12' fill='none' stroke='%23FF8A1F' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M250 250l6-2 3 6-5 3z' fill='%239B5CFF'/%3E%3Cpath d='M30 220l5 1 1 5-6 1z' fill='%23FFD23F'/%3E%3C/svg%3E");
+    background-position: 0 0, 97px 61px;
     overflow-x: hidden;
   }
   main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px; position: relative; }
@@ -168,7 +164,7 @@
   .key[data-busy="done"]  { --led: var(--green); }
   .key[data-busy="fail"]  { --led: var(--pink); }
   .key[aria-pressed="true"] { background: var(--cap); translate: 0 -4px; rotate: -4deg; box-shadow: 0 7px 0 var(--outline); }
-  .key.changed .n::after { content: "★"; margin-left: 1px; }
+  .key.changed .n::after { content: "*"; margin-left: 1px; }
   .key:focus-visible { outline: 3px dashed var(--pop-pink); outline-offset: 3px; }
   @media (prefers-reduced-motion: no-preference) {
     .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
@@ -400,7 +396,7 @@
   .steps > li:nth-child(1)::after { content: "it'll ask about MIDI: say yes!"; right: 40px; bottom: 30px; rotate: -3deg; }
   .steps > li:nth-child(2)::after { content: "any .bin from the community"; right: 50px; top: 34px; rotate: 3deg; }
   .steps > li:nth-child(3)::after { content: "the keys really are the slots"; right: 40px; top: 30px; rotate: -2deg; }
-  .steps > li:nth-child(4)::after { content: "takes a few seconds, promise"; left: 300px; bottom: 44px; rotate: -5deg; }
+  .steps > li:nth-child(4)::after { content: "takes a few seconds, promise"; left: 390px; bottom: 44px; rotate: -5deg; }
   .steps > li::after { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF4F9A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   @media (max-width: 760px) {
     .critter { justify-content: center; margin: 0 0 20px; }
@@ -422,6 +418,38 @@
     .key { border-width: 1.5px; border-radius: 5px; box-shadow: 0 2px 0 var(--outline); }
     .key::before { top: 3px; width: 56%; height: 4px; aspect-ratio: auto; border-radius: 2px; border-width: 1px; }
     .key .n { bottom: 18%; }
+  }
+  /* ---- the creature follows you down: it peeks over the step you're on ------ */
+  .peek { position: absolute; right: 44px; top: -75px; width: 120px; height: 72px; z-index: 2; pointer-events: none; visibility: hidden; }
+  .peek-head { position: absolute; inset: 0; overflow: hidden; }
+  .peek-head svg { display: block; width: 100%; height: 100%; }
+  .peek-paws { position: absolute; left: 0; top: calc(100% - 7px); width: 100%; height: auto; }
+  .peek .outline { stroke: var(--outline); stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; }
+  .peek .body { fill: var(--pop-orange); }
+  .peek .eye { fill: #fff; }
+  .peek .knob { fill: var(--pop-violet); }
+  .peek .pupils { fill: #2A1B4F; }
+  .peek .lids { fill: var(--pop-orange); transform-box: fill-box; transform-origin: center top; transform: scaleY(0); }
+  /* the first step that isn't done yet */
+  .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek { visibility: visible; }
+  /* a finished step leaves crumbs for the next one */
+  .steps > li.done:not(:last-child)::before {
+    content: ""; position: absolute; left: 22%; bottom: -58px; width: 84px; height: 58px; pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 48'%3E%3Cpath d='M10 2l8-2 3 7-6 4-6-3z' fill='%23FFD23F' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M34 16l6 0 2 5-5 3-4-3z' fill='%23FF4F9A' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M20 30l5-1 1 5-5 1z' fill='%233D8BFF' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M50 36l5 1 0 5-5 1-2-4z' fill='%232FCB7A' stroke='%232A1B4F' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek-head svg { animation: peek-up .45s .15s cubic-bezier(.3, 1.5, .5, 1) both; }
+    .steps > li:not(.done):not(.steps > li:not(.done) ~ li) .peek-paws { animation: peek-paws .2s .5s both; }
+    .peek .lids { animation: blink 4.3s infinite; }
+    .peek .pupils { animation: look 6s ease-in-out infinite; }
+    .steps > li.done:not(:last-child)::before { animation: crumbs-fall .5s ease-in both; }
+    @keyframes peek-up { from { transform: translateY(100%); } }
+    @keyframes peek-paws { from { opacity: 0; transform: translateY(-6px); } }
+    @keyframes look { 0%, 30% { transform: translate(-4px, 0); } 40%, 70% { transform: translate(4px, 0); } 80%, 100% { transform: translate(0, 1px); } }
+    @keyframes crumbs-fall { from { opacity: 0; transform: translateY(-24px); } }
+  }
+  @media (max-width: 560px) {
+    .peek { right: 22px; width: 80px; height: 48px; top: -51px; }
   }
 </style>
 </head>
@@ -486,6 +514,7 @@
 
   <ol class="steps">
     <li id="step-connect" data-conn="off">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
       <div class="inner">
         <p>Turn CHOMPI on with the launcher showing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself whenever it opens.</p>
@@ -498,6 +527,7 @@
     </li>
 
     <li id="step-firmware">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">2</span>Choose a firmware</h2>
       <div class="inner">
         <div class="drop" id="drop">
@@ -513,6 +543,7 @@
     </li>
 
     <li id="step-slot">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">3</span>Pick a slot and a name</h2>
       <div class="inner">
         <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
@@ -533,6 +564,7 @@
     </li>
 
     <li id="step-send">
+      <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">4</span>Send it</h2>
       <div class="inner">
         <p>CHOMPI's keys fill cyan as the firmware arrives and amber while it's written to the card. Then it starts.</p>
