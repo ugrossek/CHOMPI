@@ -397,6 +397,7 @@
   .steps > li:nth-child(2)::after { content: "any .bin from the community"; right: 50px; top: 34px; rotate: 3deg; }
   .steps > li:nth-child(3)::after { content: "the keys really are the slots"; right: 40px; top: 30px; rotate: -2deg; }
   .steps > li:nth-child(4)::after { content: "takes a few seconds, promise"; left: 390px; bottom: 44px; rotate: -5deg; }
+  #step-send:has(#send-result:not([hidden]))::after { content: none; }
   .steps > li::after { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF4F9A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   @media (max-width: 760px) {
     .critter { justify-content: center; margin: 0 0 20px; }
