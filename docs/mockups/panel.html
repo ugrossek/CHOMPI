@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mockup B: the instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=VT323&display=swap" rel="stylesheet">
+<style>
+  /* Mockup B: the page is an instrument panel. Brushed metal, screen-printed
+     labels, screws, a little screen that talks, real-looking keys with LEDs.
+     The creature is a vinyl sticker someone put on their gear. */
+  :root {
+    --metal: #D5D8D6;
+    --metal-hi: #E6E8E6;
+    --print: #22304D;
+    --print-soft: #5A6680;
+    --orange: #F07A2A;
+    --cyan: #18C2CF; --amber: #F0A320; --pink: #E8497F; --green: #4CC27A;
+    --glass: #0F1A1C;
+    --lcd: #7DF5D8;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --metal: #2B2F33; --metal-hi: #353A3F; --print: #DCE3EE; --print-soft: #97A3B6; --glass: #091012; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--print); font: 17px/1.55 "Barlow", system-ui, sans-serif;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.035) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, var(--metal-hi), var(--metal));
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 36px 20px 80px; }
+  a { color: inherit; text-underline-offset: 3px; }
+  .lbl { font: 600 12px/1 "Barlow Condensed", sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--print-soft); }
+
+  /* a panel zone: printed corner brackets and four screws */
+  .zone { position: relative; padding: 34px 34px 30px; margin-top: 28px; }
+  .zone::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    --c: var(--print); --l: 22px; --w: 2px;
+    background:
+      linear-gradient(var(--c) 0 0) top left / var(--l) var(--w), linear-gradient(var(--c) 0 0) top left / var(--w) var(--l),
+      linear-gradient(var(--c) 0 0) top right / var(--l) var(--w), linear-gradient(var(--c) 0 0) top right / var(--w) var(--l),
+      linear-gradient(var(--c) 0 0) bottom left / var(--l) var(--w), linear-gradient(var(--c) 0 0) bottom left / var(--w) var(--l),
+      linear-gradient(var(--c) 0 0) bottom right / var(--l) var(--w), linear-gradient(var(--c) 0 0) bottom right / var(--w) var(--l);
+    background-repeat: no-repeat;
+  }
+  .screw { position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff8, transparent 60%), linear-gradient(135deg, #A9AEB0, #7D8386);
+    box-shadow: inset 0 0 0 1px #0003, 0 1px 1px #0003; }
+  .screw::after { content: ""; position: absolute; inset: 6px 2px; background: #4A4F52; rotate: var(--r, 30deg); border-radius: 1px; }
+  .screw.tl { top: 10px; left: 10px; } .screw.tr { top: 10px; right: 10px; --r: -50deg; }
+  .screw.bl { bottom: 10px; left: 10px; --r: 80deg; } .screw.br { bottom: 10px; right: 10px; --r: 10deg; }
+
+  /* top: model name like it's printed on the case, the screen, the sticker */
+  .head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px 40px; align-items: center; }
+  .model { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 { margin: 6px 0 0; font: clamp(2.2rem, 6vw, 3.7rem)/1.05 "Michroma", sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+  h1 .brand { color: var(--orange); display: block; }
+  .lede { max-width: 30em; margin: 18px 0 0; font-size: 1.12rem; }
+  .credit { color: var(--print-soft); font-size: .95rem; margin: 8px 0 0; }
+
+  .screen {
+    position: relative; background: var(--glass); border-radius: 6px; padding: 14px 18px; margin-bottom: 18px;
+    box-shadow: inset 0 2px 8px #000c, 0 0 0 3px #0002, 0 1px 0 4px #fff3;
+    font: 30px/1.1 "VT323", monospace; color: var(--lcd); text-shadow: 0 0 8px color-mix(in oklab, var(--lcd) 60%, transparent);
+  }
+  .screen::after { content: ""; position: absolute; inset: 0; border-radius: 6px; background: repeating-linear-gradient(0deg, #0003 0 1px, transparent 1px 3px); pointer-events: none; }
+  .screen small { display: block; font-size: 18px; opacity: .7; }
+  .blink { animation: blink 1s steps(1) infinite; } @keyframes blink { 50% { opacity: 0; } }
+
+  .sticker { display: block; width: 210px; margin: 0 auto; rotate: 7deg;
+    filter: drop-shadow(0 0 0 #fff) drop-shadow(4px 0 0 #fff) drop-shadow(-4px 0 0 #fff) drop-shadow(0 4px 0 #fff) drop-shadow(0 -4px 0 #fff) drop-shadow(2px 4px 4px #0004); }
+  .critter { width: 100%; height: auto; overflow: visible; }
+  .critter .fillpart { fill: var(--orange); }
+  .critter .inkpart { fill: var(--orange); stroke: #22304D; stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+  .critter .fillpart { display: none; }
+  .critter .eyewhite { fill: #fff; }
+  .critter .pupils { fill: #22304D; }
+  .critter .mouthpart rect { fill: #1B1238; }
+  .critter .tongue { fill: var(--pink); }
+  .critter .teeth { fill: #fff; stroke: #22304D; stroke-width: 3; }
+  .critter .leds circle:nth-child(1) { fill: var(--pink); } .critter .leds circle:nth-child(2) { fill: var(--amber); }
+  .critter .leds circle:nth-child(3) { fill: var(--cyan); } .critter .leds circle:nth-child(4) { fill: var(--green); } .critter .leds circle:nth-child(5) { fill: #9B7BFF; }
+
+  .warn { display: flex; gap: 14px; align-items: flex-start; font-size: .95rem; margin-top: 8px; }
+  .warn .tri { flex: none; width: 34px; height: 30px; background: var(--amber); clip-path: polygon(50% 0, 100% 100%, 0 100%); display: grid; place-items: end center; font: 700 18px/1.4 "Barlow", sans-serif; color: #22304D; }
+
+  /* the step zone */
+  h2 { display: flex; align-items: baseline; gap: 14px; margin: 0 0 12px; font: 1.5rem/1.2 "Michroma", sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+  h2 .n { font: 600 1rem/1 "Barlow Condensed", sans-serif; letter-spacing: .1em; color: var(--metal); background: var(--print); padding: 4px 8px; border-radius: 3px; }
+  .zone p { max-width: 38em; margin: 0 0 14px; }
+  .keybed { background: linear-gradient(#0001, #0000); border-radius: 10px; padding: 16px; box-shadow: inset 0 1px 3px #0003; margin: 8px 0 16px; }
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 8px; }
+  .kcol { display: grid; gap: 6px; justify-items: center; }
+  .key {
+    width: 100%; aspect-ratio: 1; border-radius: 7px; position: relative;
+    background: linear-gradient(180deg, #FBFBF8, #E4E4DE); box-shadow: 0 3px 0 #9A9C98, 0 4px 6px #0004, inset 0 1px 0 #fff;
+  }
+  .key::before { content: ""; position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 30%; aspect-ratio: 1; border-radius: 50%; background: #CFCFC8; box-shadow: inset 0 1px 2px #0003; }
+  .key.on::before { background: var(--led); box-shadow: 0 0 10px 3px var(--led); }
+  .key.sel { translate: 0 2px; box-shadow: 0 1px 0 #9A9C98, 0 2px 3px #0004, inset 0 1px 0 #fff; }
+  .kcol .lbl { font-size: 11px; letter-spacing: .08em; }
+  .row { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
+  input { font: 26px/1 "VT323", monospace; color: var(--lcd); background: var(--glass); border: 0; border-radius: 4px; padding: 6px 12px; width: 9em; box-shadow: inset 0 2px 6px #000c; }
+  .btn { font: 600 1rem/1 "Barlow Condensed", sans-serif; letter-spacing: .16em; text-transform: uppercase; color: #fff; border: 0; border-radius: 999px;
+    background: radial-gradient(circle at 40% 30%, #FF9A55, var(--orange) 60%, #C4561A); width: 92px; height: 92px; box-shadow: 0 4px 0 #A9480F, 0 6px 10px #0005; }
+
+  @media (max-width: 700px) {
+    .head { grid-template-columns: 1fr; }
+    .zone { padding: 28px 16px 24px; }
+    .keys { gap: 4px; } .key { border-radius: 4px; } .kcol .lbl { font-size: 9px; }
+    .sticker { width: 160px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="zone">
+    <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+    <div class="head">
+      <div>
+        <div class="model"><span class="lbl">CHOMPI firmwares</span><span class="lbl">mod. 01 · one at a time</span></div>
+        <h1>Feed the <span class="brand">CHOMPI</span></h1>
+        <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away.</p>
+        <p class="credit">Builds on the <a href="#">multi-firmware launcher</a> by <a href="#">@sfaber02</a>.</p>
+      </div>
+      <div>
+        <div class="screen">FEED ME<span class="blink">_</span><small>waiting for a firmware</small></div>
+        <span class="sticker"><svg class="critter" viewBox="0 0 220 210" aria-hidden="true">
+  <g class="fillpart">
+    <rect x="48" y="182" width="38" height="20" rx="9"/>
+    <rect x="134" y="182" width="38" height="20" rx="9"/>
+    <rect x="20" y="28" width="180" height="162" rx="42"/>
+    <circle cx="110" cy="10" r="9"/>
+  </g>
+  <g class="inkpart">
+    <path d="M110 28V19"/>
+    <circle cx="110" cy="10" r="9"/>
+    <rect x="48" y="182" width="38" height="20" rx="9"/>
+    <rect x="134" y="182" width="38" height="20" rx="9"/>
+    <path d="M22 120c-14 4-16 22-4 26M198 120c14 4 16 22 4 26"/>
+    <rect x="20" y="28" width="180" height="162" rx="42"/>
+    <circle class="eyewhite" cx="80" cy="82" r="20"/>
+    <circle class="eyewhite" cx="140" cy="82" r="20"/>
+  </g>
+  <g class="pupils"><circle cx="84" cy="87" r="8"/><circle cx="144" cy="87" r="8"/></g>
+  <g class="mouthpart"><rect x="56" y="120" width="108" height="26" rx="13"/></g>
+  <ellipse class="tongue" cx="110" cy="141" rx="26" ry="5"/>
+  <g class="teeth">
+    <rect x="62" y="112" width="17" height="17" rx="4"/><rect x="82" y="112" width="17" height="17" rx="4"/>
+    <rect x="102" y="112" width="17" height="17" rx="4"/><rect x="122" y="112" width="17" height="17" rx="4"/>
+    <rect x="142" y="112" width="17" height="17" rx="4"/>
+  </g>
+  <g class="leds"><circle cx="70.5" cy="118" r="3"/><circle cx="90.5" cy="118" r="3"/><circle cx="110.5" cy="118" r="3"/><circle cx="130.5" cy="118" r="3"/><circle cx="150.5" cy="118" r="3"/></g>
+</svg>
+</span>
+      </div>
+    </div>
+    <div class="warn"><span class="tri">!</span><p style="margin:0">Unofficial community project, not made or supported by CHOMPI Club. It writes to your SD card, so back it up first. If something goes wrong, switch CHOMPI off and on.</p></div>
+  </div>
+
+  <section class="zone">
+    <span class="screw tl"></span><span class="screw tr"></span><span class="screw bl"></span><span class="screw br"></span>
+    <h2><span class="n">STEP 3</span>Slot select</h2>
+    <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+    <div class="keybed"><div class="keys"><div class="kcol"><span class="key on" style="--led:#E8497F"></span><span class="lbl">01</span></div><div class="kcol"><span class="key on" style="--led:#F0A320"></span><span class="lbl">02</span></div><div class="kcol"><span class="key on" style="--led:#18C2CF"></span><span class="lbl">03</span></div><div class="kcol"><span class="key"></span><span class="lbl">04</span></div><div class="kcol"><span class="key sel"></span><span class="lbl">05</span></div><div class="kcol"><span class="key"></span><span class="lbl">06</span></div><div class="kcol"><span class="key"></span><span class="lbl">07</span></div><div class="kcol"><span class="key"></span><span class="lbl">08</span></div><div class="kcol"><span class="key"></span><span class="lbl">09</span></div><div class="kcol"><span class="key"></span><span class="lbl">10</span></div><div class="kcol"><span class="key"></span><span class="lbl">11</span></div><div class="kcol"><span class="key"></span><span class="lbl">12</span></div><div class="kcol"><span class="key"></span><span class="lbl">13</span></div><div class="kcol"><span class="key"></span><span class="lbl">14</span></div><div class="kcol"><span class="key on" style="--led:#4CC27A"></span><span class="lbl">15</span></div></div></div>
+    <div class="row">
+      <label><span class="lbl">Name on card</span><br><input value="TAPE-DEV"></label>
+      <div style="text-align:center"><button class="btn">Send</button></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

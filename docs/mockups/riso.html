@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mockup A: riso zine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Courier+Prime:wght@400;700&family=Archivo:wght@400;600&family=Reenie+Beanie&display=swap" rel="stylesheet">
+<style>
+  /* Mockup A: a two-ink risograph zine. Fluorescent pink + blue on paper,
+     overprints turn purple, the plates don't quite line up. No black. */
+  :root {
+    --paper: #F3EEE2;
+    --pink: #FF48B0;
+    --blue: #0078BF;
+    --text: #0B4F86;
+    --soft: #4F7FA8;
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.2  0 0 0 0 0.4  0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    --dots-pink: radial-gradient(circle, var(--pink) 1.3px, transparent 1.6px) 0 0 / 6px 6px;
+    --dots-blue: radial-gradient(circle, var(--blue) 1.1px, transparent 1.4px) 0 0 / 5px 5px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    /* printed on dark paper: the inks get lighter so they still read */
+    :root { --paper: #1E2340; --pink: #FF6FC2; --blue: #5FB4FF; --text: #CFE4FF; --soft: #8FB2DA; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--grain), var(--paper); color: var(--text); font: 17px/1.55 "Archivo", system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 20px 80px; }
+  a { color: inherit; text-decoration: underline wavy var(--pink); text-underline-offset: 4px; }
+
+  /* masthead: issue line like a zine cover, then the title printed twice */
+  .issue {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    font: 700 13px/1 "Courier Prime", monospace; text-transform: uppercase; letter-spacing: .1em;
+    border-top: 2px solid var(--blue); border-bottom: 2px solid var(--blue); padding: 8px 0; margin-bottom: 26px;
+  }
+  .cover { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px 36px; align-items: center; }
+  h1 {
+    position: relative; margin: 0; font: clamp(4.4rem, 13vw, 9rem)/.82 "Anton", Impact, sans-serif; text-transform: uppercase;
+    color: var(--pink); letter-spacing: -.01em;
+  }
+  h1::after {
+    content: attr(data-text); position: absolute; inset: 0; color: var(--blue);
+    mix-blend-mode: multiply; translate: 5px 4px;
+    /* the blue plate only printed the top half: a split fountain feel */
+    clip-path: polygon(0 0, 100% 0, 100% 46%, 0 58%);
+  }
+  @media (prefers-color-scheme: dark) { h1::after { mix-blend-mode: screen; } }
+  .lede { font-size: 1.15rem; max-width: 30em; margin: 22px 0 0; }
+  .credit { color: var(--soft); font-size: .95rem; margin: 10px 0 0; max-width: 34em; }
+
+  /* the creature: blue line plate over a pink halftone plate, a bit off */
+  .critter-wrap { position: relative; justify-self: center; width: min(300px, 80%); }
+  .critter { width: 100%; height: auto; overflow: visible; }
+  .critter .fillpart { fill: var(--pink); opacity: .85; transform: translate(6px, 5px); }
+  .critter .inkpart, .critter .mouthpart { fill: none; stroke: var(--blue); stroke-width: 4.5; stroke-linejoin: round; stroke-linecap: round; mix-blend-mode: multiply; }
+  .critter .eyewhite { fill: var(--paper); }
+  .critter .pupils { fill: var(--blue); }
+  .critter .mouthpart rect { fill: var(--blue); }
+  .critter .tongue { fill: var(--pink); }
+  .critter .teeth { fill: var(--paper); stroke: var(--blue); stroke-width: 3; }
+  .critter .leds { fill: var(--pink); }
+  .scrawl {
+    position: absolute; left: -40px; top: -6px; rotate: -8deg;
+    font: 2.6rem/1 "Reenie Beanie", cursive; color: var(--pink);
+  }
+  .scrawl::after { content: ""; display: block; width: 60px; height: 36px; margin: -4px 0 0 90px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'%3E%3Cpath d='M4 4c20 2 38 10 50 28M44 30l10 3 1-11' fill='none' stroke='%23FF48B0' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat; }
+
+  /* the warning is a photocopied slip taped on */
+  .slip {
+    position: relative; margin: 34px 0 0 auto; max-width: 30em; rotate: 1.2deg;
+    background: var(--paper); padding: 16px 20px; font: 15px/1.5 "Courier Prime", monospace;
+    border: 1.5px dashed var(--blue);
+  }
+  .slip b { color: var(--pink); text-transform: uppercase; letter-spacing: .08em; }
+  .tape { position: absolute; width: 90px; height: 26px; background: color-mix(in oklab, var(--pink) 35%, transparent); top: -13px; left: 30px; rotate: -6deg;
+    clip-path: polygon(0 10%, 4% 0, 8% 12%, 12% 0, 100% 0, 96% 90%, 92% 100%, 88% 88%, 84% 100%, 0 100%); }
+  .tape.r { left: auto; right: 24px; rotate: 8deg; background: color-mix(in oklab, var(--blue) 25%, transparent); }
+
+  /* a step: a cut-out page, a rubber stamp number, halftone shadow */
+  .step {
+    position: relative; margin-top: 60px; padding: 34px 32px 30px;
+    background: var(--paper);
+    border: 2px solid var(--blue);
+    clip-path: polygon(0 1%, 3% 0, 40% .6%, 70% 0, 100% 1.2%, 99.4% 40%, 100% 99%, 60% 100%, 20% 99.2%, .4% 100%, 0 60%);
+  }
+  .step-wrap { position: relative; }
+  .step-wrap::before { content: ""; position: absolute; inset: 14px -12px -12px 14px; background: var(--dots-pink); z-index: -1; }
+  .stamp {
+    position: absolute; right: 26px; top: 20px; rotate: -12deg;
+    width: 96px; height: 96px; border-radius: 50%; border: 4px double var(--pink);
+    display: grid; place-items: center; text-align: center; color: var(--pink);
+    font: 700 11px/1 "Courier Prime", monospace; letter-spacing: .14em; text-transform: uppercase;
+    -webkit-mask: var(--grain), linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .stamp big { display: block; font: 2.6rem/.9 "Anton", sans-serif; letter-spacing: 0; }
+  h2 { margin: 0 0 10px; font: 2.4rem/1 "Anton", sans-serif; text-transform: uppercase; color: var(--blue); letter-spacing: .01em; max-width: 70%; }
+  h2 span { background: linear-gradient(transparent 58%, color-mix(in oklab, var(--pink) 55%, transparent) 58% 92%, transparent 92%); }
+  .step p { max-width: 36em; margin: 0 0 16px; }
+
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 7px; margin: 18px 0 14px; }
+  .key {
+    position: relative; aspect-ratio: 1; border: 2px solid var(--blue); border-radius: 4px; background: var(--paper);
+    font: 700 12px "Courier Prime", monospace; color: var(--blue); display: grid; place-items: end center; padding-bottom: 3px;
+  }
+  .key::before { content: ""; position: absolute; top: 18%; left: 50%; translate: -50% 0; width: 26%; aspect-ratio: 1; border-radius: 50%; border: 1.5px solid var(--blue); }
+  .key.on::before { background: var(--pink); border-color: var(--pink); }
+  .key.sel { background: var(--dots-pink), var(--paper); rotate: -5deg; translate: 0 -3px; }
+  .note { font: 1.9rem/1 "Reenie Beanie", cursive; color: var(--pink); rotate: -3deg; margin: 4px 0 22px 40%; }
+  .field { font: 700 12px "Courier Prime", monospace; letter-spacing: .1em; text-transform: uppercase; display: grid; gap: 6px; }
+  input { font: 700 1rem "Courier Prime", monospace; color: var(--text); background: transparent; border: 0; border-bottom: 2px solid var(--blue); padding: 6px 2px; width: 12em; }
+  .btn { display: inline-block; margin-top: 22px; font: 1.5rem/1 "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--paper); background: var(--blue); padding: 14px 30px; box-shadow: 5px 4px 0 var(--pink); border: 0; }
+
+  @media (max-width: 700px) {
+    .cover { grid-template-columns: 1fr; }
+    .scrawl { left: -10px; font-size: 2rem; }
+    .keys { gap: 3px; } .key { font-size: 9px; }
+    h2 { font-size: 1.9rem; max-width: 65%; }
+    .stamp { width: 74px; height: 74px; right: 12px; } .stamp big { font-size: 2rem; }
+    .step { padding: 26px 18px 24px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="issue"><span>CHOMPI firmwares</span><span>issue 01 · one at a time</span><span>made by the community</span></div>
+  <div class="cover">
+    <div>
+      <h1 data-text="Feed the CHOMPI">Feed the CHOMPI</h1>
+      <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away.</p>
+      <p class="credit">Builds on the <a href="#">multi-firmware launcher</a> by <a href="#">@sfaber02</a>.</p>
+    </div>
+    <div class="critter-wrap">
+      <span class="scrawl">feed me!</span>
+      <svg class="critter" viewBox="0 0 220 210" aria-hidden="true">
+  <g class="fillpart">
+    <rect x="48" y="182" width="38" height="20" rx="9"/>
+    <rect x="134" y="182" width="38" height="20" rx="9"/>
+    <rect x="20" y="28" width="180" height="162" rx="42"/>
+    <circle cx="110" cy="10" r="9"/>
+  </g>
+  <g class="inkpart">
+    <path d="M110 28V19"/>
+    <circle cx="110" cy="10" r="9"/>
+    <rect x="48" y="182" width="38" height="20" rx="9"/>
+    <rect x="134" y="182" width="38" height="20" rx="9"/>
+    <path d="M22 120c-14 4-16 22-4 26M198 120c14 4 16 22 4 26"/>
+    <rect x="20" y="28" width="180" height="162" rx="42"/>
+    <circle class="eyewhite" cx="80" cy="82" r="20"/>
+    <circle class="eyewhite" cx="140" cy="82" r="20"/>
+  </g>
+  <g class="pupils"><circle cx="84" cy="87" r="8"/><circle cx="144" cy="87" r="8"/></g>
+  <g class="mouthpart"><rect x="56" y="120" width="108" height="26" rx="13"/></g>
+  <ellipse class="tongue" cx="110" cy="141" rx="26" ry="5"/>
+  <g class="teeth">
+    <rect x="62" y="112" width="17" height="17" rx="4"/><rect x="82" y="112" width="17" height="17" rx="4"/>
+    <rect x="102" y="112" width="17" height="17" rx="4"/><rect x="122" y="112" width="17" height="17" rx="4"/>
+    <rect x="142" y="112" width="17" height="17" rx="4"/>
+  </g>
+  <g class="leds"><circle cx="70.5" cy="118" r="3"/><circle cx="90.5" cy="118" r="3"/><circle cx="110.5" cy="118" r="3"/><circle cx="130.5" cy="118" r="3"/><circle cx="150.5" cy="118" r="3"/></g>
+</svg>
+
+    </div>
+  </div>
+  <div class="slip"><span class="tape"></span><span class="tape r"></span><b>Use at your own risk.</b> Unofficial community project, not made or supported by CHOMPI Club. It writes to your SD card, so back it up first. If something goes wrong, switch CHOMPI off and on.</div>
+
+  <div class="step-wrap">
+    <section class="step">
+      <div class="stamp"><div>step<big>3</big>of 4</div></div>
+      <h2><span>Pick a slot and a name</span></h2>
+      <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+      <div class="keys"><span class="key on" style="--led:#E8497F">1</span><span class="key on" style="--led:#F0A320">2</span><span class="key on" style="--led:#18C2CF">3</span><span class="key">4</span><span class="key sel">5</span><span class="key">6</span><span class="key">7</span><span class="key">8</span><span class="key">9</span><span class="key">10</span><span class="key">11</span><span class="key">12</span><span class="key">13</span><span class="key">14</span><span class="key on" style="--led:#4CC27A">15</span></div>
+      <p class="note">the keys really are the slots ↑</p>
+      <label class="field">Name on the card <input value="TAPE-DEV"></label>
+      <button class="btn">Send it</button>
+    </section>
+  </div>
+</main>
+</body>
+</html>
