@@ -9,7 +9,7 @@
 <meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&family=Gochi+Hand&display=swap" rel="stylesheet">
 <style>
   /* Wild look (experiment): confetti paper, stacked letters, stickers,
      chunky outlines with hard shadows. Same page underneath. */
@@ -33,6 +33,7 @@
     --field: #FFFFFF;
     --display: "Bungee", "Arial Black", sans-serif;
     --shade: "Bungee Shade", "Bungee", "Arial Black", sans-serif;
+    --letter: "Gochi Hand", "Comic Sans MS", cursive;
     --hand: "Caveat", "Comic Sans MS", cursive;
     --mono: "Space Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
@@ -68,35 +69,15 @@
     background-position: 11px 23px, 97px 61px, 40px 140px, 120px 9px;
     overflow-x: hidden;
   }
-  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px 120px; position: relative; }
+  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 80px; position: relative; }
   a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: var(--pop-pink); }
   a:hover { background: var(--pop-yellow); color: #2A1B4F; text-decoration-color: currentColor; }
   code { font: .85em var(--mono); background: color-mix(in oklab, var(--pop-yellow) 45%, var(--page)); border-radius: 6px; padding: 1px 6px; }
 
-  /* ---- the spine: CHOMPI stacked down the left edge ----------------------- */
-  .spine {
-    position: fixed; left: 18px; top: 50%; translate: 0 -50%;
-    writing-mode: vertical-rl; text-orientation: upright;
-    font: 64px/1 var(--display); letter-spacing: -.12em;
-    pointer-events: none; user-select: none; z-index: 0;
-  }
-  .spine span { display: inline-block; }
-  .spine span:nth-child(1) { color: var(--pop-pink);   rotate: -8deg; }
-  .spine span:nth-child(2) { color: var(--pop-orange); rotate: 6deg; }
-  .spine span:nth-child(3) { color: var(--pop-yellow); rotate: -4deg; -webkit-text-stroke: 2px var(--outline); }
-  .spine span:nth-child(4) { color: var(--pop-green);  rotate: 10deg; }
-  .spine span:nth-child(5) { color: var(--pop-blue);   rotate: -6deg; }
-  .spine span:nth-child(6) { color: var(--pop-violet); rotate: 5deg; }
-
   /* ---- top ---------------------------------------------------------------- */
   .head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 28px 48px; align-items: center; padding-bottom: 40px; position: relative; }
-  .eyebrow {
-    display: inline-block; margin: 0 0 22px;
-    font: 700 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
-    background: var(--pop-yellow); color: #2A1B4F;
-    border: 2.5px solid var(--outline); border-radius: 999px; padding: 7px 14px;
-    rotate: -3deg; box-shadow: 3px 3px 0 var(--outline);
-  }
+  .eyebrow { margin: 0 0 18px; font: 700 13px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
+  .eyebrow a { text-decoration: none; }
   h1 { margin: 0 0 18px; line-height: .9; font-weight: 400; }
   h1 .feed {
     display: inline-block; font: clamp(1.8rem, 5vw, 3rem)/1 var(--display);
@@ -114,7 +95,6 @@
   @media (prefers-reduced-motion: no-preference) {
     h1 .brand span:hover { rotate: 0deg; translate: 0 -12px; }
     @keyframes bob { 50% { translate: 0 -6px; } }
-    .eyebrow { animation: bob 3s ease-in-out infinite; }
   }
   .lede { max-width: 32em; margin: 0 0 14px; font-size: 1.18rem; font-weight: 500; }
   .credit { max-width: 40em; margin: 0; color: var(--text-soft); font-size: .95rem; }
@@ -336,8 +316,19 @@
 
 
   /* ---- the CHOMPI creature: its teeth are keys, it eats what you feed it ---- */
-  .critter { position: relative; display: flex; align-items: flex-end; justify-content: flex-end; gap: 6px; margin: -20px 0 26px; }
-  .critter svg { width: 190px; height: auto; flex: none; overflow: visible; }
+  .critter {
+    position: relative; display: flex; align-items: flex-end; justify-content: flex-end;
+    min-height: 310px; margin: 0 0 30px; padding: 110px 22px 0; overflow: hidden;
+    border: 3px solid var(--outline); box-shadow: 6px 6px 0 var(--outline);
+    background: radial-gradient(circle, color-mix(in oklab, var(--outline) 16%, transparent) 1.4px, transparent 1.8px) 0 0 / 9px 9px,
+      color-mix(in oklab, var(--pop-pink) 32%, var(--page));
+  }
+  .critter svg { width: 190px; height: auto; flex: none; overflow: visible; margin-bottom: -10px; }
+  .caption {
+    position: absolute; left: -3px; bottom: -3px; max-width: 12em;
+    background: var(--pop-yellow); color: #2A1B4F; border: 3px solid var(--outline);
+    padding: 7px 12px; font: 700 .95rem/1.3 "Space Grotesk", sans-serif;
+  }
   .critter .outline { stroke: var(--outline); stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
   .critter .body { fill: var(--pop-orange); }
   .critter .belly { fill: color-mix(in oklab, var(--pop-yellow) 70%, #fff); }
@@ -356,19 +347,17 @@
   .critter .knob-g { transform-origin: 110px 30px; }
   .critter .pupils { transform-origin: 113px 86px; }
 
-  /* what it says, in handwriting */
+  /* what it says: a comic balloon */
   .bubble {
-    position: relative; align-self: flex-start; margin-top: 10px;
-    font: 700 1.55rem/1.05 var(--hand); color: var(--text);
-    background: var(--page); border: 3px solid var(--outline); border-radius: 22px 22px 6px 22px;
-    padding: 10px 16px 12px; rotate: -4deg; max-width: 11em; text-align: center;
-    box-shadow: 4px 4px 0 var(--pop-pink);
+    position: absolute; top: 14px; left: 16px; right: 16px; margin: 0; min-height: 76px;
+    display: grid; place-items: center; text-align: center;
+    background: #fff; color: #2A1B4F; border: 3px solid var(--outline); border-radius: 50%;
+    padding: 12px 26px; font: 1.55rem/1.05 var(--letter);
   }
   .bubble::before { content: "feed me!"; }
   .bubble::after {
-    content: ""; position: absolute; right: -14px; bottom: 6px; width: 18px; height: 14px;
-    background: var(--page); border: solid var(--outline); border-width: 3px 3px 0 0;
-    transform: skewY(30deg); border-radius: 0 4px 0 0;
+    content: ""; position: absolute; left: 66%; bottom: -17px; width: 22px; height: 26px;
+    background: #fff; border: solid var(--outline); border-width: 0 3px 3px 0; rotate: 40deg; skew: 18deg;
   }
   body:has(#step-connect.done) .bubble::before  { content: "hi! got a snack for me?"; }
   body:has(#step-firmware.done) .bubble::before { content: "ooh, tasty… now pick a key"; }
@@ -424,14 +413,12 @@
   .steps > li:nth-child(4)::after { content: "takes a few seconds, promise"; left: 300px; bottom: 44px; rotate: -5deg; }
   .steps > li::after { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF4F9A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   @media (max-width: 760px) {
-    .critter { justify-content: center; margin: 0 0 20px; }
+    .critter { min-height: 270px; }
     .critter svg { width: 150px; }
     .steps > li::after { position: static; display: block; white-space: normal; margin-top: 14px; padding: 0 0 0 52px; background-position: left center; font-size: 1.3rem; }
   }
 
   @media (max-width: 900px) {
-    main { padding-left: 20px; }
-    .spine { position: absolute; left: auto; right: 4px; top: 30px; translate: none; font-size: 40px; opacity: .9; }
   }
   @media (max-width: 760px) {
     .head { grid-template-columns: minmax(0, 1fr); }
@@ -439,7 +426,6 @@
   }
   @media (max-width: 560px) {
     main { padding: 28px 16px 64px; }
-    .spine { font-size: 30px; right: 10px; top: 16px; }
     .steps > li { padding: 24px 18px 20px; rotate: 0deg !important; box-shadow: 5px 5px 0 var(--shadow); }
     .chompi { padding: 10px 8px 12px; border-radius: 14px; }
     .keys { gap: 3px; }
@@ -450,7 +436,6 @@
 </style>
 </head>
 <body>
-<div class="spine" aria-hidden="true"><span>C</span><span>H</span><span>O</span><span>M</span><span>P</span><span>I</span></div>
 <main>
   <div class="head">
     <div>
@@ -463,6 +448,7 @@
     <div>
       <div class="critter" aria-hidden="true">
         <p class="bubble"></p>
+        <span class="caption">Meet CHOMPI. It eats firmware.</span>
         <svg viewBox="0 0 220 210">
           <g class="knob-g"><path class="outline" d="M110 30V12" fill="none"/><circle class="knob outline" cx="110" cy="10" r="9"/></g>
           <rect class="body outline" x="48" y="182" width="38" height="20" rx="9"/>
