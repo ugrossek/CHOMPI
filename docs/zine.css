@@ -11,10 +11,14 @@
   --blue: #0078BF;
   --text: #0B4F86;
   --soft: #4F7FA8;
-  --bad: #D7263D;
-  --cyan: #18C2CF;
-  --amber: #F0A320;
-  --green: #2FB86E;
+  --bad: #E8384F;
+  /* LEDs and firmware colours are printed in riso spot inks: any colour
+     keeps its hue but gets the inks' brightness (--ink-l) and saturation */
+  --cyan: #5EC8E5;
+  --amber: #FFB511;
+  --green: #00A95C;
+  --ink-l: .7;
+  --ink-c: .17;
   --display: "Anton", Impact, sans-serif;
   --type: "Courier Prime", ui-monospace, monospace;
   --hand: "Reenie Beanie", "Comic Sans MS", cursive;
@@ -25,7 +29,7 @@
 }
 @media (prefers-color-scheme: dark) {
   /* printed on dark paper: lighter inks so they still read */
-  :root { --paper: #1F2238; --paper-hi: #262A44; --pink: #FF6FC2; --blue: #5FB4FF; --text: #CFE4FF; --soft: #8FB2DA; --bad: #FF6B7A; color-scheme: dark; }
+  :root { --paper: #1F2238; --paper-hi: #262A44; --pink: #FF6FC2; --blue: #5FB4FF; --text: #CFE4FF; --soft: #8FB2DA; --bad: #FF6B7A; --ink-l: .76; color-scheme: dark; }
 }
 
 * { box-sizing: border-box; }
@@ -215,8 +219,9 @@ button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible
 .key .n { position: absolute; left: 0; right: 0; bottom: 8%; font: 700 clamp(.55rem, 1.5vw, .78rem)/1 var(--type); }
 .key::before {
   content: ""; position: absolute; top: 16%; left: 50%; translate: -50% 0; width: 28%; aspect-ratio: 1;
-  border-radius: 50%; border: 2px solid var(--led, var(--blue)); background: var(--led, transparent);
+  border-radius: 50%; border: 2px solid var(--ink-led, var(--blue)); background: var(--ink-led, transparent);
 }
+.key { --ink-led: oklch(from var(--led) var(--ink-l) var(--ink-c) h); }
 .key[data-busy="send"]  { --led: var(--cyan); }
 .key[data-busy="store"] { --led: var(--amber); }
 .key[data-busy="done"]  { --led: var(--green); }

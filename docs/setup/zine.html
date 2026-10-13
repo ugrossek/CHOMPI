@@ -41,12 +41,15 @@
     body:has(#step-write.done) .critter { animation: hop .6s ease-in-out 3; }
   }
   .steps > li:nth-child(1)::after { content: "keys breathing white = launcher is ready"; right: 40px; bottom: 24px; rotate: -2deg; }
-  .steps > li:nth-child(2)::after { content: "mix & match, it's your CHOMPI"; right: 140px; top: -34px; rotate: 3deg; }
-  .steps > li:nth-child(3)::after { content: "good moment for a coffee"; right: 140px; top: -34px; rotate: -3deg; }
+  .steps > li:nth-child(2)::after { content: "mix & match, it's your CHOMPI"; right: 140px; top: 26px; rotate: 3deg; }
+  .steps > li:nth-child(3)::after { content: "good moment for a coffee"; right: 140px; top: 26px; rotate: -3deg; }
   @media (max-width: 860px) { .steps > li:nth-child(2)::after, .steps > li:nth-child(3)::after { right: 40px; top: auto; bottom: 24px; } }
 
   /* keys show the firmware planned for them */
   .key[data-led] .n { color: var(--text); }
+
+  /* firmware colours in riso ink, see zine.css */
+  .slots li, .slots .swatch, .fw { --ink-sw: oklch(from var(--sw) var(--ink-l) var(--ink-c) h); }
 
   /* ---- the key list: typed rows ----------------------------------------------- */
   .tools { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
@@ -60,7 +63,7 @@
   .slots li.changed { box-shadow: inset 4px 0 0 var(--pink); }
   .slots .kn {
     display: inline-grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
-    border: 2.5px solid var(--blue); background: color-mix(in oklab, var(--sw, transparent) 45%, var(--paper-hi));
+    border: 2.5px solid var(--blue); background: color-mix(in oklab, var(--ink-sw, transparent) 45%, var(--paper-hi));
     font: 700 .82rem/1 var(--type); color: var(--text);
   }
   .slots .what { min-width: 0; }
@@ -75,10 +78,10 @@
       linear-gradient(45deg, transparent 50%, currentColor 50%) right 17px center / 6px 6px no-repeat,
       linear-gradient(-45deg, transparent 50%, currentColor 50%) right 11px center / 6px 6px no-repeat,
       var(--paper-hi);
-    border: 2px solid var(--blue); border-left: 8px solid var(--sw, var(--blue)); padding: 7px 32px 7px 10px;
+    border: 2px solid var(--blue); border-left: 8px solid var(--ink-sw, var(--blue)); padding: 7px 32px 7px 10px;
   }
   .slots select:disabled { color: var(--soft); cursor: default; }
-  .slots .swatch { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .45em; vertical-align: .05em; background: var(--sw, transparent); }
+  .slots .swatch { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: .45em; vertical-align: .05em; background: var(--ink-sw, transparent); }
   .slots .state { grid-column: 2 / -1; font: 700 .82rem/1.4 var(--type); }
   .slots .state:empty { display: none; }
   .slots .state.bad { color: var(--bad); }
@@ -88,7 +91,7 @@
   .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 26px; margin-top: 22px; }
   .fw {
     position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 16px 14px;
-    background: var(--grain), var(--paper-hi); border-top: 6px solid var(--sw);
+    background: var(--grain), var(--paper-hi); border-top: 6px solid var(--ink-sw, var(--blue));
     box-shadow: 0 1px 0 #0001, 2px 3px 0 #0000000f;
   }
   .fw:nth-child(3n+1) { rotate: -1deg; } .fw:nth-child(3n+2) { rotate: .8deg; } .fw:nth-child(3n) { rotate: -.4deg; }
@@ -131,14 +134,16 @@
     <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="warp"/>
     <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.5" result="wobbly"/>
     <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="7" result="spk"/>
-    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -9 0 0 0 5.6" result="holes"/>
+    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -12 0 0 0 7" result="holes"/>
+    <feComponentTransfer in="holes" result="holes"><feFuncA type="linear" slope="0.22" intercept="0.78"/></feComponentTransfer>
     <feComposite in="wobbly" in2="holes" operator="in"/>
   </filter>
   <filter id="ink" x="-5%" y="-5%" width="110%" height="110%">
     <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="warp"/>
     <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.5" result="wobbly"/>
     <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="7" result="spk"/>
-    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -9 0 0 0 6.6" result="holes"/>
+    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -12 0 0 0 7" result="holes"/>
+    <feComponentTransfer in="holes" result="holes"><feFuncA type="linear" slope="0.3" intercept="0.7"/></feComponentTransfer>
     <feComposite in="wobbly" in2="holes" operator="in"/>
   </filter>
   <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="5"/><feDisplacementMap in="SourceGraphic" scale="4"/></filter>
