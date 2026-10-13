@@ -1,0 +1,264 @@
+/* Zine look, shared by the front page and the setup page.
+   A two-ink risograph zine printed a little badly on purpose: fluorescent
+   pink and blue on paper, ink that doesn't quite cover, a fold, a staple.
+   The CHOMPI creature is the only comic part; the instructions stay plain.
+   The ink filters (#ink, #ink-heavy, #rough) are inline SVG in each page. */
+
+:root {
+  --paper: #EFE8D8;
+  --paper-hi: #F6F1E6;
+  --pink: #FF48B0;
+  --blue: #0078BF;
+  --text: #0B4F86;
+  --soft: #4F7FA8;
+  --bad: #D7263D;
+  --cyan: #18C2CF;
+  --amber: #F0A320;
+  --green: #2FB86E;
+  --display: "Anton", Impact, sans-serif;
+  --type: "Courier Prime", ui-monospace, monospace;
+  --hand: "Reenie Beanie", "Comic Sans MS", cursive;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.25  0 0 0 0 0.2  0 0 0 0 0.12  0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+  --fibres: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.15  0 0 0 .12 0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23f)'/%3E%3C/svg%3E");
+  --dots: radial-gradient(circle, color-mix(in oklab, var(--pink) 70%, transparent) 1.6px, transparent 2px) 0 0 / 7px 7px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  /* printed on dark paper: lighter inks so they still read */
+  :root { --paper: #1F2238; --paper-hi: #262A44; --pink: #FF6FC2; --blue: #5FB4FF; --text: #CFE4FF; --soft: #8FB2DA; --bad: #FF6B7A; color-scheme: dark; }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; color: var(--text); font: 17px/1.55 "Archivo", system-ui, sans-serif;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), #0000000d calc(50% - 1px) calc(50% + 1px), #ffffff22 calc(50% + 1px) calc(50% + 3px), transparent calc(50% + 3px)),
+    radial-gradient(ellipse at 50% 30%, transparent 55%, #00000018),
+    var(--grain), var(--fibres), var(--paper);
+}
+main { max-width: 1000px; margin: 0 auto; padding: 40px 20px 80px; }
+a { color: inherit; text-decoration: underline var(--pink) 2px; text-underline-offset: 4px; }
+a:hover { color: var(--pink); }
+code { font: .9em var(--type); background: color-mix(in oklab, var(--pink) 18%, transparent); padding: 0 4px; }
+.ink { filter: url(#ink); }
+h1.ink { filter: url(#ink-heavy); }
+
+/* ---- masthead ------------------------------------------------------------ */
+.issue {
+  display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap;
+  font: 700 13px/1.2 var(--type); text-transform: uppercase; letter-spacing: .1em;
+  border-top: 3px solid var(--blue); border-bottom: 1.5px solid var(--blue); padding: 8px 0; margin-bottom: 22px;
+}
+.issue a { text-decoration: none; }
+.head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px 30px; align-items: center; }
+h1 { position: relative; margin: 0; font: clamp(4rem, 12vw, 8.4rem)/.82 var(--display); text-transform: uppercase; letter-spacing: -.005em; font-weight: 400; }
+h1 .l1 { display: block; color: var(--blue); text-shadow: -4px 3px 0 color-mix(in oklab, var(--pink) 55%, transparent); }
+h1 .l2 { display: block; color: var(--pink); text-shadow: 5px -3px 0 color-mix(in oklab, var(--blue) 45%, transparent); rotate: -1.5deg; }
+.lede { font-size: 1.15rem; max-width: 30em; margin: 22px 0 0; }
+.credit { color: var(--soft); font-size: .95rem; margin: 10px 0 0; max-width: 36em; }
+.facts { font: 700 13px/1.6 var(--type); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 0; }
+
+/* ---- the creature: pink plate under a blue plate, a little off ----------- */
+.star { position: relative; justify-self: center; width: min(310px, 86%); padding-top: 92px; }
+.critter { display: block; width: 100%; height: auto; overflow: visible; }
+.critter .pink { fill: var(--pink); transform: translate(6px, 5px); opacity: .9; }
+.critter .blue { fill: none; stroke: var(--blue); stroke-width: 4.5; stroke-linejoin: round; stroke-linecap: round; }
+.critter .f { fill: var(--blue); }
+.critter .w { fill: var(--paper-hi); }
+.critter .tongue { fill: var(--pink); stroke: none; }
+.critter .lids { fill: var(--pink); stroke: none; transform-origin: 120px 84px; transform: scaleY(0); }
+.critter .happy { opacity: 0; }
+.critter .crumb { fill: var(--pink); stroke: var(--blue); stroke-width: 2.5; opacity: 0; }
+.critter .mouth { transform-origin: 120px 122px; }
+.critter .pupils { transform-origin: 122px 89px; }
+.critter .mouth, .critter .pupils { transition: transform .25s cubic-bezier(.5, 1.8, .5, 1); }
+
+/* what it says: a hand-drawn balloon */
+.balloon { position: absolute; top: 0; left: -12px; width: 230px; height: 100px; display: grid; place-items: center; padding: 6px 26px 22px 30px; }
+.balloon svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: url(#rough); }
+.balloon path { fill: var(--paper-hi); stroke: var(--pink); stroke-width: 3; }
+.balloon .say { position: relative; font: 30px/.95 var(--hand); color: var(--blue); text-align: center; }
+.balloon .say::before { content: "feed me!"; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .critter .lids { animation: blink 5s infinite; }
+  @keyframes blink { 0%, 93%, 100% { transform: scaleY(0); } 96% { transform: scaleY(1); } }
+  .critter { animation: sway 4.5s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes sway { 50% { rotate: -2.5deg; } }
+  @keyframes chew { from { transform: scaleY(.45); } to { transform: scaleY(1.6); } }
+  @keyframes munch { to { scale: 1.04 .96; } }
+  @keyframes hop { 50% { translate: 0 -14px; } }
+}
+
+/* ---- the warning: a photocopied slip, stapled ----------------------------- */
+.slip {
+  position: relative; margin: 14px 0 0; rotate: 1.2deg;
+  background: var(--grain), var(--paper-hi);
+  padding: 18px 22px 16px; font: 15px/1.5 var(--type);
+  box-shadow: 0 1px 0 #0001, 2px 3px 0 #0000000f;
+}
+.slip + .slip { rotate: -1deg; margin-top: 18px; }
+.slip b, .slip strong { color: var(--pink); text-transform: uppercase; letter-spacing: .08em; }
+.slip strong { display: block; margin-bottom: 4px; }
+.slip p { margin: 0 0 8px; } .slip p:last-child { margin: 0; }
+.slip::before { content: ""; position: absolute; top: 10px; left: 16px; width: 34px; height: 6px; border: 2px solid #8A8F96; border-bottom: 0; rotate: -8deg; border-radius: 2px 2px 0 0; }
+#demo-note { background: var(--grain), color-mix(in oklab, var(--blue) 14%, var(--paper-hi)); }
+#demo-note strong { color: var(--blue); }
+
+/* ---- steps: torn-edge cards with a rubber stamp --------------------------- */
+ol.steps { list-style: none; margin: 70px 0 0; padding: 0; display: grid; gap: 70px; counter-reset: step; }
+.steps > li {
+  position: relative; padding: 34px 32px 30px; border: 2px solid var(--blue);
+  background: var(--dots), var(--paper);
+  counter-increment: step;
+}
+/* halftone only in one corner, fading out */
+.steps > li::before {
+  content: ""; position: absolute; inset: 0; background: var(--grain), var(--paper);
+  -webkit-mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 110px, #000 340px);
+  mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 110px, #000 340px);
+}
+.steps > li:nth-child(even)::before {
+  -webkit-mask: radial-gradient(circle at 0 100%, transparent 0, transparent 110px, #000 340px);
+  mask: radial-gradient(circle at 0 100%, transparent 0, transparent 110px, #000 340px);
+}
+.steps > li > * { position: relative; }
+.steps h2 {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin: 0 0 12px; padding-right: 110px;
+  font: 400 clamp(1.8rem, 4.4vw, 2.5rem)/1 var(--display); text-transform: uppercase; color: var(--blue);
+  text-shadow: -3px 2px 0 color-mix(in oklab, var(--pink) 50%, transparent);
+  filter: url(#ink);
+}
+/* the step number is a rubber stamp in the top right corner */
+.steps h2 .num {
+  position: absolute; right: -6px; top: -14px; rotate: -12deg;
+  width: 96px; height: 96px; border-radius: 50%; border: 4px double var(--pink);
+  display: grid; place-content: center; text-align: center; color: var(--pink); text-shadow: none;
+  font: 2.6rem/.9 var(--display);
+}
+.steps h2 .num::before { content: "step"; display: block; font: 700 11px/1.2 var(--type); letter-spacing: .14em; text-transform: uppercase; }
+/* done: a second stamp lands on top */
+.steps > li.done h2 .num::after {
+  content: "OK"; position: absolute; inset: 22px -12px auto -10px; rotate: 24deg;
+  font: 1.5rem/1 var(--display); letter-spacing: .08em; color: var(--blue);
+  border: 3px solid var(--blue); border-radius: 4px; padding: 2px 0 0; background: color-mix(in oklab, var(--paper) 50%, transparent);
+}
+#step-connect[data-conn="off"]  { --conn: var(--bad); }
+#step-connect[data-conn="busy"] { --conn: var(--amber); }
+#step-connect[data-conn="on"]   { --conn: var(--green); }
+.steps h2 .conn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 700 12px/1 var(--type); letter-spacing: .08em; text-transform: uppercase; color: var(--text); text-shadow: none;
+  border: 1.5px dashed var(--blue); padding: 5px 9px;
+}
+.steps h2 .conn::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--conn); }
+.steps .inner { padding: 0; }
+.steps p { margin: 0 0 14px; max-width: 40em; }
+.hint { color: var(--soft); font-size: .95rem; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+/* handwritten notes in the margins, set per page with content: "…" */
+.steps > li::after {
+  position: absolute; z-index: 1; pointer-events: none;
+  font: 2rem/1 var(--hand); color: var(--pink); white-space: nowrap;
+  padding-bottom: 32px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 34'%3E%3Cpath d='M42 4C30 6 14 10 9 28M3 22l6 7 7-5' fill='none' stroke='%23FF48B0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") left bottom / 44px 32px no-repeat;
+}
+
+/* ---- buttons -------------------------------------------------------------- */
+button.act, a.act, label.act {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; text-decoration: none;
+  font: 400 1.3rem/1 var(--display); text-transform: uppercase; letter-spacing: .04em;
+  color: var(--paper-hi); background: var(--blue); padding: 13px 26px; box-shadow: 5px 4px 0 var(--pink);
+  rotate: -1deg; transition: translate .08s, box-shadow .08s;
+}
+button.act:not(:disabled):hover, label.act:hover { translate: -2px -2px; box-shadow: 7px 6px 0 var(--pink); }
+button.act:not(:disabled):active { translate: 3px 3px; box-shadow: 2px 1px 0 var(--pink); }
+button.act.big { font-size: 1.7rem; padding: 16px 38px; margin: 6px 0 16px; }
+button.act:disabled { opacity: .35; cursor: not-allowed; }
+label.act { background: var(--pink); box-shadow: 5px 4px 0 var(--blue); }
+label.act:hover { box-shadow: 7px 6px 0 var(--blue); }
+label.act:focus-within { outline: 3px dashed var(--pink); outline-offset: 4px; }
+button.soft {
+  font: 700 .95rem/1.2 var(--type); color: var(--text); background: transparent; cursor: pointer;
+  border: 2px solid var(--blue); padding: 7px 14px; text-transform: uppercase; letter-spacing: .04em;
+}
+button.soft:not(:disabled):hover { background: color-mix(in oklab, var(--pink) 22%, transparent); }
+button.soft:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible { outline: 3px dashed var(--pink); outline-offset: 3px; }
+
+.result { margin-top: 14px; font: 700 1rem/1.45 var(--type); }
+.result.bad { color: var(--bad); }
+.warn { color: var(--bad); font-weight: 700; }
+
+/* ---- the instrument: printed keys ------------------------------------------ */
+.chompi { margin: 6px 0 18px; padding: 14px; border: 2px dashed var(--blue); }
+.screen {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; margin-bottom: 14px; padding: 6px 12px;
+  font: 700 14px/1.4 var(--type); color: var(--text);
+  border-bottom: 2px solid var(--blue); background: color-mix(in oklab, var(--blue) 8%, transparent);
+}
+.screen .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--blue); flex: none; }
+.screen[data-mood="ok"]   .dot { background: var(--cyan);  border-color: var(--cyan); }
+.screen[data-mood="busy"] .dot { background: var(--amber); border-color: var(--amber); }
+.screen[data-mood="bad"]  .dot { background: var(--bad);   border-color: var(--bad); }
+.keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 7px; }
+.key {
+  position: relative; appearance: none; margin: 0; padding: 0; aspect-ratio: 1; cursor: pointer;
+  border: 2.5px solid var(--blue); border-radius: 5px; background: var(--paper-hi); color: var(--blue);
+  font: inherit; transition: translate .1s, rotate .1s;
+}
+.key:disabled { cursor: default; }
+.key:not(:disabled):hover { background: color-mix(in oklab, var(--pink) 16%, var(--paper-hi)); }
+.key .n { position: absolute; left: 0; right: 0; bottom: 8%; font: 700 clamp(.55rem, 1.5vw, .78rem)/1 var(--type); }
+.key::before {
+  content: ""; position: absolute; top: 16%; left: 50%; translate: -50% 0; width: 28%; aspect-ratio: 1;
+  border-radius: 50%; border: 2px solid var(--led, var(--blue)); background: var(--led, transparent);
+}
+.key[data-busy="send"]  { --led: var(--cyan); }
+.key[data-busy="store"] { --led: var(--amber); }
+.key[data-busy="done"]  { --led: var(--green); }
+.key[data-busy="fail"]  { --led: var(--bad); }
+.key[aria-pressed="true"] { background: radial-gradient(circle, var(--pink) 1.3px, transparent 1.7px) 0 0 / 5px 5px, var(--paper-hi); rotate: -5deg; translate: 0 -4px; }
+.key.changed .n::after { content: "*"; color: var(--pink); }
+@media (prefers-reduced-motion: no-preference) {
+  .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write .9s ease-in-out infinite alternate; }
+  @keyframes write { to { opacity: .35; } }
+}
+
+/* ---- fields ----------------------------------------------------------------- */
+.field { display: grid; gap: 6px; font: 700 12px/1 var(--type); letter-spacing: .1em; text-transform: uppercase; }
+input[type="text"] {
+  font: 700 1.05rem var(--type); color: var(--text); background: transparent; letter-spacing: .04em; text-transform: uppercase;
+  border: 0; border-bottom: 2.5px dashed var(--blue); padding: 6px 2px; width: 13em;
+}
+.chosen { font: 700 .95em var(--type); background: color-mix(in oklab, var(--pink) 25%, transparent); padding: 0 4px; }
+
+/* ---- log, footer ---------------------------------------------------------- */
+details.log { margin-top: 60px; }
+details.log summary { cursor: pointer; font: 700 13px var(--type); letter-spacing: .08em; text-transform: uppercase; }
+details.log pre { max-height: 280px; overflow: auto; font: .78rem var(--type); background: var(--paper-hi); border: 1.5px dashed var(--blue); padding: 12px; white-space: pre-wrap; word-break: break-all; }
+footer { margin-top: 28px; border-top: 3px solid var(--blue); padding-top: 16px; font: 14px/1.6 var(--type); }
+footer p { max-width: 52em; margin: 0 0 6px; }
+
+@media (max-width: 760px) {
+  .head { grid-template-columns: minmax(0, 1fr); }
+  .star { width: min(260px, 80%); }
+}
+@media (max-width: 560px) {
+  main { padding: 28px 16px 64px; }
+  .steps > li::before { -webkit-mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 40px, #000 150px); mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 40px, #000 150px); }
+  .steps > li:nth-child(even)::before { -webkit-mask: radial-gradient(circle at 0 100%, transparent 0, transparent 40px, #000 150px); mask: radial-gradient(circle at 0 100%, transparent 0, transparent 40px, #000 150px); }
+  .steps > li { padding: 30px 16px 22px; }
+  .steps h2 { padding-right: 76px; }
+  .steps h2 .num { width: 74px; height: 74px; font-size: 2rem; right: -4px; }
+  .steps h2 .num::before { font-size: 9px; }
+  .steps > li::after { position: static; display: block; white-space: normal; margin-top: 14px; padding: 0 0 0 50px; background-position: left center; font-size: 1.7rem; }
+  .chompi { padding: 8px; }
+  .keys { gap: 3px; }
+  .key { border-width: 1.5px; border-radius: 3px; }
+  .key::before { top: 3px; width: 56%; height: 4px; aspect-ratio: auto; border-radius: 2px; border-width: 1px; }
+  .key .n { bottom: 14%; }
+}
