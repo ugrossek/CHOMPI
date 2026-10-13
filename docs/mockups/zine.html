@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mockup E: dirty zine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Courier+Prime:wght@400;700&family=Archivo:wght@400;600&family=Reenie+Beanie&display=swap" rel="stylesheet">
+<style>
+  /* Mockup E: the riso zine, printed worse on purpose. Ink that doesn't
+     quite cover, rough edges, heavy paper grain, a fold, a staple. Comic
+     only where the creature is: it talks in balloons and peeks in. The
+     instructions themselves stay plain. */
+  :root {
+    --paper: #EFE8D8;
+    --pink: #FF48B0;
+    --blue: #0078BF;
+    --text: #0B4F86;
+    --soft: #4F7FA8;
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.25  0 0 0 0 0.2  0 0 0 0 0.12  0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+    --fibres: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.15  0 0 0 .12 0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23f)'/%3E%3C/svg%3E");
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1F2238; --pink: #FF6FC2; --blue: #5FB4FF; --text: #CFE4FF; --soft: #8FB2DA; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--text); font: 17px/1.55 "Archivo", system-ui, sans-serif;
+    background:
+      linear-gradient(90deg, transparent calc(50% - 1px), #0000000d calc(50% - 1px) calc(50% + 1px), #ffffff22 calc(50% + 1px) calc(50% + 3px), transparent calc(50% + 3px)),
+      radial-gradient(ellipse at 50% 40%, transparent 55%, #00000018),
+      var(--grain), var(--fibres), var(--paper);
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 20px 80px; }
+  a { color: inherit; text-decoration: underline var(--pink) 2px; text-underline-offset: 4px; }
+  /* everything printed goes through the ink filter */
+  .ink { filter: url(#ink); }
+  h1.ink { filter: url(#ink-heavy); }
+  .rough { filter: url(#rough); }
+
+  .issue {
+    display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    font: 700 13px/1 "Courier Prime", monospace; text-transform: uppercase; letter-spacing: .1em;
+    border-top: 3px solid var(--blue); border-bottom: 1.5px solid var(--blue); padding: 8px 0; margin-bottom: 22px;
+  }
+  .cover { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px 30px; align-items: center; }
+  h1 { position: relative; margin: 0; font: clamp(4.4rem, 13vw, 9rem)/.82 "Anton", Impact, sans-serif; text-transform: uppercase; letter-spacing: -.005em; }
+  h1 .l1 { display: block; color: var(--blue); text-shadow: -4px 3px 0 color-mix(in oklab, var(--pink) 55%, transparent); }
+  h1 .l2 { display: block; color: var(--pink); text-shadow: 5px -3px 0 color-mix(in oklab, var(--blue) 45%, transparent); rotate: -1.5deg; }
+  .lede { font-size: 1.15rem; max-width: 30em; margin: 22px 0 0; }
+  .credit { color: var(--soft); font-size: .95rem; margin: 10px 0 0; }
+
+  /* the creature and its balloon */
+  .star { position: relative; justify-self: center; width: min(310px, 86%); padding-top: 70px; }
+  .balloon { position: absolute; top: 0; left: -10px; width: 210px; height: 92px; }
+  .balloon path { fill: var(--paper); stroke: var(--pink); stroke-width: 3; }
+  .balloon text { font: 34px "Reenie Beanie", cursive; fill: var(--blue); }
+
+  /* riso creature: pink plate shifted under the blue plate */
+  .critter { width: 100%; height: auto; overflow: visible; }
+  .critter .pink { fill: var(--pink); transform: translate(6px, 5px); opacity: .9; }
+  .critter .blue { fill: none; stroke: var(--blue); stroke-width: 4.5; stroke-linejoin: round; stroke-linecap: round; }
+  .critter .blue .f { fill: var(--blue); }
+  .critter .blue .w { fill: var(--paper); }
+  .critter .blue .shine { fill: var(--paper); stroke: none; }
+
+  /* the warning: a photocopied slip, stapled */
+  .slip {
+    position: relative; margin: 30px 0 0 auto; max-width: 31em; rotate: 1.4deg;
+    background: var(--grain), color-mix(in oklab, var(--paper) 92%, #fff);
+    padding: 18px 22px 16px; font: 15px/1.5 "Courier Prime", monospace;
+    box-shadow: 0 1px 0 #0001, 2px 3px 0 #0000000f;
+  }
+  .slip b { color: var(--pink); text-transform: uppercase; letter-spacing: .08em; }
+  .staple { position: absolute; top: 10px; left: 16px; width: 34px; height: 6px; border: 2px solid #8A8F96; border-bottom: 0; rotate: -8deg; border-radius: 2px 2px 0 0; }
+
+  /* a step: torn page, halftone fade, rubber stamp, creature peeking in */
+  .step-wrap { position: relative; margin-top: 90px; }
+  .step {
+    position: relative; padding: 34px 32px 30px;
+    background:
+      radial-gradient(circle, color-mix(in oklab, var(--pink) 70%, transparent) 1.6px, transparent 2px) 0 0 / 7px 7px,
+      var(--paper);
+    border: 2px solid var(--blue);
+  }
+  /* halftone only in the bottom-right corner, fading out */
+  .step::before { content: ""; position: absolute; inset: 0; background: var(--paper); -webkit-mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 120px, #000 360px); mask: radial-gradient(circle at 100% 100%, transparent 0, transparent 120px, #000 360px); }
+  .step > * { position: relative; }
+  .stamp {
+    position: absolute; right: 26px; top: 20px; rotate: -12deg;
+    width: 100px; height: 100px; border-radius: 50%; border: 4px double var(--pink);
+    display: grid; place-items: center; text-align: center; color: var(--pink);
+    font: 700 11px/1 "Courier Prime", monospace; letter-spacing: .14em; text-transform: uppercase;
+  }
+  .stamp big { display: block; font: 2.7rem/.9 "Anton", sans-serif; letter-spacing: 0; }
+  h2 { margin: 0 0 10px; font: 2.4rem/1 "Anton", sans-serif; text-transform: uppercase; color: var(--blue); max-width: 70%; text-shadow: -3px 2px 0 color-mix(in oklab, var(--pink) 50%, transparent); }
+  .step p { max-width: 36em; margin: 0 0 16px; }
+  .peek { position: absolute; left: -26px; top: -78px; width: 120px; rotate: -10deg; }
+  .peek .balloon2 { position: absolute; left: 104px; top: -14px; width: 190px; height: 70px; }
+  .peek .balloon2 path { fill: var(--paper); stroke: var(--pink); stroke-width: 3; }
+  .peek .balloon2 text { font: 28px "Reenie Beanie", cursive; fill: var(--blue); }
+
+  .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 7px; margin: 18px 0 18px; }
+  .key {
+    position: relative; aspect-ratio: 1; border: 2.5px solid var(--blue); border-radius: 5px; background: var(--paper);
+    font: 700 12px "Courier Prime", monospace; color: var(--blue); display: grid; place-items: end center; padding-bottom: 3px;
+  }
+  .key::before { content: ""; position: absolute; top: 18%; left: 50%; translate: -50% 0; width: 28%; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--blue); }
+  .key.on::before { background: var(--pink); border-color: var(--pink); }
+  .key.sel { background: radial-gradient(circle, var(--pink) 1.3px, transparent 1.7px) 0 0 / 5px 5px, var(--paper); rotate: -5deg; translate: 0 -4px; }
+  .field { font: 700 12px "Courier Prime", monospace; letter-spacing: .1em; text-transform: uppercase; display: grid; gap: 6px; }
+  input { font: 700 1.05rem "Courier Prime", monospace; color: var(--text); background: transparent; border: 0; border-bottom: 2.5px dashed var(--blue); padding: 6px 2px; width: 12em; }
+  .btn { display: inline-block; margin-top: 22px; font: 1.6rem/1 "Anton", sans-serif; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--paper); background: var(--blue); padding: 14px 32px; box-shadow: 6px 5px 0 var(--pink); border: 0; rotate: -1deg; }
+
+  /* mascot casting */
+  .casting { margin-top: 80px; border-top: 3px solid var(--blue); padding-top: 14px; }
+  .casting h3 { margin: 0 0 4px; font: 2rem/1 "Anton", sans-serif; text-transform: uppercase; color: var(--pink); }
+  .casting > p { margin: 0 0 20px; font: 15px "Courier Prime", monospace; }
+  .cast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+  .cast figure { margin: 0; text-align: center; }
+  .cast figcaption { font: 2rem/1 "Reenie Beanie", cursive; color: var(--blue); margin-top: 6px; }
+  .cast .critter { max-width: 220px; }
+
+  @media (max-width: 700px) {
+    .cover { grid-template-columns: 1fr; }
+    .keys { gap: 3px; } .key { font-size: 9px; border-width: 1.5px; }
+    h2 { font-size: 1.9rem; max-width: 62%; }
+    .stamp { width: 76px; height: 76px; right: 12px; } .stamp big { font-size: 2rem; }
+    .step { padding: 30px 18px 24px; }
+    .peek { width: 90px; top: -60px; left: -8px; }
+    .cast { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- ink that doesn't quite cover: wobbly edges plus small holes -->
+  <filter id="ink-heavy" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.5" result="wobbly"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="7" result="spk"/>
+    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -9 0 0 0 5.6" result="holes"/>
+    <feComposite in="wobbly" in2="holes" operator="in"/>
+  </filter>
+
+  <filter id="ink" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="3" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.5" result="wobbly"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="7" result="spk"/>
+    <feColorMatrix in="spk" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -9 0 0 0 6.6" result="holes"/>
+    <feComposite in="wobbly" in2="holes" operator="in"/>
+  </filter>
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="5"/><feDisplacementMap in="SourceGraphic" scale="4"/></filter>
+</svg>
+<main>
+  <div class="issue ink"><span>CHOMPI firmwares</span><span>issue 01 · one at a time</span><span>made by the community</span></div>
+  <div class="cover">
+    <div>
+      <h1 class="ink"><span class="l1">Feed the</span><span class="l2">CHOMPI</span></h1>
+      <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away.</p>
+      <p class="credit">Builds on the <a href="#">multi-firmware launcher</a> by <a href="#">@sfaber02</a>.</p>
+    </div>
+    <div class="star">
+      <svg class="balloon rough" viewBox="0 0 210 92" aria-hidden="true"><path d="M20 40c0-24 40-34 86-34s92 10 92 34-40 34-80 34c-8 0-14 0-20-1l-24 16 6-19C40 66 20 56 20 40z"/><text x="58" y="50">feed me!</text></svg>
+      <svg class="critter ink" viewBox="0 0 240 230" aria-hidden="true"><g class="pink"><rect x="30" y="30" width="180" height="162" rx="48"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><circle cx="120" cy="12" r="9"/><ellipse cx="62" cy="134" rx="14" ry="8"/><ellipse cx="178" cy="134" rx="14" ry="8"/></g><g class="blue"><path d="M120 30V21"/><circle cx="120" cy="12" r="9"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><path d="M32 122c-14 4-16 22-4 26M208 122c14 4 16 22 4 26"/><rect x="30" y="30" width="180" height="162" rx="48"/><ellipse class="f" cx="88" cy="106" rx="16" ry="18"/><ellipse class="f" cx="152" cy="106" rx="16" ry="18"/><circle class="shine" cx="94" cy="99" r="6"/><circle class="shine" cx="158" cy="99" r="6"/><circle class="shine" cx="83" cy="114" r="2.6"/><circle class="shine" cx="147" cy="114" r="2.6"/><rect class="f" x="84" y="136" width="72" height="22" rx="11"/><rect class="w" x="88" y="130" width="14" height="14" rx="3"/><rect class="w" x="104" y="130" width="14" height="14" rx="3"/><rect class="w" x="122" y="130" width="14" height="14" rx="3"/><rect class="w" x="138" y="130" width="14" height="14" rx="3"/></g></svg>
+    </div>
+  </div>
+  <div class="slip"><span class="staple"></span><b>Use at your own risk.</b> Unofficial community project, not made or supported by CHOMPI Club. It writes to your SD card, so back it up first. If something goes wrong, switch CHOMPI off and on.</div>
+
+  <div class="step-wrap">
+    <div class="peek">
+      <svg class="critter ink" viewBox="0 0 240 230" aria-hidden="true"><g class="pink"><rect x="30" y="30" width="180" height="162" rx="48"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><circle cx="120" cy="12" r="9"/><ellipse cx="62" cy="134" rx="14" ry="8"/><ellipse cx="178" cy="134" rx="14" ry="8"/></g><g class="blue"><path d="M120 30V21"/><circle cx="120" cy="12" r="9"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><path d="M32 122c-14 4-16 22-4 26M208 122c14 4 16 22 4 26"/><rect x="30" y="30" width="180" height="162" rx="48"/><ellipse class="f" cx="88" cy="106" rx="16" ry="18"/><ellipse class="f" cx="152" cy="106" rx="16" ry="18"/><circle class="shine" cx="94" cy="99" r="6"/><circle class="shine" cx="158" cy="99" r="6"/><circle class="shine" cx="83" cy="114" r="2.6"/><circle class="shine" cx="147" cy="114" r="2.6"/><rect class="f" x="84" y="136" width="72" height="22" rx="11"/><rect class="w" x="88" y="130" width="14" height="14" rx="3"/><rect class="w" x="104" y="130" width="14" height="14" rx="3"/><rect class="w" x="122" y="130" width="14" height="14" rx="3"/><rect class="w" x="138" y="130" width="14" height="14" rx="3"/></g></svg>
+      <svg class="balloon2 rough" viewBox="0 0 190 70" aria-hidden="true"><path d="M14 32c0-18 34-26 80-26s84 8 84 26-34 26-74 26c-10 0-18 0-26-2L44 68l8-14C30 50 14 42 14 32z"/><text x="34" y="40">which key?</text></svg>
+    </div>
+    <section class="step">
+      <div class="stamp ink"><div>step<big>3</big>of 4</div></div>
+      <h2 class="ink">Pick a slot and a name</h2>
+      <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+      <div class="keys ink"><span class="key on">1</span><span class="key on">2</span><span class="key on">3</span><span class="key">4</span><span class="key sel">5</span><span class="key">6</span><span class="key">7</span><span class="key">8</span><span class="key">9</span><span class="key">10</span><span class="key">11</span><span class="key">12</span><span class="key">13</span><span class="key">14</span><span class="key on">15</span></div>
+      <label class="field">Name on the card <input value="TAPE-DEV"></label>
+      <button class="btn ink">Send it</button>
+    </section>
+  </div>
+
+  <section class="casting">
+    <h3 class="ink">Mascot casting</h3>
+    <p>Same print, three creatures. Which one gets the job?</p>
+    <div class="cast">
+      <figure><svg class="critter ink" viewBox="0 0 240 230" aria-hidden="true"><g class="pink"><rect x="30" y="30" width="180" height="162" rx="42"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><circle cx="120" cy="12" r="9"/><ellipse cx="120" cy="143" rx="26" ry="5"/></g><g class="blue"><path d="M120 30V21"/><circle cx="120" cy="12" r="9"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><path d="M32 122c-14 4-16 22-4 26M208 122c14 4 16 22 4 26"/><rect x="30" y="30" width="180" height="162" rx="42"/><circle class="w" cx="90" cy="84" r="20"/><circle class="w" cx="150" cy="84" r="20"/><circle class="f" cx="94" cy="89" r="8"/><circle class="f" cx="154" cy="89" r="8"/><rect class="f" x="66" y="122" width="108" height="26" rx="13"/><rect class="w" x="72" y="114" width="17" height="17" rx="4"/><rect class="w" x="92" y="114" width="17" height="17" rx="4"/><rect class="w" x="112" y="114" width="17" height="17" rx="4"/><rect class="w" x="132" y="114" width="17" height="17" rx="4"/><rect class="w" x="152" y="114" width="17" height="17" rx="4"/></g></svg><figcaption>1 · the original</figcaption></figure>
+      <figure><svg class="critter ink" viewBox="0 0 240 230" aria-hidden="true"><g class="pink"><rect x="30" y="30" width="180" height="162" rx="48"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><circle cx="120" cy="12" r="9"/><ellipse cx="62" cy="134" rx="14" ry="8"/><ellipse cx="178" cy="134" rx="14" ry="8"/></g><g class="blue"><path d="M120 30V21"/><circle cx="120" cy="12" r="9"/><rect x="58" y="184" width="38" height="20" rx="9"/><rect x="144" y="184" width="38" height="20" rx="9"/><path d="M32 122c-14 4-16 22-4 26M208 122c14 4 16 22 4 26"/><rect x="30" y="30" width="180" height="162" rx="48"/><ellipse class="f" cx="88" cy="106" rx="16" ry="18"/><ellipse class="f" cx="152" cy="106" rx="16" ry="18"/><circle class="shine" cx="94" cy="99" r="6"/><circle class="shine" cx="158" cy="99" r="6"/><circle class="shine" cx="83" cy="114" r="2.6"/><circle class="shine" cx="147" cy="114" r="2.6"/><rect class="f" x="84" y="136" width="72" height="22" rx="11"/><rect class="w" x="88" y="130" width="14" height="14" rx="3"/><rect class="w" x="104" y="130" width="14" height="14" rx="3"/><rect class="w" x="122" y="130" width="14" height="14" rx="3"/><rect class="w" x="138" y="130" width="14" height="14" rx="3"/></g></svg><figcaption>2 · in between</figcaption></figure>
+      <figure><svg class="critter ink" viewBox="0 0 240 230" aria-hidden="true"><g class="pink"><rect x="32" y="52" width="196" height="160" rx="54"/><ellipse cx="90" cy="212" rx="20" ry="11"/><ellipse cx="170" cy="212" rx="20" ry="11"/><ellipse cx="62" cy="160" rx="15" ry="9"/><ellipse cx="198" cy="160" rx="15" ry="9"/></g><g class="blue"><path d="M94 62V36q0-14 14-14h44q14 0 14 14v26" style="stroke-width:9"/><ellipse cx="90" cy="212" rx="20" ry="11"/><ellipse cx="170" cy="212" rx="20" ry="11"/><path d="M36 150q-14 6-10 22M224 150q14 6 10 22"/><rect x="32" y="52" width="196" height="160" rx="54"/><ellipse class="f" cx="90" cy="132" rx="19" ry="21"/><ellipse class="f" cx="170" cy="132" rx="19" ry="21"/><circle class="shine" cx="97" cy="123" r="7"/><circle class="shine" cx="177" cy="123" r="7"/><circle class="shine" cx="84" cy="142" r="3.2"/><circle class="shine" cx="164" cy="142" r="3.2"/><path d="M114 158q16 16 32 0"/><rect class="w" x="120" y="160" width="9" height="11" rx="2"/><rect class="w" x="131" y="160" width="9" height="11" rx="2"/></g></svg><figcaption>3 · the cute one</figcaption></figure>
+    </div>
+  </section>
+</main>
+</body>
+</html>
