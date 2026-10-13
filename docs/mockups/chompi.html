@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mockup D: made of CHOMPI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Mockup D: the page is drawn in CHOMPI's own language. Light mode is the
+     pink edition, dark mode the black one with gold. White line drawings
+     link things like the traces on the panel; gold-ringed LEDs; a keybed
+     with black and white keys; purple wheel, teal and yellow keycaps. */
+  :root {
+    --room: #E4E1DE;          /* the table it stands on */
+    --panel: #EFA79E;         /* pink edition */
+    --panel-edge: #D98A80;
+    --line: #FFF7F0;          /* the white drawings */
+    --gold: #F4E3A1;
+    --text: #3A2626;
+    --text-soft: #6E4A47;
+    --led-p: #A77BFF; --led-g: #6FE08A; --led-y: #FFD34D; --led-r: #FF6A4D; --led-b: #7CC8FF;
+    --wheel: #A98BE8;
+    --teal: #2EC4D6;
+    --yellow: #F2C230;
+    --red: #EE6A50;
+    --keyw: #F4F2EE; --keyb: #1E1E20;
+    --notch: #B9A6F5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --room: #2A2C30; --panel: #151515; --panel-edge: #000;
+      --line: #E9E4DA; --gold: #C9A24E; --text: #EDE7DC; --text-soft: #A9A196;
+      color-scheme: dark;
+    }
+    .handle { border-color: #3A3A3D; }
+    .critter .hd { stroke: #4A4A4E; } .critter .ft { fill: #3A3A3D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--room); color: var(--text); font: 17px/1.55 "Jost", system-ui, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 60px 18px 80px; }
+  a { color: inherit; text-decoration-color: var(--gold); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+
+  /* the device: handle on top, screws, the panel */
+  .device { position: relative; margin-top: 40px; }
+  .handle {
+    position: absolute; left: 50%; translate: -50% 0; top: -46px; width: 34%; height: 70px;
+    border: 18px solid #232325; border-bottom: 0; border-radius: 22px 22px 0 0;
+  }
+  .panel {
+    position: relative; background: var(--panel); border-radius: 6px; padding: 34px 38px 34px;
+    box-shadow: 0 10px 0 var(--panel-edge), 0 24px 40px #0003;
+  }
+  .screw { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #2A2A2C; }
+  .screw.a { top: 12px; left: 12px; } .screw.b { top: 12px; right: 12px; } .screw.c { bottom: 12px; left: 12px; } .screw.d { bottom: 12px; right: 12px; }
+
+  /* the LED row doubles as the step indicator */
+  .leds { display: flex; gap: 26px; align-items: center; margin-bottom: 26px; }
+  .led { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--gold); background: #0002; }
+  .led.on { background: var(--c); box-shadow: 0 0 10px 2px var(--c); }
+  .leds small { font: 600 12px/1 "Jost", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--text-soft); margin-left: auto; }
+
+  .head { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px 30px; align-items: center; }
+  h1 { margin: 0; font: 700 clamp(2.6rem, 7vw, 4.6rem)/.95 "Jost", sans-serif; letter-spacing: -.02em; color: var(--line); }
+  h1 .brand { display: block; color: var(--text); }
+  @media (prefers-color-scheme: dark) { h1 .brand { color: var(--gold); } }
+  .lede { margin: 16px 0 0; max-width: 28em; font-size: 1.1rem; }
+  .credit { margin: 8px 0 0; color: var(--text-soft); font-size: .95rem; }
+
+  /* our creature: a tiny CHOMPI with a handle, keys for teeth */
+  .critter { width: 100%; max-width: 260px; height: auto; overflow: visible; justify-self: center; }
+  .critter .hd { fill: none; stroke: #232325; stroke-width: 12; stroke-linecap: round; }
+  .critter .bd { fill: var(--red); stroke: var(--line); stroke-width: 4; }
+  .critter .pu { fill: #232325; }
+  .critter .arm { fill: none; stroke: var(--red); stroke-width: 12; stroke-linecap: round; }
+  .critter .tilt { transform-origin: 120px 210px; rotate: -4deg; }
+  .critter .gl { fill: var(--c); stroke: var(--gold); stroke-width: 2.5; }
+  .critter .mo { fill: none; stroke: #232325; stroke-width: 5; stroke-linecap: round; }
+  .critter .tw { fill: #fff; stroke: #232325; stroke-width: 2.5; }
+  .critter .tb { fill: var(--keyb); }
+  .critter .ft { fill: #232325; }
+  .critter .cheek { fill: #FF8FA3; opacity: .9; }
+  @media (prefers-reduced-motion: no-preference) {
+    .critter .pupils { animation: look 6s ease-in-out infinite; }
+    @keyframes look { 0%, 40%, 100% { transform: translate(0, 0); } 50%, 80% { transform: translate(-3px, 2px); } }
+    .critter .tilt { animation: tilt 5s ease-in-out infinite; }
+    @keyframes tilt { 50% { rotate: 4deg; } }
+  }
+  /* a white trace from the creature to what it says */
+  .says { position: relative; display: inline-block; margin-top: 8px; padding: 8px 14px; border: 2.5px solid var(--line); border-radius: 12px; font: 600 1.05rem/1.2 "Jost", sans-serif; color: var(--line); }
+  .says::before { content: ""; position: absolute; right: 100%; top: 50%; width: 40px; height: 30px; border: solid var(--line); border-width: 0 0 2.5px 2.5px; border-radius: 0 0 0 12px; translate: 0 -100%; }
+
+  .warn { margin-top: 28px; display: flex; gap: 14px; align-items: flex-start; font-size: .95rem; border-top: 2px solid var(--line); padding-top: 16px; }
+  .warn svg { flex: none; width: 28px; height: 28px; }
+
+  /* a step: a line-drawn frame with a gold inner rule, like the knob groups */
+  .step { margin-top: 70px; }
+  .frame { position: relative; border: 2.5px solid var(--line); border-radius: 18px; padding: 28px 26px 24px; }
+  .frame::before { content: ""; position: absolute; inset: 6px; border: 1.5px solid var(--gold); border-radius: 13px; pointer-events: none; }
+  .frame h2 { position: absolute; top: -16px; left: 22px; margin: 0; padding: 0 10px; background: var(--panel); font: 700 1.35rem/1.2 "Jost", sans-serif; display: flex; gap: 10px; align-items: center; }
+  .frame h2 .n { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--gold); font-size: 1rem; background: var(--c); color: #222; }
+  .frame p { margin: 6px 0 14px; max-width: 38em; }
+
+  /* the keybed, black keys in groups of 2-3-2-3 like on CHOMPI */
+  .keybed { display: grid; grid-template-columns: repeat(15, 1fr); gap: 5px; margin: 14px 0 4px; }
+  .blacks { display: grid; grid-template-columns: repeat(15, 1fr); gap: 5px; margin-top: 8px; }
+  .bk { grid-row: 1; translate: 55% 0; height: 34px; background: var(--keyb); border-radius: 4px; box-shadow: 0 3px 0 #000; position: relative; }
+  .wk { aspect-ratio: .82; background: var(--keyw); border-radius: 4px; box-shadow: 0 4px 0 #BDB8B0; position: relative; }
+  .wk::before, .bk::before { content: ""; position: absolute; top: 7px; left: 50%; translate: -50% 0; width: 34%; height: 5px; border-radius: 3px; background: color-mix(in oklab, var(--notch) 40%, #ddd); }
+  .bk::before { background: #444; }
+  .wk.on::before { background: var(--led); box-shadow: 0 0 8px 2px var(--led); }
+  .wk.sel { translate: 0 3px; box-shadow: 0 1px 0 #BDB8B0; }
+  .nums { display: grid; grid-template-columns: repeat(15, 1fr); gap: 5px; text-align: center; font: 500 13px/1.8 "Jost", sans-serif; color: var(--line); }
+  .row { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
+  label { font: 600 12px/1 "Jost", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--text-soft); display: grid; gap: 8px; }
+  input { font: 600 1.05rem "Jost", sans-serif; letter-spacing: .06em; color: var(--text); background: transparent; border: 2.5px solid var(--line); border-radius: 10px; padding: 8px 12px; width: 11em; }
+  .cap { display: inline-flex; gap: 10px; align-items: center; border: 0; border-radius: 6px; padding: 14px 22px; font: 700 1.05rem/1 "Jost", sans-serif; color: #1E1E20; cursor: pointer;
+    background: var(--teal); box-shadow: 0 5px 0 color-mix(in oklab, var(--teal) 60%, #000), inset 0 1px 0 #fff6; }
+  .cap.y { background: var(--yellow); box-shadow: 0 5px 0 color-mix(in oklab, var(--yellow) 60%, #000), inset 0 1px 0 #fff6; }
+  .wheelbtn { width: 86px; height: 86px; border-radius: 50%; border: 0; background: radial-gradient(circle at 60% 30%, #fff5 0 10%, transparent 11%), var(--wheel); box-shadow: 0 5px 0 color-mix(in oklab, var(--wheel) 55%, #000); font: 700 .8rem/1.1 "Jost", sans-serif; color: #1E1E20; letter-spacing: .06em; text-transform: uppercase; }
+
+  @media (max-width: 720px) {
+    .panel { padding: 26px 16px; }
+    .head { grid-template-columns: 1fr; }
+    .critter { max-width: 180px; }
+    .leds { gap: 14px; }
+    .keybed, .blacks, .nums { gap: 2px; }
+    .bk { height: 20px; } .nums { font-size: 9px; }
+    .handle { width: 50%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="device">
+    <div class="handle"></div>
+    <div class="panel">
+      <span class="screw a"></span><span class="screw b"></span><span class="screw c"></span><span class="screw d"></span>
+      <div class="leds" aria-label="Step 3 of 4">
+        <span class="led on" style="--c: var(--led-p)"></span><span class="led on" style="--c: var(--led-g)"></span><span class="led on" style="--c: var(--led-y)"></span><span class="led" style="--c: var(--led-r)"></span>
+        <small>CHOMPI firmwares · one at a time</small>
+      </div>
+      <div class="head">
+        <div>
+          <h1>Feed the <span class="brand">CHOMPI</span></h1>
+          <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away.</p>
+          <p class="credit">Builds on the <a href="#">multi-firmware launcher</a> by <a href="#">@sfaber02</a>.</p>
+        </div>
+        <div style="display:grid; justify-items:center">
+          <svg class="critter" viewBox="0 0 240 230" aria-hidden="true">
+            <g class="tilt">
+            <path class="hd" d="M84 62V36q0-14 14-14h44q14 0 14 14v26"/>
+            <ellipse class="ft" cx="80" cy="212" rx="20" ry="11"/><ellipse class="ft" cx="160" cy="212" rx="20" ry="11"/>
+            <path class="arm" d="M26 150q-14 6-10 22M214 150q14 6 10 22"/>
+            <rect class="bd" x="22" y="52" width="196" height="160" rx="54"/>
+            <circle class="gl" cx="96" cy="76" r="5" style="--c:#A77BFF"/><circle class="gl" cx="120" cy="72" r="5" style="--c:#6FE08A"/><circle class="gl" cx="144" cy="76" r="5" style="--c:#FFD34D"/>
+            <g class="pupils">
+              <ellipse class="pu" cx="80" cy="132" rx="19" ry="21"/><ellipse class="pu" cx="160" cy="132" rx="19" ry="21"/>
+              <circle cx="87" cy="123" r="7" fill="#fff"/><circle cx="167" cy="123" r="7" fill="#fff"/>
+              <circle cx="74" cy="142" r="3.2" fill="#fff"/><circle cx="154" cy="142" r="3.2" fill="#fff"/>
+            </g>
+            <ellipse class="cheek" cx="52" cy="160" rx="15" ry="9"/><ellipse class="cheek" cx="188" cy="160" rx="15" ry="9"/>
+            <path class="mo" d="M104 158q16 16 32 0"/>
+            <rect class="tw" x="110" y="160" width="9" height="11" rx="2"/><rect class="tw" x="121" y="160" width="9" height="11" rx="2"/>
+            </g>
+          </svg>
+          <span class="says">feed me!</span>
+        </div>
+      </div>
+      <div class="warn">
+        <svg viewBox="0 0 28 28"><path d="M14 3l12 21H2z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 11v6M14 20.5v.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        <p style="margin:0">Unofficial community project, not made or supported by CHOMPI Club. It writes to your SD card, so back it up first. If something goes wrong, switch CHOMPI off and on.</p>
+      </div>
+
+      <section class="step">
+        <div class="frame">
+          <h2><span class="n" style="--c: var(--led-y)">3</span>Pick a slot and a name</h2>
+          <p>Press a key below. Whatever is in that slot now will be replaced.</p>
+          <div class="blacks"><span class="bk" style="grid-column:1"></span><span class="bk" style="grid-column:2"></span><span class="bk" style="grid-column:4"></span><span class="bk" style="grid-column:5"></span><span class="bk" style="grid-column:6"></span><span class="bk" style="grid-column:8"></span><span class="bk" style="grid-column:9"></span><span class="bk" style="grid-column:11"></span><span class="bk" style="grid-column:12"></span><span class="bk" style="grid-column:13"></span></div>
+          <div class="keybed"><span class="wk on" style="--led:#A77BFF"></span><span class="wk on" style="--led:#FFD34D"></span><span class="wk on" style="--led:#7CC8FF"></span><span class="wk"></span><span class="wk sel"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk"></span><span class="wk on" style="--led:#6FE08A"></span></div>
+          <div class="nums"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span></div>
+          <div class="row">
+            <label>Name on the card <input value="TAPE-DEV"></label>
+            <button class="cap">▶ Send</button>
+            <button class="wheelbtn">Connect</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+</body>
+</html>
