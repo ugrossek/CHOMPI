@@ -49,10 +49,20 @@ namespace chompi
         }
 
         /** call once per audio block, before processing any voice */
-        static inline void NewBlock(size_t block_size)
+        static inline void NewBlock(size_t block_size) { Budget() = int(block_size) * kSearchPerSample; }
+
+        /** Read-ahead only spends CPU the audio callback leaves over. Call once
+         *  per audio block, before the voices run, with the last block's load
+         *  (time in the callback / block period). Its read-ahead is in that load,
+         *  so the budget settles where the load meets the target; above the
+         *  limit there is none, and notes start as if without read-ahead. */
+        static void PlanReadAhead(size_t block_size, float load)
         {
-            Budget()      = int(block_size) * kSearchPerSample;
-            PrimeBudget() = int(block_size) * kPrimePerSample;
+            const int used = PrimeGiven() - std::max(PrimeBudget(), 0);
+            int next = used + int((kPrimeTargetLoad - load) * kPrimeFullLoad * int(block_size));
+            if(load > kPrimeMaxLoad)
+                next = 0;
+            PrimeGiven() = PrimeBudget() = std::min(std::max(next, 0), int(block_size) * kPrimePerSample);
         }
 
         /** Read-ahead: shifting up reads faster than real time, so a new note
@@ -127,7 +137,10 @@ namespace chompi
         static constexpr int    kSearch    = 320; // +/- search around the jump
         static constexpr int    kLagStep   = int(kAnaDecim); // one analysis sample
         static constexpr int    kSearchPerSample = 2; // candidates per sample, all voices together
-        static constexpr int    kPrimePerSample  = 16; // read-ahead frames per sample, all voices together
+        static constexpr int    kPrimePerSample  = 16; // most read-ahead frames per sample, all voices together
+        static constexpr int    kPrimeFullLoad   = 25; // read-ahead frames that take about one sample period (guess, on the safe side)
+        static constexpr float  kPrimeTargetLoad = .7f;
+        static constexpr float  kPrimeMaxLoad    = .85f;
         static constexpr float  kSearchSamps = (2 * kSearch) / kLagStep + 1;
         static constexpr float  kDLo = kCorrLen + 8;         // shortest delay a tap may reach
         static constexpr float  kDHi = 2 * kGrain + kSearch + kCorrLen; // longest
@@ -325,6 +338,13 @@ namespace chompi
         {
             static int budget = 0;
             return budget;
+        }
+
+        /** the read-ahead budget this block started with */
+        static int &PrimeGiven()
+        {
+            static int given = 0;
+            return given;
         }
 
         int16_t *buf_;

@@ -385,6 +385,10 @@ namespace daisy
         /** the streaming FIFO ran dry */
         inline bool Starved() { return read_samps.GetNumElements() < 16 && !using_ram; }
 
+        /** read-ahead leaves a streamed sample's FIFO at least half full, so the
+         *  card has its usual time to refill it */
+        inline bool ReadAheadRoom() { return using_ram || read_samps.GetNumElements() > kMaxFileStreamingSamps / 2; }
+
         /** moves the source on by one frame, at original speed (pitch is handled
          *  by shifter_), running the click, loop and reverse envelopes */
         inline void StepSource(float env_sig)
@@ -545,7 +549,7 @@ namespace daisy
                      *  future is right here, so feed the shifter ahead instead */
                     if(!deferred_trig && click_clear == 0)
                     {
-                        for(size_t n = shifter_.Hunger(ratio); n > 0 && !Starved(); n--)
+                        for(size_t n = shifter_.Hunger(ratio); n > 0 && ReadAheadRoom(); n--)
                         {
                             StepSource(env_sig);
                             float al, ar;
