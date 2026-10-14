@@ -49,22 +49,40 @@ namespace chompi
         }
 
         /** call once per audio block, before processing any voice */
-        static inline void NewBlock(size_t block_size) { Budget() = int(block_size) * kSearchPerSample; }
+        static inline void NewBlock(size_t block_size)
+        {
+            Budget()      = int(block_size) * kSearchPerSample;
+            PrimeBudget() = int(block_size) * kPrimePerSample;
+        }
+
+        /** Read-ahead: shifting up reads faster than real time, so a new note
+         *  needs some history before it can sound. A source that knows its
+         *  future (a sample) can Feed() that many frames ahead instead of
+         *  waiting. Returns how many to feed now, limited by a per-block
+         *  budget all voices share. */
+        size_t Hunger(float ratio)
+        {
+            if(primed_ || ratio <= 1.f || PrimeBudget() <= 0)
+                return 0;
+            const size_t need = PrimeFrames(daisysp::fclamp(ratio, kMinRatio, kMaxRatio));
+            return need > filled_ ? std::min(need - filled_, size_t(PrimeBudget())) : 0;
+        }
+
+        /** writes one frame of input without producing output (see Hunger) */
+        void Feed(float l, float r)
+        {
+            PrimeBudget()--;
+            Write(l, r);
+            if(filled_ < kShiftBufFrames)
+                filled_++;
+            d0_ = filled_; // still the note's start, as while waiting in Advance
+            w_  = (w_ + 1) & kMask;
+        }
 
         /** @param ratio pitch ratio, 1.0 = unchanged, 2.0 = octave up */
         void Process(float ratio, float *l, float *r)
         {
-            buf_[2 * w_]     = ToS16(*l);
-            buf_[2 * w_ + 1] = ToS16(*r);
-
-            // every kAnaDecim frames, store their average (mono) for the search
-            acc_ += *l + *r;
-            if((w_ & (kAnaDecim - 1)) == kAnaDecim - 1)
-            {
-                const float v = daisysp::fclamp(acc_ * (32767.f / (2 * kAnaDecim)), -32767.f, 32767.f);
-                ana_[w_ / kAnaDecim] = int16_t(v);
-                acc_ = 0.f;
-            }
+            Write(*l, *r);
 
             // at exactly 1.0 there's nothing to do, so fade to dry
             const float target = fabsf(ratio - 1.f) < .003f ? 0.f : 1.f;
@@ -109,28 +127,56 @@ namespace chompi
         static constexpr int    kSearch    = 320; // +/- search around the jump
         static constexpr int    kLagStep   = int(kAnaDecim); // one analysis sample
         static constexpr int    kSearchPerSample = 2; // candidates per sample, all voices together
+        static constexpr int    kPrimePerSample  = 16; // read-ahead frames per sample, all voices together
         static constexpr float  kSearchSamps = (2 * kSearch) / kLagStep + 1;
         static constexpr float  kDLo = kCorrLen + 8;         // shortest delay a tap may reach
         static constexpr float  kDHi = 2 * kGrain + kSearch + kCorrLen; // longest
 
         enum class State { IDLE, SEARCH, FADE };
 
+        void Write(float l, float r)
+        {
+            buf_[2 * w_]     = ToS16(l);
+            buf_[2 * w_ + 1] = ToS16(r);
+
+            // every kAnaDecim frames, store their average (mono) for the search
+            acc_ += l + r;
+            if((w_ & (kAnaDecim - 1)) == kAnaDecim - 1)
+            {
+                const float v = daisysp::fclamp(acc_ * (32767.f / (2 * kAnaDecim)), -32767.f, 32767.f);
+                ana_[w_ / kAnaDecim] = int16_t(v);
+                acc_ = 0.f;
+            }
+        }
+
+        // shifting up, the tap closes in on "now": above 2x the crossfade is
+        // shortened so it always uses the same delay, and the jump grows so
+        // every splice gains more room than the search and fade use up
+        static inline float FadeUse(float rr) { return rr > 1.f ? kFade * fminf(rr - 1.f, 1.f) : 0.f; }
+        static inline float Margin(float rr) { return kSearchSamps * fabsf(1.f - rr); }
+        static inline int   JumpUp(float rr)
+        {
+            return std::max(kGrain, int(FadeUse(rr) + .5f * Margin(rr)) + kSearch + 64);
+        }
+
+        /** history a note needs before shifting up can start */
+        static inline size_t PrimeFrames(float rr)
+        {
+            return size_t(kDLo + FadeUse(rr) + Margin(rr) + JumpUp(rr));
+        }
+
         void Advance(float rr)
         {
-            const float inc    = 1.f - rr; // delay change per output sample
-            const float margin = kSearchSamps * fabsf(inc);
-
-            // shifting up, the tap closes in on "now": above 2x the crossfade is
-            // shortened so it always uses the same delay, and the jump grows so
-            // every splice gains more room than the search and fade use up
-            const float fade_use = rr > 1.f ? kFade * fminf(rr - 1.f, 1.f) : 0.f;
-            const int   jump_up  = std::max(kGrain, int(fade_use + .5f * margin) + kSearch + 64);
+            const float inc      = 1.f - rr; // delay change per output sample
+            const float margin   = Margin(rr);
+            const float fade_use = FadeUse(rr);
+            const int   jump_up  = JumpUp(rr);
 
             if(!primed_)
             {
                 // shifting up reads faster than real time: collect some history
-                // first, then start at the beginning of the note
-                if(rr > 1.f && filled_ < size_t(kDLo + fade_use + margin + jump_up))
+                // first (or get it fed ahead), then start at the beginning of the note
+                if(rr > 1.f && filled_ < PrimeFrames(rr))
                 {
                     d0_ = filled_; // reads silence until primed
                     return;
@@ -269,6 +315,13 @@ namespace chompi
 
         /** search candidates left in this audio block, shared by all voices */
         static int &Budget()
+        {
+            static int budget = 0;
+            return budget;
+        }
+
+        /** read-ahead frames left in this audio block, shared by all voices */
+        static int &PrimeBudget()
         {
             static int budget = 0;
             return budget;

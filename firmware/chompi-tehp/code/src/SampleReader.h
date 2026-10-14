@@ -382,6 +382,121 @@ namespace daisy
         /** Reads the next data available in the local FIFO */
         int16_t PopSample() { return 0; }
 
+        /** the streaming FIFO ran dry */
+        inline bool Starved() { return read_samps.GetNumElements() < 16 && !using_ram; }
+
+        /** moves the source on by one frame, at original speed (pitch is handled
+         *  by shifter_), running the click, loop and reverse envelopes */
+        inline void StepSource(float env_sig)
+        {
+            rpos_frac_ += 1.f;
+            if (rpos_frac_ >= 1.f)
+            {
+                /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
+                uint32_t samp_stride = (uint32_t)rpos_frac_;
+                rpos_frac_ -= samp_stride;
+
+                for (uint32_t i = 0; i < samp_stride; i++)
+                {
+                    // click envelope (for when the voice interrupts itself)
+                    click_env += click_dec;
+
+                    if(click_dec < 0.f)
+                    {
+                        if(click_env <= 0.f || (env_sig < .01f && deferred_trig))
+                        {
+                            click_dec = .004f;
+
+                            if(deferred_trig)
+                            {
+                                env_.Retrigger(false); // deferred env retrigger
+                                env_gate_ = true;
+                                deferred_trig = false;
+                            }
+                            
+                            if(using_ram)
+                            {
+                                click_clear = 0;
+                                JumpToStart();
+                            }
+
+                            read_samps.PopFrontMany(click_clear);
+                            varispeed_counter = 0;
+                            varispeed_factor = varispeed_target;
+
+                            if(!using_ram)
+                                click_clear = 0;
+                        }
+                    }
+                    click_env = daisysp::fclamp(click_env, 0.f, 1.f);
+                    click_clear -= 2;
+                    if(click_clear <= 0)
+                    {
+                        using_ram = using_ram_target;
+                        click_clear = 0;
+                    }
+
+                    // loop envelope (for when the voice loops over the end)
+                    if(loop_env_delay == 0)
+                    {
+                        loop_env += loop_env_dec;
+                        if(loop_env < 0.f)
+                        {
+                            loop_env = 0.f;
+                            loop_env_dec = fabsf(loop_env_dec);
+
+                            if(using_ram && auto_loop)
+                                JumpToStart();
+                        }
+                    }
+                    else
+                    {
+                        loop_env_delay--;
+                    }
+                    loop_env = daisysp::fclamp(loop_env, 0.f, 1.f);
+
+                    rev_env += rev_env_dec;
+                    if(rev_env < 0.f)
+                    {
+                        rev_env_dec = fabsf(rev_env_dec);
+                    }
+                    rev_env = daisysp::fclamp(rev_env, 0.f, 1.f);
+                    rev_wait = rev_wait >= 2 ? 2 : rev_wait + 1;
+
+                    varispeed_counter = varispeed_counter == 0 ? 0 : varispeed_counter - 1;
+                    if(varispeed_counter == 0)
+                        varispeed_factor = varispeed_target;
+
+                    // update samples, B become A, and A get popped from FIFO
+                    read_left_a_ = read_left_b_;
+                    read_right_a_ = read_right_b_;
+
+                    if(using_ram)
+                    {
+                        ram_buff.StereoRead(&read_left_b_, &read_right_b_, reverse_);
+                    }
+                    else
+                    {
+                        read_left_b_ = read_samps.PopFront();
+                        read_right_b_ = read_samps.PopFront();
+                    }
+                }
+            }
+        }
+
+        /** the current source frame, envelopes applied */
+        inline void SourceFrame(float *sl, float *sr)
+        {
+            /** linear interpolation */
+            float tl = read_left_a_ + (read_left_b_ - read_left_a_) * rpos_frac_;
+            float tr = read_right_a_ + (read_right_b_ - read_right_a_) * rpos_frac_;                
+
+            // click/loop/rev envs mask jumps in the source, so they go before the shifter
+            const float pre = click_env * loop_env * rev_env;
+            *sl = s162f(tl) * pre;
+            *sr = s162f(tr) * pre;
+        }
+
         void PopStereoSamps(float *l, float *r)
         {
             float env_sig = env_.Process(env_gate_);
@@ -407,8 +522,7 @@ namespace daisy
             if(pan_r_ < .01f && pan_r_target_ < .01f)
                 pan_r_ = 0.f;
 
-            if (((read_samps.GetNumElements() < 16 && !using_ram) 
-                || env_sig < .001f)
+            if ((Starved() || env_sig < .001f)
                 && !deferred_trig
             )
             {
@@ -417,112 +531,28 @@ namespace daisy
             }
             else
             {
-                /** always read at original speed, pitch is handled by shifter_ */
-                rpos_frac_ += 1.f;
-                if (rpos_frac_ >= 1.f)
-                {
-                    /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
-                    uint32_t samp_stride = (uint32_t)rpos_frac_;
-                    rpos_frac_ -= samp_stride;
-
-                    for (uint32_t i = 0; i < samp_stride; i++)
-                    {
-                        // click envelope (for when the voice interrupts itself)
-                        click_env += click_dec;
-
-                        if(click_dec < 0.f)
-                        {
-                            if(click_env <= 0.f || (env_sig < .01f && deferred_trig))
-                            {
-                                click_dec = .004f;
-
-                                if(deferred_trig)
-                                {
-                                    env_.Retrigger(false); // deferred env retrigger
-                                    env_gate_ = true;
-                                    deferred_trig = false;
-                                }
-                                
-                                if(using_ram)
-                                {
-                                    click_clear = 0;
-                                    JumpToStart();
-                                }
-
-                                read_samps.PopFrontMany(click_clear);
-                                varispeed_counter = 0;
-                                varispeed_factor = varispeed_target;
-
-                                if(!using_ram)
-                                    click_clear = 0;
-                            }
-                        }
-                        click_env = daisysp::fclamp(click_env, 0.f, 1.f);
-                        click_clear -= 2;
-                        if(click_clear <= 0)
-                        {
-                            using_ram = using_ram_target;
-                            click_clear = 0;
-                        }
-
-                        // loop envelope (for when the voice loops over the end)
-                        if(loop_env_delay == 0)
-                        {
-                            loop_env += loop_env_dec;
-                            if(loop_env < 0.f)
-                            {
-                                loop_env = 0.f;
-                                loop_env_dec = fabsf(loop_env_dec);
-
-                                if(using_ram && auto_loop)
-                                    JumpToStart();
-                            }
-                        }
-                        else
-                        {
-                            loop_env_delay--;
-                        }
-                        loop_env = daisysp::fclamp(loop_env, 0.f, 1.f);
-
-                        rev_env += rev_env_dec;
-                        if(rev_env < 0.f)
-                        {
-                            rev_env_dec = fabsf(rev_env_dec);
-                        }
-                        rev_env = daisysp::fclamp(rev_env, 0.f, 1.f);
-                        rev_wait = rev_wait >= 2 ? 2 : rev_wait + 1;
-
-                        varispeed_counter = varispeed_counter == 0 ? 0 : varispeed_counter - 1;
-                        if(varispeed_counter == 0)
-                            varispeed_factor = varispeed_target;
-
-                        // update samples, B become A, and A get popped from FIFO
-                        read_left_a_ = read_left_b_;
-                        read_right_a_ = read_right_b_;
-
-                        if(using_ram)
-                        {
-                            ram_buff.StereoRead(&read_left_b_, &read_right_b_, reverse_);
-                        }
-                        else
-                        {
-                            read_left_b_ = read_samps.PopFront();
-                            read_right_b_ = read_samps.PopFront();
-                        }
-                    }
-                }
+                StepSource(env_sig);
 
                 if(rev_wait == 2)
                 {
-                    /** linear interpolation */
-                    float tl = read_left_a_ + (read_left_b_ - read_left_a_) * rpos_frac_;
-                    float tr = read_right_a_ + (read_right_b_ - read_right_a_) * rpos_frac_;                
+                    float sl, sr;
+                    SourceFrame(&sl, &sr);
+                    const float ratio = varispeed_factor * global_pitch;
+                    shifter_.Process(ratio, &sl, &sr);
 
-                    // click/loop/rev envs mask jumps in the source, so they go before the shifter
-                    const float pre = click_env * loop_env * rev_env;
-                    float sl = s162f(tl) * pre;
-                    float sr = s162f(tr) * pre;
-                    shifter_.Process(varispeed_factor * global_pitch, &sl, &sr);
+                    /** TEHP read-ahead: shifting up reads faster than the sample
+                     *  comes in, so a new note would wait for history. The sample's
+                     *  future is right here, so feed the shifter ahead instead */
+                    if(!deferred_trig && click_clear == 0)
+                    {
+                        for(size_t n = shifter_.Hunger(ratio); n > 0 && !Starved(); n--)
+                        {
+                            StepSource(env_sig);
+                            float al, ar;
+                            SourceFrame(&al, &ar);
+                            shifter_.Feed(al, ar);
+                        }
+                    }
 
                     const float post = env_sig * velocity * gain_;
                     *l = sl * post * pan_l_;
