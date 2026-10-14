@@ -7,13 +7,13 @@
 export const PROTOCOL_VERSION = 1;
 
 const HEADER = [0xF0, 0x7D, 0x43, 0x48];
-export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, RUN = 0x05, LIST = 0x06, CLEAR = 0x07;
+export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, RUN = 0x05, LIST = 0x06, CLEAR = 0x07, COLOR = 0x08;
 /** Where the test launchers 1.4.0 - 1.4.2 had them, before 05 went to RUN. */
 const OLD_LIST = 0x05, OLD_CLEAR = 0x06;
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
-export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8, RUN: 16 };
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8, RUN: 16, COLOR: 32 };
 /** BEGIN's slot for a new launcher (FEATURE.LAUNCHER). */
 export const LAUNCHER_SLOT = 127;
 const END_STAY = 1;
@@ -155,18 +155,30 @@ export class Launcher {
     return { version, maxChunk: get7(r.slice(2, 6)), slots: r[6], features, launcherVersion };
   }
 
-  /** LIST and CLEAR replies name their slot; failures are the status only. */
+  /** LIST, CLEAR and COLOR replies name their slot; failures are the status only. */
   static #forSlot(slot) {
     return (r) => r[0] !== 0 || r.length < 2 || r[1] === slot;
   }
 
-  /** What is on a key: { file, size }, file "" if the key is empty. */
+  /** What is on a key: { file, size, color }, file "" if the key is empty.
+   *  color is the key's colour as "#RRGGBB" (FEATURE.COLOR), else null. */
   async list(slot) {
     const r = await this.call(this.cmd.LIST, [slot], { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
     Launcher.#check(r);
     const n = r[2];
     const file = String.fromCharCode(...r.slice(3, 3 + n));
-    return { file, size: n ? get7(r.slice(3 + n, 7 + n)) : 0 };
+    const rgb = r.length >= 10 + n ? [...r.slice(7 + n, 10 + n)] : null;
+    const color = n && rgb ? "#" + rgb.map((c) => ((c << 1) | (c >> 6)).toString(16).padStart(2, "0").toUpperCase()).join("") : null;
+    return { file, size: n ? get7(r.slice(3 + n, 7 + n)) : 0, color };
+  }
+
+  /** Set the colour a key breathes in, "#RRGGBB" (FEATURE.COLOR). The key
+   *  must hold a firmware; "#000000" goes back to the launcher's own. */
+  async color(slot, hex) {
+    const v = parseInt(hex.slice(1), 16);
+    const payload = [slot, (v >> 17) & 0x7F, (v >> 9) & 0x7F, (v >> 1) & 0x7F];
+    const r = await this.call(COLOR, payload, { timeout: 2000, retries: 3, match: Launcher.#forSlot(slot) });
+    Launcher.#check(r);
   }
 
   /** Empty a key. With `file` (what list() reported there), only that file
