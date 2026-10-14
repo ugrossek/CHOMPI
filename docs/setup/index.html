@@ -403,9 +403,11 @@ const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.in
 const NEEDED = FEATURE.LIST | FEATURE.CLEAR | FEATURE.STAY;
 const SLOTS = 15;
 const CATALOG_FAILED = "Couldn't load the list of firmwares. Check your internet connection and reload the page.";
-/* one colour per firmware, for its key's LED; launchers from 1.6 show it on CHOMPI too */
-const SWATCH = ["#FF9431", "#FF5C7C", "#3FAEFF", "#39D27E", "#B57BFF", "#FFD23F",
-                "#18D2DF", "#FF7AD9", "#9BE15D", "#FF6B3D", "#7AA2FF", "#E0C097"];
+/* One colour per firmware, for its key's LED; launchers from 1.6 show it on
+   CHOMPI too. The list gives each firmware its own; one without gets a spare
+   from these, spread out so they are easy to tell apart on the LEDs. */
+const SWATCH = ["#FF8A00", "#FF2D2D", "#FFD600", "#9CFF00", "#00D15A", "#00D5E0",
+                "#2F6BFF", "#8A4DFF", "#E62EE6", "#FF6FAE", "#FFE3B0", "#A8D8FF"];
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -461,7 +463,13 @@ async function loadCatalog() {
   state.catalog = data.firmwares;
   state.newLauncher = data.launcher || null;
   if (data.launcher) $("launcher-download").href = data.launcher.file;
-  state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
+  const taken = new Set(state.catalog.map((f) => f.color).filter(Boolean));
+  const spare = SWATCH.filter((c) => !taken.has(c));
+  let next = 0;
+  for (const f of state.catalog) {
+    if (!/^#[0-9A-F]{6}$/i.test(f.color || "")) f.color = (spare.length ? spare : SWATCH)[next++ % (spare.length || SWATCH.length)];
+    state.byId[f.id] = f;
+  }
 }
 
 /** Which catalogue firmware a file on the card is, by name and size:
@@ -840,7 +848,7 @@ $("update-launcher").addEventListener("click", async () => {
     state.info = null;
     $("launcher-update").hidden = true;
     $("step-connect").classList.remove("done");
-    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then start breathing again. This page reconnects by itself.";
+    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then start breathing again. This page reconnects by itself. If the keys stay one colour without breathing for more than half a minute, switch CHOMPI off and on.";
     screen(msg, "busy");
     show("connect-result", msg);
   } catch (e) {
