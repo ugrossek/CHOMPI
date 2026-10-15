@@ -5,6 +5,11 @@
 #include "temp_led_stuff.h"
 #include "FileCopier.h"
 
+#ifdef TEHP_DIAG
+extern volatile uint32_t tehp_starved_at;
+extern float tehp_load_avg, tehp_load_peak;
+#endif
+
 namespace chompi
 {
         static const uint8_t cc_map[3][6] = {
@@ -681,6 +686,35 @@ namespace chompi
             } 
 
             SetPthLedFloat(led_map[5], r, g, b);
+
+#ifdef TEHP_DIAG
+            /* test builds: audio load on the white keys, low C = 0, high C =
+               100%: a dim bar for the average, one red key for the peak of
+               the last 2 s. The bar is blue while a key's sample ran dry in
+               the last 2 s. White key w (0 = low C) is LED 24 - w. */
+            {
+                static float    peak_hold = 0.f;
+                static uint32_t peak_t    = 0;
+                if(now - peak_t > 2000)
+                {
+                    peak_hold = ::tehp_load_peak;
+                    ::tehp_load_peak = 0.f;
+                    peak_t = now;
+                }
+                const bool  dry  = now - ::tehp_starved_at < 2000 && ::tehp_starved_at != 0;
+                const float peak = fmaxf(peak_hold, ::tehp_load_peak);
+                const int   peak_key = int(fminf(peak, .9999f) * 15.f);
+                for(int w = 0; w < 15; w++)
+                {
+                    if(w == peak_key)
+                        SetSmtLedFloat(24 - w, 1.f, 0.f, 0.f);
+                    else if(w / 15.f < ::tehp_load_avg)
+                        SetSmtLedFloat(24 - w, dry ? 0.f : .2f, dry ? 0.f : .2f, dry ? 1.f : .2f);
+                    else
+                        SetSmtLedFloat(24 - w, 0.f, 0.f, dry ? .15f : 0.f);
+                }
+            }
+#endif
 
             // ========   send the data   =========
             fill_led_data();

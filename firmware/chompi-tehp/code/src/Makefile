@@ -29,6 +29,12 @@ USE_FATFS = 1
 LIBDAISY_DIR = $(CHOMPI_LIBS)/libDaisy
 DAISYSP_DIR = $(CHOMPI_LIBS)/DaisySP
 
+# test builds: `make DIAG=1` shows the audio load on the white keys, blue
+# when a key's sample ran dry (SD card too slow)
+ifeq ($(DIAG),1)
+C_DEFS += -DTEHP_DIAG
+endif
+
 # Core location, and generic Makefile
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile

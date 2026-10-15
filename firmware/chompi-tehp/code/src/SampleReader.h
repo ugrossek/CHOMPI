@@ -7,6 +7,10 @@
 #include "RamBuffer.h"
 #include "PitchShifter.h"
 
+#ifdef TEHP_DIAG
+extern volatile uint32_t tehp_starved_at; // chompi_main.cpp
+#endif
+
 namespace daisy
 {
 
@@ -528,6 +532,17 @@ namespace daisy
             if(pan_r_ < .01f && pan_r_target_ < .01f)
                 pan_r_ = 0.f;
 
+#ifdef TEHP_DIAG
+            // a playing sample's stream ran dry mid-way (not at its end)
+            if(!Starved())
+                fed_ = true;
+            else if(fed_ && env_.IsRunning() && !OTE())
+            {
+                tehp_starved_at = System::GetNow();
+                fed_ = false;
+            }
+#endif
+
             if ((Starved() || env_sig < .001f)
                 && !deferred_trig
             )
@@ -850,6 +865,9 @@ namespace daisy
 
                 env_.Retrigger(false);
                 shifter_.Reset();
+#ifdef TEHP_DIAG
+                fed_ = false;
+#endif
 
                 if(!is_buffered)
                 {
@@ -945,6 +963,9 @@ namespace daisy
         float global_pitch;
         float length_, speed_;
         uint32_t varispeed_counter;
+#ifdef TEHP_DIAG
+        bool fed_ = false;
+#endif
 
         bool reverse_;
         float rev_env = 1.f;

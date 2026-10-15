@@ -92,8 +92,15 @@ FileCopier copier;
  *  Channel 4 - Master R
  */
 bool line_in_state;
+#ifdef TEHP_DIAG
+volatile uint32_t tehp_starved_at = 0;
+float tehp_load_avg = 0.f, tehp_load_peak = 0.f;
+#endif
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
+#ifdef TEHP_DIAG
+    const uint32_t block_start = System::GetTick();
+#endif
     // meter.OnBlockStart();
     if(booting && !ui.InTestMode())
     {
@@ -132,6 +139,13 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     }
     else
         engine.Process(in, out, size);
+
+#ifdef TEHP_DIAG
+    static const float ticks_per_sample = float(System::GetTickFreq()) / hw.seed.AudioSampleRate();
+    const float load = float(System::GetTick() - block_start) / (ticks_per_sample * size);
+    tehp_load_avg += .01f * (load - tehp_load_avg);
+    tehp_load_peak = fmaxf(tehp_load_peak, load);
+#endif
 
     // meter.OnBlockEnd();
 }
