@@ -126,6 +126,29 @@ namespace chompi
 
     static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 2, 2}; // TEHP length: knob 1 page 3, knob 5 page 2
 
+    /** TEHP loop length on the loop wheel's two LEDs, a needle like the pitch
+     *  page's: 1x = both dim purple, shorter = the left LED only, purple to
+     *  pink, longer = the right one, purple to blue (knob 1's length colours)
+     *  @param value knob, .5 = 1x */
+    static void LoopLengthLeds(float value, float dim, float *left, float *right)
+    {
+        const float a = fminf(fabsf(value - .5f) * 2.f, 1.f);
+        if(a < .02f)
+        {
+            for(int k = 0; k < 3; k++)
+                left[k] = right[k] = purple[k] * .3f * dim;
+            return;
+        }
+        const float *to  = value < .5f ? pink : blue;
+        float       *on  = value < .5f ? left : right;
+        float       *off = value < .5f ? right : left;
+        for(int k = 0; k < 3; k++)
+        {
+            on[k]  = (purple[k] + (to[k] - purple[k]) * a) * (.3f + .7f * a) * dim;
+            off[k] = 0.f;
+        }
+    }
+
     class NormalPage : public daisy::UiPage
     {
     public:
@@ -430,14 +453,12 @@ namespace chompi
                         SetPthLedFloat(5, 0.f, 0.f, 0.f);
                         SetPthLedFloat(6, 0.f, 0.f, 0.f);
                     }
-                    else if(page == 1) // loop length: both leds, as for knob 1's length
+                    else if(page == 1) // loop length: a needle, like the pitch page
                     {
-                        const float dim = switch_state ? 1.f : kRecDim;
-                        r = color_triple_xfade(pink[0], purple[0], blue[0], value) * dim;
-                        g = color_triple_xfade(pink[1], purple[1], blue[1], value) * dim;
-                        b = color_triple_xfade(pink[2], purple[2], blue[2], value) * dim;
-                        SetPthLedFloat(5, r, g, b);
-                        SetPthLedFloat(6, r, g, b);
+                        float left[3], right[3];
+                        LoopLengthLeds(value, switch_state ? 1.f : kRecDim, left, right);
+                        SetPthLedFloat(5, left[0], left[1], left[2]);
+                        SetPthLedFloat(6, right[0], right[1], right[2]);
                     }
                     else if(fx_->IsLooperPlaying())
                     {

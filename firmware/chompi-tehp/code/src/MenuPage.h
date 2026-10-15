@@ -540,11 +540,10 @@ namespace chompi
                         fx_->SetLooperLength(fx_->KnobToLength(enc_values[1][4]));
                     }
 
-                    r = color_triple_xfade(pink[0], purple[0], blue[0], enc_values[1][4]);
-                    g = color_triple_xfade(pink[1], purple[1], blue[1], enc_values[1][4]);
-                    b = color_triple_xfade(pink[2], purple[2], blue[2], enc_values[1][4]);
-                    SetPthLedFloat(5, r, g, b);
-                    SetPthLedFloat(6, r, g, b);
+                    float left[3], right[3];
+                    LoopLengthLeds(enc_values[1][4], 1.f, left, right);
+                    SetPthLedFloat(5, left[0], left[1], left[2]);
+                    SetPthLedFloat(6, right[0], right[1], right[2]);
                 }
                 else if(encoderID == 4)
                 {
