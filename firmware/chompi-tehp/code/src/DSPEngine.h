@@ -958,30 +958,48 @@ namespace daisy
             return oct < 0.f ? oct * .5f + .5f : oct * .25f + .5f;
         }
 
-        /** stepped length, like stepped pitch: dotted and straight values */
-        __attribute__((noinline)) float SetLengthStepped(int16_t turns, float enc_pos)
+        /** stepped length, like stepped pitch: dotted and straight values.
+         *  Returns the next step past the current length (so free values snap
+         *  too) once `chunk` has a whole detent, else 0 */
+        __attribute__((noinline)) static float LengthStep(float &chunk, int16_t turns, float enc_pos)
         {
             static const float steps[] = {.5f, .75f, 1.f, 1.5f, 2.f, 3.f, 4.f};
             static const int kNumSteps = sizeof(steps) / sizeof(steps[0]);
 
-            length_chunk += turns * .25f;
-            if(length_chunk < 1.f && length_chunk > -1.f)
-                return enc_pos;
+            chunk += turns * .25f;
+            if(chunk < 1.f && chunk > -1.f)
+                return 0.f;
 
-            const bool up = length_chunk > 0.f;
-            length_chunk = 0.f;
+            const bool up = chunk > 0.f;
+            chunk = 0.f;
 
-            // the next step past the current length, so free values snap too
             const float len = KnobToLength(enc_pos);
             int i = up ? 0 : kNumSteps - 1;
             while(i >= 0 && i < kNumSteps && (up ? steps[i] <= len * 1.01f : steps[i] >= len * .99f))
                 i += up ? 1 : -1;
-            if(i < 0 || i >= kNumSteps)
-                return enc_pos;
-
-            SetLength(steps[i]);
-            return LengthToKnob(steps[i]);
+            return i < 0 || i >= kNumSteps ? 0.f : steps[i];
         }
+
+        // these return the value for the encoder tracking
+        float SetLengthStepped(int16_t turns, float enc_pos)
+        {
+            const float len = LengthStep(length_chunk, turns, enc_pos);
+            if(len == 0.f)
+                return enc_pos;
+            SetLength(len);
+            return LengthToKnob(len);
+        }
+
+        float SetLooperLengthStepped(int16_t turns, float enc_pos)
+        {
+            const float len = LengthStep(looper_length_chunk, turns, enc_pos);
+            if(len == 0.f)
+                return enc_pos;
+            looper.SetLength(len);
+            return LengthToKnob(len);
+        }
+
+        inline void SetLooperLength(float len) { looper.SetLength(len); }
 
         __attribute__((noinline)) void SetLength(float len)
         {
@@ -1229,6 +1247,7 @@ namespace daisy
         {
             looper_fifth = false;
             looper_encoder_chunk = 0.f;
+            looper_length_chunk = 0.f;
         }
 
         float SetLooperPitchQuantized(int16_t turns, float enc_pos)
@@ -1585,7 +1604,7 @@ namespace daisy
 
         float encoder_chunk = 0.f; // chunk up the quantized pitch controls
         float looper_encoder_chunk = 0.f;
-        float length_chunk = 0.f;
+        float length_chunk = 0.f, looper_length_chunk = 0.f;
         bool fifth, looper_fifth;
         
         /** env followers for VU meters */

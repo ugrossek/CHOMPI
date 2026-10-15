@@ -119,7 +119,7 @@ namespace chompi
     static const float dark_orange[3] = {.77f, .38f, .06f};
     static const float yellow_green[3] = {.706f, 1.f, 0.f};
 
-    static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 1, 2}; // knob 1 page 3: TEHP length
+    static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 2, 2}; // TEHP length: knob 1 page 3, knob 5 page 2
 
     class NormalPage : public daisy::UiPage
     {
@@ -223,6 +223,7 @@ namespace chompi
             if(fx_->CheckReset())
             {
                 enc_values[0][4] = enc_defaults[0][4];
+                enc_values[1][4] = enc_defaults[1][4];
                 fx_->ResetLooperPitchQuant();
             }
 
@@ -423,6 +424,15 @@ namespace chompi
                     {
                         SetPthLedFloat(5, 0.f, 0.f, 0.f);
                         SetPthLedFloat(6, 0.f, 0.f, 0.f);
+                    }
+                    else if(page == 1) // loop length: both leds, as for knob 1's length
+                    {
+                        const float dim = switch_state ? 1.f : kRecDim;
+                        r = color_triple_xfade(pink[0], purple[0], blue[0], value) * dim;
+                        g = color_triple_xfade(pink[1], purple[1], blue[1], value) * dim;
+                        b = color_triple_xfade(pink[2], purple[2], blue[2], value) * dim;
+                        SetPthLedFloat(5, r, g, b);
+                        SetPthLedFloat(6, r, g, b);
                     }
                     else if(fx_->IsLooperPlaying())
                     {
@@ -725,17 +735,14 @@ namespace chompi
                 break;
             }
 
-            // reset the looper pitch
+            // looper pitch / length page (TEHP; CHOMPI + press resets, MenuPage)
             case ENC_5_SW:
             {
                 if (!rising)
                 {
-                    enc_values[0][4] = enc_defaults[0][4];
-                    hw_->SendCC(midi_channel, cc_map[0][4], enc_values[0][4] * 127.f);
+                    knob_page[4]++;
+                    knob_page[4] %= knob_num_pages[4];
                 }
-
-                fx_->SetLooperPitch(1.f);
-                fx_->ResetLooperPitchQuant();
                 break;
             }
 
@@ -946,7 +953,7 @@ namespace chompi
                 else if ((encoderID == 0 && page == 0 && !quantized_pitch_)
                     || (encoderID == 1 && page == 0)
                     || (encoderID == 2 && page == 0)
-                    || (encoderID == 4 && !quantized_pitch_))
+                    || (encoderID == 4 && page == 0 && !quantized_pitch_))
                 {
                     inc = turns * kEncoderFineStep;
                 }
@@ -970,6 +977,13 @@ namespace chompi
                     enc_values[2][0] = fx_->SetLengthStepped(turns, enc_values[2][0]);
                 else
                     fx_->SetLength(fx_->KnobToLength(enc_values[2][0]));
+            }
+            else if (encoderID == 4 && page == 1)
+            {
+                if(quantized_pitch_)
+                    enc_values[1][4] = fx_->SetLooperLengthStepped(turns, enc_values[1][4]);
+                else
+                    fx_->SetLooperLength(fx_->KnobToLength(enc_values[1][4]));
             }
             else if (encoderID == 4)
             {

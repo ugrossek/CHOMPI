@@ -148,6 +148,7 @@ namespace daisy
         }
 
         inline void SetPitch(float val) { looper.SetVarispeed(val); }
+        inline void SetLength(float len) { looper.SetLength(len); }
         inline void SetReverse(bool rev) { looper.SetReverse(rev); }
         inline void SetScrub(float scrub) { looper.SetScrub(scrub); }
         inline float GetScrub() { return looper.GetScrub(); }

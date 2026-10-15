@@ -530,6 +530,22 @@ namespace chompi
                         fx_->SetFilterResonance(resonance);
                     }
                 }
+                else if(encoderID == 4 && page == 1) // loop length
+                {
+                    if(quantized_pitch_)
+                        enc_values[1][4] = fx_->SetLooperLengthStepped(turns, enc_values[1][4]);
+                    else
+                    {
+                        enc_values[1][4] = fclamp(enc_values[1][4] + inc, 0.f, 1.f);
+                        fx_->SetLooperLength(fx_->KnobToLength(enc_values[1][4]));
+                    }
+
+                    r = color_triple_xfade(pink[0], purple[0], blue[0], enc_values[1][4]);
+                    g = color_triple_xfade(pink[1], purple[1], blue[1], enc_values[1][4]);
+                    b = color_triple_xfade(pink[2], purple[2], blue[2], enc_values[1][4]);
+                    SetPthLedFloat(5, r, g, b);
+                    SetPthLedFloat(6, r, g, b);
+                }
                 else if(encoderID == 4)
                 {
                     if(quantized_pitch_)
@@ -695,9 +711,23 @@ namespace chompi
             break;
             }
 
-            // reset the looper pitch via fall through
+            // reset the looper's pitch or length, whichever page knob 5 is on
             case ENC_5_SW:
-                return false;
+                if(rising)
+                {
+                    if(knob_page[4] == 0)
+                    {
+                        enc_values[0][4] = enc_defaults[0][4];
+                        fx_->SetLooperPitch(1.f);
+                    }
+                    else
+                    {
+                        enc_values[1][4] = enc_defaults[1][4];
+                        fx_->SetLooperLength(1.f);
+                    }
+                    fx_->ResetLooperPitchQuant();
+                }
+                break; // the release mustn't switch the page (NormalPage)
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // attack knob
                 if(rising)

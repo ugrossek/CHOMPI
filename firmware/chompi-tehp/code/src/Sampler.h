@@ -20,6 +20,7 @@ namespace daisy
             sr_ = sr;
             varispeed_factor = 1.f;
             pitch_ = 1.f;
+            length_ = speed_ = 1.f;
             out_shifter_.Init(out_shift_buff, out_shift_ana);
             in_shifter_.Init(in_shift_buff, in_shift_ana);
             scrub_ =  1.f;
@@ -98,13 +99,14 @@ namespace daisy
 
             {
                 /* TEHP: the pitch setting no longer moves the tape. Playing runs
-                 * at 1x (or -1x reversed); stopping, scrubbing and reset still
-                 * slow down and speed up like tape. The pitch goes to the
-                 * shifters, gliding like the tape speed would. */
+                 * at 1 / length (reversed: minus that); stopping, scrubbing and
+                 * reset still slow down and speed up like tape. The pitch goes
+                 * to the shifters, gliding like the tape speed would. */
                 const float slew = tape_slew_ ? .0001f : .01f;
                 daisysp::fonepole(pitch_, fmaxf(fabsf(varispeed_factor), kMinPitch), slew);
+                daisysp::fonepole(speed_, 1.f / length_, slew);
 
-                float target = playing ? (varispeed_factor < 0.f ? -1.f : 1.f) : scrub_target_;
+                float target = playing ? (varispeed_factor < 0.f ? -speed_ : speed_) : scrub_target_;
                 if(reset)
                     target = 0.f;
 
@@ -140,6 +142,7 @@ namespace daisy
                         loop_env_dec = loop_env_dec_val; // ~5ms
                         scrub_ = scrub_target_ = 0.f;
                         SetVarispeed(1.f, true);
+                        length_ = speed_ = 1.f;
                         ram_buff.Reset();
                         ForceSetScrub(1.f);
                         old_samps_l.Clear();
@@ -161,11 +164,12 @@ namespace daisy
 
                 /* what you hear is what you record: the input is shifted the
                  * other way before it's written, so on the next pass the output
-                 * shifter brings it back to the pitch you played */
+                 * shifter brings it back to the pitch you played. The tape
+                 * write squeezes it by the tape speed, so that comes off too */
                 if(recording || input_env > .01f)
                 {
                     float il = s162f(inl), ir = s162f(inr);
-                    in_shifter_.Process(1.f / pitch_, &il, &ir);
+                    in_shifter_.Process(speed_ / pitch_, &il, &ir);
                     inl = f2s16(il);
                     inr = f2s16(ir);
                 }
@@ -227,6 +231,10 @@ namespace daisy
                             loop_env = 0.f;
                             loop_env_dec = loop_env_dec_val;
                         }
+
+                        // the tape's frames go to the output shifter as they are
+                        const float env = daisysp::fclamp(loop_env, 0.f, 1.f) * rev_env * reset_env;
+                        out_shifter_.Push(s162f(bl) * env, s162f(br) * env);
                     }
 
                     const float num_samps = old_samps_l.GetNumElements() - 1.f;
@@ -276,11 +284,18 @@ namespace daisy
                 old_inl = inl;
                 old_inr = inr;
 
-                // Amp env, then the pitch
+                /* Amp env, then the pitch. The shifter reads the tape's frames
+                 * at pitch x (tape speed / playing speed): at playing speed
+                 * that's the pitch setting, while stopping or scrubbing it
+                 * follows the tape like varispeed. Where that equals the tape
+                 * speed (pitch = 1 / length) the plain tape is right: dry. So it
+                 * is at a standstill, where no new tape comes in for the shifter */
                 const float env = loop_env * rev_env * reset_env;
                 float sl = s162f(int16_t(tl)) * env;
                 float sr = s162f(int16_t(tr)) * env;
-                out_shifter_.Process(pitch_, &sl, &sr);
+                const float ratio = chompi::StereoPitchShifter::ClampRatio(pitch_ * abs_scrub / speed_);
+                const bool dry = fabsf(pitch_ - speed_) < .003f || abs_scrub < .02f;
+                out_shifter_.Out(ratio, ratio - abs_scrub, dry, &sl, &sr);
                 *out_l = f2s16(sl);
                 last_l = *out_l;
                 *out_r = f2s16(sr);
@@ -307,6 +322,9 @@ namespace daisy
         }
 
         inline float GetVarispeed() { return varispeed_factor; }
+
+        /** TEHP loop length (time stretch, pitch unchanged): 2.0 plays at half speed */
+        inline void SetLength(float len) { length_ = len; }
 
         // reverse functions only used internally (except getter)
         bool SetReverse(bool rev) 
@@ -361,6 +379,7 @@ namespace daisy
          *  sign the direction), pitch_ its slewed size for the shifters */
         float varispeed_factor;
         float pitch_;
+        float length_, speed_; // speed_: 1 / length_, slewed like the pitch
         static constexpr float kMinPitch = .0625f;
         chompi::StereoPitchShifter out_shifter_, in_shifter_;
         float rpos_frac_;

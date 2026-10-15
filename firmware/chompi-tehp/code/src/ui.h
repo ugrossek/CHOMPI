@@ -15,7 +15,7 @@ namespace chompi
 
     static const float enc_defaults[3][6] = {
         {.83f, 0.f, 1.f, 0.f, .75f, .84f}, // page 1
-        {.704f, 0.f, 0.f, 0.f, 0.f, .75f},   // page 2
+        {.704f, 0.f, 0.f, 0.f, .5f, .75f},   // page 2 (knob 5: TEHP loop length, .5 = 1x)
         {.5f, 0.f, 0.f, .5f, 0.f, 0.f},   // page 3 (knob 1: TEHP length, .5 = 1x)
     };
 
