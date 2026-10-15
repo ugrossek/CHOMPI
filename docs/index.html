@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Feed the CHOMPI</title>
-<script src="setup/demo.js?v=2026-10-14"></script>
+<script src="setup/demo.js?v=2026-10-15"></script>
 <meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -725,23 +725,38 @@ function seenPorts() {
 function adapter(pair) {
   return {
     send: (bytes) => pair.out.send(bytes),
-    onMessage: (fn) => { pair.in.onmidimessage = (e) => fn(e.data); },
+    onMessage: (fn) => { pair.handler = (e) => fn(e.data); pair.in.onmidimessage = pair.handler; },
   };
+}
+
+/* On Windows, Chrome and Edge can freeze when a USB MIDI device goes away
+   while its ports are open, and reloading the page hangs too. CHOMPI goes
+   away as soon as it starts a firmware, so the ports are open only while
+   the page talks to it. */
+async function openPorts() {
+  const p = state.pair;
+  await Promise.all([p.in.open(), p.out.open()]);
+  p.in.onmidimessage = p.handler;
+}
+async function closePorts(p = state.pair) {
+  if (!p) return;
+  p.in.onmidimessage = null; // would open the input again
+  await Promise.all([p.in.close(), p.out.close()]).catch(() => {});
 }
 
 /** Ping the launcher on this pair. quiet: an automatic attempt, which
  *  doesn't show its failure as an error. True if a launcher answered. */
 async function connectTo(pair, quiet = false) {
-  if (state.pair?.in) state.pair.in.onmidimessage = null;
-  state.pair = pair;
   state.connecting = true;
+  await closePorts();
+  state.pair = pair;
   paintConnection();
   screen(`Knocking on ${pair.name}…`, "busy");
   let ok = false;
   try {
     /* a fresh connection: after a power cycle the old one is dead */
-    await Promise.all([pair.in.open(), pair.out.open()]);
     state.launcher = new Launcher(adapter(pair), log);
+    await openPorts();
     state.info = await state.launcher.ping();
     buildKeys(state.info.slots);
     if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
@@ -757,6 +772,7 @@ async function connectTo(pair, quiet = false) {
       show("connect-result", e.message, true);
     }
   } finally {
+    await closePorts();
     state.connecting = false;
   }
   update();
@@ -795,7 +811,15 @@ async function startMidi(user) {
       if (user) show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
       return;
     }
-    state.access.onstatechange = () => refreshPorts(false);
+    /* Opening and closing a port fires this too; only plugging in or out matters. */
+    const plugged = new Map([...state.access.inputs.values(), ...state.access.outputs.values()].map((p) => [p.id, p.state]));
+    state.access.onstatechange = (e) => {
+      if (e?.port) {
+        if (plugged.get(e.port.id) === e.port.state) return;
+        plugged.set(e.port.id, e.port.state);
+      }
+      refreshPorts(false);
+    };
   }
   refreshPorts(true, !user);
 }
@@ -937,15 +961,20 @@ $("send").addEventListener("click", async () => {
   paintKeys("cyan", 0);
   screen("Chomping…", "busy");
   try {
-    await state.launcher.upload(state.image, state.slot, name, state.info.maxChunk, (phase, done, total) => {
-      if (phase === "send") {
-        paintKeys("cyan", done / total);
-        screen(`Chomping… ${Math.floor((100 * done) / total)}%`, "busy");
-      } else {
-        paintKeys("amber", 1);
-        screen("Writing to the card…", "busy");
-      }
-    });
+    await openPorts();
+    try {
+      await state.launcher.upload(state.image, state.slot, name, state.info.maxChunk, (phase, done, total) => {
+        if (phase === "send") {
+          paintKeys("cyan", done / total);
+          screen(`Chomping… ${Math.floor((100 * done) / total)}%`, "busy");
+        } else {
+          paintKeys("amber", 1);
+          screen("Writing to the card…", "busy");
+        }
+      });
+    } finally {
+      await closePorts(); // right away: CHOMPI starts the firmware and leaves USB
+    }
     paintKeys("white", 1);
     const file = `${String(state.slot).padStart(2, "0")}_${name}.bin`;
     screen(`Stored as ${file}. CHOMPI is starting it.`, "ok");
