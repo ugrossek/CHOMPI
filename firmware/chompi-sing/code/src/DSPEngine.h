@@ -318,11 +318,15 @@ namespace daisy
                held keys add harmony voices from it; the effects follow */
             if(in_source == InputSource::MIC || in_source == InputSource::LINE_IN)
             {
+                /* line in: the left channel only, as a mono plug has it.
+                   Summing L and R left the voice very quiet on CHOMPI
+                   (where TAPE, which keeps them apart, was fine): the two
+                   channels probably reach the codec in opposite polarity */
                 float live[size];
                 const bool mic = in_source == InputSource::MIC;
                 for(size_t i = 0; i < size; i++)
                     live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
-                                  : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
+                                  : in[2][i] * ingain_ * kLineInGain;
                 pitch_.Process(live, size);
 
                 /* voice gate: opens at once on input level (the detector
