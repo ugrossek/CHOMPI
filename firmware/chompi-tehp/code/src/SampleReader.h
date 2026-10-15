@@ -6,6 +6,7 @@
 #include "Control/adsr.h"
 #include "RamBuffer.h"
 #include "PitchShifter.h"
+#include "TehpDiag.h"
 
 #ifdef TEHP_DIAG
 extern volatile uint32_t tehp_starved_at; // chompi_main.cpp
@@ -490,7 +491,9 @@ namespace daisy
 
                     // click/loop/rev envs mask jumps in the source, so they go before the shifter
                     const float pre = click_env * loop_env * rev_env;
+                    TEHP_TIME_START
                     shifter_.Push(s162f(read_left_b_) * pre, s162f(read_right_b_) * pre);
+                    TEHP_TIME_END(kTehpPush)
                 }
             }
         }
@@ -563,7 +566,9 @@ namespace daisy
                     const float pitch = varispeed_factor * global_pitch;
                     const float ratio = chompi::StereoPitchShifter::ClampRatio(pitch);
                     const float close = ratio - speed_;
+                    TEHP_TIME_START
                     shifter_.Out(ratio, close, fabsf(pitch * length_ - 1.f) < .003f, &sl, &sr);
+                    TEHP_TIME_END(kTehpOut)
 
                     const float post = env_sig * velocity * gain_;
                     *l = sl * post * pan_l_;

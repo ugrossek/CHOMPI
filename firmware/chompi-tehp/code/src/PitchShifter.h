@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include "daisysp.h"
+#include "TehpDiag.h"
 
 namespace chompi
 {
@@ -217,7 +218,14 @@ namespace chompi
                     while(Budget() > 0 && lag_ <= kSearch && !late)
                     {
                         Budget()--;
+#ifdef TEHP_DIAG
+                        const uint32_t tehp_t0 = TEHP_CYCLES;
                         Consider(jump_ + lag_);
+                        if(tehp_in_voices)
+                            tehp_ticks[kTehpSearch] += TEHP_CYCLES - tehp_t0;
+#else
+                        Consider(jump_ + lag_);
+#endif
                         lag_ += kLagStep;
                         if(lag_ % (kSearchPerSample * kLagStep) == 0)
                             break; // at most kSearchPerSample per voice per sample

@@ -110,13 +110,14 @@ bool line_in_state;
 #ifdef TEHP_DIAG
 volatile uint32_t tehp_starved_at = 0;
 float tehp_load_avg = 0.f, tehp_load_peak = 0.f;
-uint32_t tehp_ticks[kTehpParts];  // this block, per part (DSPEngine.h)
+uint32_t tehp_ticks[kTehpParts];  // this block, per part (TehpDiag.h), in core cycles
+bool     tehp_in_voices = false;
 float    tehp_share[kTehpParts];  // smoothed, as a fraction of the block period
 #endif
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
 #ifdef TEHP_DIAG
-    const uint32_t block_start = System::GetTick();
+    const uint32_t block_start = TEHP_CYCLES;
 #endif
     // meter.OnBlockStart();
     if(booting && !ui.InTestMode())
@@ -139,7 +140,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 #ifdef TEHP_DIAG
     for(int k = 0; k < kTehpParts; k++)
         tehp_ticks[k] = 0;
-    tehp_ticks[kTehpUi] = System::GetTick() - block_start;
+    tehp_ticks[kTehpUi] = TEHP_CYCLES - block_start;
 #endif
 
     // does this have to happen in the audio callback?
@@ -163,8 +164,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
         engine.Process(in, out, size);
 
 #ifdef TEHP_DIAG
-    static const float ticks_per_sample = float(System::GetTickFreq()) / hw.seed.AudioSampleRate();
-    const float load = float(System::GetTick() - block_start) / (ticks_per_sample * size);
+    static const float ticks_per_sample = float(SystemCoreClock) / hw.seed.AudioSampleRate();
+    const float load = float(TEHP_CYCLES - block_start) / (ticks_per_sample * size);
     tehp_load_avg += .01f * (load - tehp_load_avg);
     tehp_load_peak = fmaxf(tehp_load_peak, load);
     for(int k = 0; k < kTehpParts; k++)
@@ -437,6 +438,12 @@ int main(void)
         options.midi_ch_in, options.midi_ch_out, options.pitch_shift_quantization, options.delay_split);
 
     hw.StartLowPriorityCallback(SDCallback, 1000);
+#ifdef TEHP_DIAG
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // the cycle counter
+    DWT->LAR = 0xC5ACCE55;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+#endif
     hw.StartAudio(AudioCallback);
 
     ZeroSDRAM();

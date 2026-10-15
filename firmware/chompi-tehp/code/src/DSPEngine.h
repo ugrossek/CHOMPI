@@ -26,16 +26,7 @@ static constexpr float kHpGain = .2f;
 static constexpr float kMicGain = 5.f;
 static constexpr float kLineInGain = 3.f;
 static constexpr size_t kMaxPoly = 7;
-#ifdef TEHP_DIAG
-/** test builds: where the audio callback's time goes (chompi_main.cpp) */
-enum { kTehpUi, kTehpVoices, kTehpLooper, kTehpFx, kTehpParts };
-extern uint32_t tehp_ticks[kTehpParts];
-#define TEHP_TIME_START const uint32_t tehp_t0 = System::GetTick();
-#define TEHP_TIME_END(part) tehp_ticks[part] += System::GetTick() - tehp_t0;
-#else
-#define TEHP_TIME_START
-#define TEHP_TIME_END(part)
-#endif
+#include "TehpDiag.h"
 
 static_assert(kMaxPoly == kLooperOutShifter, "the looper's shifters follow the voices'");
 
@@ -436,6 +427,9 @@ namespace daisy
 
             /** voice read*/
             chompi::StereoPitchShifter::NewBlock(size);
+#ifdef TEHP_DIAG
+            tehp_in_voices = true;
+#endif
             for (size_t voice = 0; voice < kMaxPoly; voice++)
             {
                 if (chompi_voice[voice].IsPlaying() || chompi_voice[voice].deferred_trig)
@@ -452,6 +446,9 @@ namespace daisy
                 }
             }
             TEHP_TIME_END(kTehpVoices)
+#ifdef TEHP_DIAG
+            tehp_in_voices = false;
+#endif
             }
 
             for(size_t i = 0; i < size; i++)
