@@ -104,7 +104,16 @@ namespace daisy
                  * to the shifters, gliding like the tape speed would. */
                 const float slew = tape_slew_ ? .0001f : .01f;
                 daisysp::fonepole(pitch_, fmaxf(fabsf(varispeed_factor), kMinPitch), slew);
-                daisysp::fonepole(speed_, 1.f / length_, slew);
+
+                /* a new length changes time, not pitch: the tape takes the new
+                 * speed at once, whatever it's doing, so tape speed / playing
+                 * speed (the varispeed part of the pitch) doesn't move */
+                const float speed = 1.f / length_;
+                if(speed != speed_)
+                {
+                    scrub_ *= speed / speed_;
+                    speed_ = speed;
+                }
 
                 float target = playing ? (varispeed_factor < 0.f ? -speed_ : speed_) : scrub_target_;
                 if(reset)
@@ -379,7 +388,7 @@ namespace daisy
          *  sign the direction), pitch_ its slewed size for the shifters */
         float varispeed_factor;
         float pitch_;
-        float length_, speed_; // speed_: 1 / length_, slewed like the pitch
+        float length_, speed_; // speed_: 1 / length_, taken over in the audio callback
         static constexpr float kMinPitch = .0625f;
         chompi::StereoPitchShifter out_shifter_, in_shifter_;
         float rpos_frac_;
