@@ -3,11 +3,12 @@
 > ### This branch: TEHP — TAPE, with pitch that keeps its time
 >
 > CHOMPI's TAPE firmware, with one change: changing pitch no longer changes speed. Keys keep
-> the sample's length, and the looper keeps its tempo when you pitch it. It uses TAPE's
+> the sample's length, and the looper keeps its tempo when you pitch it. New in alpha 2:
+> length stretches samples and the loop in time without changing their pitch. It uses TAPE's
 > samples and settings. Details, install and known limits are in
 > [`firmware/chompi-tehp`](firmware/chompi-tehp/).
 >
-> **[Download TEHP](../../releases/tag/tehp-alpha)** — a ready-to-flash `.bin` (alpha).
+> **[Download TEHP](../../releases/tag/tehp-alpha-2)** — a ready-to-flash `.bin` (alpha 2).
 >
 > **Written with AI.** This was written together with Claude, Anthropic's AI assistant, and
 > tested on one CHOMPI. Not an official CHOMPI Club release; everything below is their
