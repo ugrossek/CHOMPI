@@ -41,6 +41,35 @@ SECTIONS
 		. = ALIGN(4);
 	} > SRAM_EXEC
 
+	/* TEHP: the audio path runs from ITCM, the core's zero-wait code RAM.
+	 * From SRAM_EXEC it ran through a 16 KB instruction cache that the
+	 * ~26 KB per-sample code kept thrashing. Its image stays in SRAM_EXEC
+	 * (so the bootloader loads it) and is copied over before the
+	 * constructors run (chompi_main.cpp, .preinit_array). */
+	.itcm_text :
+	{
+		. = ALIGN(4);
+		. = . + 0x40; /* no code at 0, where a function would look like a null pointer */
+		*(.text._Z13AudioCallbackPKPKfPPfj)
+		*(.text._ZN5daisy11AudioHandle4Impl16InternalCallbackEPlS2_j)
+		*(.text._ZN5daisy6Engine7ProcessEPKPKfPPfj)
+		*(.text._ZN5daisy6Engine7ApplyFxEPfS1_j)
+		*(.text._ZN5daisy16FileSampleReader14PopStereoSampsEPfS1_)
+		*(.text._ZN5daisy11FileSampler14PopStereoSampsEssPsS1_bb)
+		*(.text._ZN6chompi18StereoPitchShifter7AdvanceEff)
+		*(.text._ZN7daisysp6Reverb7ProcessEPfS1_)
+		*(.text._ZN7daisysp3Svf7ProcessEf)
+		*(.text._ZN7daisysp4Adsr7ProcessEb)
+		*(.text._ZN7daisysp7DcBlock7ProcessEf)
+		*(.text.sqrtf .text.__ieee754_sqrtf .text.fmodf .text.__ieee754_fmodf)
+		*(.text.sinf .text.cosf .text.expf .text.logf)
+		. = ALIGN(4);
+	} > ITCMRAM AT > SRAM_EXEC
+
+	_itcm_text_vma  = ADDR(.itcm_text);
+	_itcm_text_lma  = LOADADDR(.itcm_text);
+	_itcm_text_size = SIZEOF(.itcm_text);
+
 	.text :
 	{
 		. = ALIGN(4);

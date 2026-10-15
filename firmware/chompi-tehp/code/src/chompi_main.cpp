@@ -70,6 +70,21 @@ extern "C" void *_sbrk(ptrdiff_t incr)
 
 daisysp::Oscillator osc;
 
+/* The audio path's code runs from ITCM (chompi_sram.lds, .itcm_text). Its
+ * image comes with the program in SRAM_EXEC; copy it over before anything
+ * runs, constructors included: .preinit_array comes first. */
+extern "C" uint32_t _itcm_text_vma, _itcm_text_lma, _itcm_text_size;
+static void CopyItcmText()
+{
+    const uint32_t *src = &_itcm_text_lma;
+    uint32_t       *dst = &_itcm_text_vma;
+    for(uint32_t i = 0; i < uint32_t(&_itcm_text_size) / 4; i++)
+        dst[i] = src[i];
+    __DSB();
+    __ISB();
+}
+__attribute__((section(".preinit_array"), used)) static void (*const copy_itcm_text)() = CopyItcmText;
+
 // CpuLoadMeter meter;
 uint32_t pret, sd_checkt;
 // bool log_batt;
