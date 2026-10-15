@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <!-- ?v= names this version of the scripts, so a browser never pairs this page
      with an older copy it kept. Change it whenever demo.js or chompi-midi.js change. -->
-<script src="demo.js?v=2026-10-10"></script>
+<script src="demo.js?v=2026-10-14"></script>
 <style>
   /* Setup page: crumb-strewn paper, a CHOMPI creature that eats firmware, handwritten notes,
      steps printed like the lines on CHOMPI's panel (see the end of this block). */
@@ -652,7 +652,7 @@
       <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">1</span>Connect<span class="conn" id="conn-state">not connected</span></h2>
       <div class="inner">
-        <p>Switch CHOMPI on so its keys are breathing white, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself.</p>
+        <p>Switch CHOMPI on so its keys are breathing, plug it into this computer, then connect. Your browser will ask to allow MIDI; say yes. After that, this page connects by itself.</p>
         <div class="row">
           <button class="act" id="connect">Connect CHOMPI</button>
           <select id="port" hidden aria-label="MIDI device"></select>
@@ -679,7 +679,7 @@
       <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">2</span>Choose firmwares</h2>
       <div class="inner">
-        <p>Each white key on CHOMPI can hold one firmware. Tap a key, then choose what goes on it. Or tap <b>Put on key</b> on a firmware below.</p>
+        <p>Each white key on CHOMPI can hold one firmware. Tap a key, then choose what goes on it. Or tap <b>Put on key</b> on a firmware below. With launcher 1.6 or newer, CHOMPI's keys light up in the colours you see here.</p>
         <section class="chompi" aria-label="CHOMPI keybed">
           <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
             <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
@@ -739,19 +739,21 @@
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-10";
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-14";
 
 const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:";
-const NO_LAUNCHER = "Still no answer. If its keys never breathe white after switching on, this CHOMPI has no launcher yet. To install the launcher:";
+const NO_LAUNCHER = "Still no answer. If its keys never start breathing after switching on, this CHOMPI has no launcher yet. To install the launcher:";
 /* ?chunk=N: send at most N bytes per message, for comparing speeds */
 const CHUNK = Math.max(0, parseInt(new URLSearchParams(location.search).get("chunk"), 10) || 0);
 const chunkSize = () => (CHUNK ? Math.min(CHUNK, state.info.maxChunk) : state.info.maxChunk);
 const NEEDED = FEATURE.LIST | FEATURE.CLEAR | FEATURE.STAY;
 const SLOTS = 15;
 const CATALOG_FAILED = "Couldn't load the list of firmwares. Check your internet connection and reload the page.";
-/* one colour per firmware, for its key's LED */
-const SWATCH = ["#FF9431", "#FF5C7C", "#3FAEFF", "#39D27E", "#B57BFF", "#FFD23F",
-                "#18D2DF", "#FF7AD9", "#9BE15D", "#FF6B3D", "#7AA2FF", "#E0C097"];
+/* One colour per firmware, for its key's LED; launchers from 1.6 show it on
+   CHOMPI too. The list gives each firmware its own; one without gets a spare
+   from these, spread out so they are easy to tell apart on the LEDs. */
+const SWATCH = ["#FF8A00", "#FF2D2D", "#FFD600", "#9CFF00", "#00D15A", "#00D5E0",
+                "#2F6BFF", "#8A4DFF", "#E62EE6", "#FF6FAE", "#FFE3B0", "#A8D8FF"];
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -807,7 +809,13 @@ async function loadCatalog() {
   state.catalog = data.firmwares;
   state.newLauncher = data.launcher || null;
   if (data.launcher) $("launcher-download").href = data.launcher.file;
-  state.catalog.forEach((f, i) => { f.color = SWATCH[i % SWATCH.length]; state.byId[f.id] = f; });
+  const taken = new Set(state.catalog.map((f) => f.color).filter(Boolean));
+  const spare = SWATCH.filter((c) => !taken.has(c));
+  let next = 0;
+  for (const f of state.catalog) {
+    if (!/^#[0-9A-F]{6}$/i.test(f.color || "")) f.color = (spare.length ? spare : SWATCH)[next++ % (spare.length || SWATCH.length)];
+    state.byId[f.id] = f;
+  }
 }
 
 /** Which catalogue firmware a file on the card is, by name and size:
@@ -854,8 +862,34 @@ function planLabel(i) {
 function planColor(i) {
   const p = state.plan[i];
   if (p === "empty") return null;
-  if (p === "keep") return state.current[i].prev ? state.byId[state.current[i].prev.id].color : "#FFFFFF";
+  if (p === "keep") return keyColor(state.current[i]) || state.current[i].color || "#FFFFFF";
   return state.byId[p].color;
+}
+/** The colour the page gives what is on a key now; null for a file it
+ *  doesn't know, which keeps the colour the launcher gave it. */
+function keyColor(c) {
+  const id = c.id || c.prev?.id;
+  return id ? state.byId[id].color : null;
+}
+
+/** Give every key on CHOMPI the colour it has here (launcher 1.6 and newer).
+ *  Only for keys whose colour differs; never fails the caller. */
+async function syncColors() {
+  if (!(state.info?.features & FEATURE.COLOR)) return;
+  /* the launcher's colours come in 7 bits: compare those */
+  const seven = (hex) => (hex ? parseInt(hex.slice(1), 16) & 0xFEFEFE : -1);
+  for (const [i, c] of state.current.entries()) {
+    const want = c.file && keyColor(c);
+    if (!want || seven(want) === seven(c.color)) continue;
+    try {
+      await state.launcher.color(i + 1, want);
+      c.color = want;
+      note(`key ${i + 1}: colour ${want}`);
+    } catch (e) {
+      note(`key ${i + 1}: colour not set: ${e.message}`);
+      return; /* the card is the trouble; the next write tries again */
+    }
+  }
 }
 
 /* ---- keybed ------------------------------------------------------------ */
@@ -1161,7 +1195,7 @@ $("update-launcher").addEventListener("click", async () => {
     state.info = null;
     $("launcher-update").hidden = true;
     $("step-connect").classList.remove("done");
-    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then breathe white again. This page reconnects by itself.";
+    const msg = "CHOMPI is restarting to install the new launcher. Its keys show a rainbow, then start breathing again. This page reconnects by itself. If the keys stay one colour without breathing for more than half a minute, switch CHOMPI off and on.";
     screen(msg, "busy");
     show("connect-result", msg);
   } catch (e) {
@@ -1216,8 +1250,8 @@ async function readCard(talk = true) {
   const current = [];
   for (let n = 1; n <= SLOTS; n++) {
     if (talk) screen(`Looking at key ${n} of ${SLOTS}…`, "busy");
-    const { file, size } = await state.launcher.list(n);
-    current.push({ file, size, ...(file ? identify(file, size) : {}) });
+    const { file, size, color } = await state.launcher.list(n);
+    current.push({ file, size, color, ...(file ? identify(file, size) : {}) });
   }
   return current;
 }
@@ -1251,6 +1285,7 @@ async function connectTo(pair, quiet = false) {
     /* keep what the user planned across a reconnect */
     state.plan = hadChanges ? before : state.current.map((_, i) => initialPlan(i));
     state.info = info;
+    await syncColors();
     const n = state.current.filter((c) => c.file).length;
     screen(`Connected. ${n} key${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} a firmware.`, "ok");
     const lv = info.launcherVersion ? ` (launcher ${info.launcherVersion})` : "";
@@ -1295,7 +1330,7 @@ async function autoConnect() {
     await sleep(1000);
   }
   if (!state.info && !state.busy && $("old-launcher").hidden && state.catalog.length) {
-    screen("CHOMPI is there, but the launcher isn't answering. Maybe a firmware is running: switch CHOMPI off and on so its keys breathe white, and this page connects by itself.", "idle");
+    screen("CHOMPI is there, but the launcher isn't answering. Maybe a firmware is running: switch CHOMPI off and on so its keys are breathing, and this page connects by itself.", "idle");
     /* Still nothing a while later: maybe there is no launcher at all. A
        stock CHOMPI starts TAPE every time, so off and on won't change it. */
     clearTimeout(state.noLauncherTimer);
@@ -1513,6 +1548,7 @@ $("write").addEventListener("click", async () => {
     const before = state.current;
     state.current = await readCard();
     state.plan = state.current.map((_, i) => initialPlan(i));
+    await syncColors();
     const off = expected.map((p, i) => (p !== state.plan[i] ? i + 1 : 0)).filter(Boolean);
     if (off.length) {
       /* most likely a file without a number that moved to a freed key */

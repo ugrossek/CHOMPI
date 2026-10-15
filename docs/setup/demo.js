@@ -18,7 +18,16 @@
   const failSlot = +(P.get("failslot") || 0);
   const FULL = P.has("full"), SLOWCLEAR = P.has("slowclear"), SILENT = P.has("silent");
   const NOSELF = P.has("noself");
-  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.4.4")).split(".").map(Number);
+  let lver = (P.get("lver") || (NOSELF ? "1.4.0" : "1.6.0")).split(".").map(Number);
+  const hasColor = () => lver[0] * 1e6 + lver[1] * 1e3 + lver[2] >= 1006000;
+  /* key colours as the launcher keeps them: per file, else one from the name */
+  const colors = window.__colors = {};
+  function nameColor(f) {
+    let n = f.replace(/^\d\d_/, "").replace(/\.bin$/i, "").toUpperCase(), h = 2166136261;
+    for (const c of n) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+    const hue = h % 1536, s = Math.floor(hue / 256), up = hue % 256, dn = 255 - up;
+    return [[255,up,0],[dn,255,0],[0,255,up],[0,dn,255],[up,0,255],[255,0,dn]][s];
+  }
   function keys() {
     const k = Array(15).fill(null);
     const bins = Object.keys(card).filter((f) => /\.bin$/i.test(f)).sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
@@ -37,7 +46,7 @@
     send(m) {
       if (SILENT) return;
       const cmd = m[4], b = m.slice(5, -1);
-      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(2048,4),15,NOSELF ? 7 : (lver[2] >= 4 || lver[1] > 4 ? 31 : 15),...lver]);
+      if (cmd === 1) return reply(1, OLD ? [0,1,...p7(256,4),15] : [0,1,...p7(2048,4),15,NOSELF ? 7 : hasColor() ? 63 : (lver[2] >= 4 || lver[1] > 4 ? 31 : 15),...lver]);
       if (cmd === 2) { const n = b[5];
         if (b[4] === 127 && NOSELF) return reply(2,[8]); up = { size: g7(b.slice(0,4)), slot: b[4], name: String.fromCharCode(...b.slice(6,6+n)), got: 0 }; return reply(2,[0]); }
       if (cmd === 3) { const off = g7(b.slice(0,4)); const L = b.length - 4; const raw = L - Math.ceil(L/8); up.got = Math.max(up.got, off+raw); return reply(3,[0,...p7(up.got,4)]); }
@@ -66,8 +75,12 @@
         const plug = (on) => { input.state = output.state = on ? "connected" : "disconnected"; access.onstatechange && access.onstatechange({}); };
         return setTimeout(() => plug(false), 300);
       }
-      if (cmd === LIST) { const f = keys()[b[0]-1]; if (!f) return reply(LIST,[0,b[0],0,0,0,0,0]);
-        return reply(LIST,[0,b[0],f.length,...[...f].map(c=>c.charCodeAt(0)),...p7(card[f],4)]); }
+      const rgb7 = (f) => hasColor() ? (f ? colors[f] || nameColor(f) : [0,0,0]).map((c) => c >> 1) : [];
+      if (cmd === LIST) { const f = keys()[b[0]-1]; if (!f) return reply(LIST,[0,b[0],0,0,0,0,0,...rgb7(null)]);
+        return reply(LIST,[0,b[0],f.length,...[...f].map(c=>c.charCodeAt(0)),...p7(card[f],4),...rgb7(f)]); }
+      if (cmd === 8 && hasColor()) { const f = keys()[b[0]-1]; if (!f) return reply(8,[8]);
+        if (b[1] || b[2] || b[3]) colors[f] = [b[1],b[2],b[3]].map((c) => (c << 1) | (c >> 6)); else delete colors[f];
+        return reply(8,[0,b[0]], 40); }
       if (cmd === CLEAR) { const pre = String(b[0]).padStart(2,"0")+"_"; const on = keys()[b[0]-1];
         const want = b.length > 1 ? String.fromCharCode(...b.slice(2, 2 + b[1])) : null;
         const ms = SLOWCLEAR ? 2300 : 3;
