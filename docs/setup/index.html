@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
 <!-- ?v= names this version of the scripts, so a browser never pairs this page
      with an older copy it kept. Change it whenever demo.js or chompi-midi.js change. -->
-<script src="demo.js?v=2026-10-14"></script>
+<script src="demo.js?v=2026-10-15"></script>
 <style>
   /* Setup page: crumb-strewn paper, a CHOMPI creature that eats firmware, handwritten notes,
      steps printed like the lines on CHOMPI's panel (see the end of this block). */
@@ -1188,9 +1188,14 @@ $("update-launcher").addEventListener("click", async () => {
   try {
     screen("Downloading the launcher…", "busy");
     const img = await fetchImage({ id: "_launcher", title: "the launcher", file: nl.file, size: nl.size, sha256: nl.sha256 });
-    await state.launcher.upload(img, LAUNCHER_SLOT, "LAUNCHER", chunkSize(), (phase, done, total) => {
-      screen(phase === "send" ? `Sending the launcher… ${Math.floor((100 * done) / total)}%` : "Writing the launcher to the card…", "busy");
-    });
+    await openPorts();
+    try {
+      await state.launcher.upload(img, LAUNCHER_SLOT, "LAUNCHER", chunkSize(), (phase, done, total) => {
+        screen(phase === "send" ? `Sending the launcher… ${Math.floor((100 * done) / total)}%` : "Writing the launcher to the card…", "busy");
+      });
+    } finally {
+      await closePorts(); // right away: CHOMPI restarts and leaves USB
+    }
     state.launcherUpdate = { to: nl.version };
     state.info = null;
     $("launcher-update").hidden = true;
@@ -1231,8 +1236,28 @@ function seenPorts() {
 function adapter(pair) {
   return {
     send: (bytes) => pair.out.send(bytes),
-    onMessage: (fn) => { pair.in.onmidimessage = (e) => fn(e.data); },
+    onMessage: (fn) => { pair.handler = (e) => fn(e.data); pair.in.onmidimessage = pair.handler; },
   };
+}
+
+/* On Windows, Chrome and Edge can freeze when a USB MIDI device goes away
+   while its ports are open, and reloading the page hangs too. CHOMPI goes
+   away every time a key starts a firmware, so the ports are open only while
+   the page talks to it. Counted, as one talk can sit inside another. */
+let talking = 0;
+async function openPorts() {
+  talking++;
+  const p = state.pair;
+  await Promise.all([p.in.open(), p.out.open()]);
+  p.in.onmidimessage = p.handler;
+}
+async function closePorts() {
+  talking = Math.max(0, talking - 1);
+  if (!talking && state.pair) await shut(state.pair);
+}
+async function shut(p) {
+  p.in.onmidimessage = null; // would open the input again
+  await Promise.all([p.in.close(), p.out.close()]).catch(() => {});
 }
 
 function paintConnection() {
@@ -1257,17 +1282,17 @@ async function readCard(talk = true) {
 }
 
 async function connectTo(pair, quiet = false) {
-  if (state.pair?.in) state.pair.in.onmidimessage = null;
-  state.pair = pair;
   state.connecting = true;
+  if (state.pair) await shut(state.pair);
+  state.pair = pair;
   $("old-launcher").hidden = true;
   $("old-launcher-alt").hidden = true;
   render();
   screen(`Knocking on ${pair.name}…`, "busy");
   let ok = false;
   try {
-    await Promise.all([pair.in.open(), pair.out.open()]);
     state.launcher = new Launcher(adapter(pair), log);
+    await openPorts();
     const info = await state.launcher.ping();
     note(`launcher ${info.launcherVersion || "(no version)"}, features ${info.features}`);
     if ((info.features & NEEDED) !== NEEDED) {
@@ -1298,6 +1323,12 @@ async function connectTo(pair, quiet = false) {
     } else {
       show("connect-result", `Connected${lv}. Step 2 shows what's on your CHOMPI now.`);
     }
+    if (!hadChanges) {
+      /* back after a firmware ran: the last write's "All done" is old news */
+      show("write-result", "");
+      $("step-write").classList.remove("done");
+      $("speed").hidden = true;
+    }
     offerLauncher(info);
     $("step-connect").classList.add("done");
     ok = true;
@@ -1314,6 +1345,7 @@ async function connectTo(pair, quiet = false) {
       show("connect-result", e.message, true);
     }
   } finally {
+    await closePorts();
     state.connecting = false;
     render();
   }
@@ -1354,7 +1386,15 @@ async function startMidi(user) {
       if (user) show("connect-result", "MIDI access was blocked. Allow MIDI for this site in the browser's settings, then connect again.", true);
       return;
     }
-    state.access.onstatechange = () => refreshPorts(false);
+    /* Opening and closing a port fires this too; only plugging in or out matters. */
+    const plugged = new Map([...state.access.inputs.values(), ...state.access.outputs.values()].map((p) => [p.id, p.state]));
+    state.access.onstatechange = (e) => {
+      if (e?.port) {
+        if (plugged.get(e.port.id) === e.port.state) return;
+        plugged.set(e.port.id, e.port.state);
+      }
+      refreshPorts(false);
+    };
   }
   refreshPorts(true, !user);
 }
@@ -1423,6 +1463,7 @@ $("run-speedtest").addEventListener("click", async () => {
   const img = new Uint8Array(ROUND);
   for (let o = 0; o < ROUND; o += 65536) crypto.getRandomValues(img.subarray(o, o + 65536));
   try {
+    await openPorts();
     for (const chunk of [256, 512, 1024, 2048].filter((c) => c <= state.info.maxChunk)) {
       let ms = 0;
       for (let r = 0; r < 2; r++) {
@@ -1439,6 +1480,7 @@ $("run-speedtest").addEventListener("click", async () => {
     print(`stopped: ${e.message}`);
     screen(e.message, "bad");
   } finally {
+    await closePorts();
     state.busy = false;
     $("run-speedtest").disabled = false;
     render();
@@ -1452,12 +1494,15 @@ $("run-key-start").addEventListener("click", async () => {
   if (!(state.info.features & FEATURE.RUN)) { out.textContent = "This launcher can't start keys from here (needs 1.5)."; return; }
   const key = parseInt($("run-key").value, 10);
   try {
+    await openPorts();
     await state.launcher.run(key);
     out.textContent = `Key ${key} started.`;
     note(`run key ${key}: started`);
   } catch (e) {
     out.textContent = `Key ${key}: ${e.message}`;
     note(`run key ${key}: ${e.message}`);
+  } finally {
+    await closePorts();
   }
 });
 
@@ -1500,6 +1545,7 @@ $("write").addEventListener("click", async () => {
     /* Download everything first, so a bad connection fails before CHOMPI is touched. */
     screen("Downloading firmwares…", "busy");
     for (const op of ops) if (op.kind === "write") await fetchImage(op.fw);
+    await openPorts();
 
     /* Files without a number go first. They sit on whatever key is free, so
        each removal can move the others: look up where each one is right
@@ -1569,6 +1615,7 @@ $("write").addEventListener("click", async () => {
       $("step-write").classList.add("done");
     }
     state.progress = {};
+    await closePorts();
   } catch (e) {
     const msg = e instanceof ProtocolError || e instanceof Error ? e.message : String(e);
     /* what is on the card now, so a second try only does what's left */
@@ -1577,6 +1624,7 @@ $("write").addEventListener("click", async () => {
       state.current = await readCard(false);
       state.plan = planned;
     } catch (e2) { note(`couldn't read the card back: ${e2.message}`); /* the reconnect will */ }
+    await closePorts();
     if (failed) progress(failed.key, "fail", msg, true);
     screen(msg, "bad");
     show("write-result", `${msg} Keys marked done are written; press Write again to do the rest.`, true);

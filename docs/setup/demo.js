@@ -40,9 +40,9 @@
   const g7 = (a) => a.reduceRight((v, b) => v * 128 + b, 0);
   const p7 = (v, n) => Array.from({ length: n }, (_, i) => Math.floor(v / 128 ** i) & 0x7f);
   let up = null;
-  const input = { name: "CHOMPI", manufacturer: "x", state: "connected", type: "input", onmidimessage: null, open: async () => {} };
+  const input = { name: "CHOMPI", manufacturer: "x", state: "connected", type: "input", onmidimessage: null, connection: "closed", open: async () => { input.connection = "open"; }, close: async () => { input.connection = "closed"; } };
   const reply = (cmd, p, ms = 3) => setTimeout(() => input.onmidimessage && input.onmidimessage({ data: new Uint8Array([0xF0,0x7D,0x43,0x48,cmd|0x40,...p,0xF7]) }), ms);
-  const output = { name: "CHOMPI", manufacturer: "x", state: "connected", type: "output", open: async () => {},
+  const output = { name: "CHOMPI", manufacturer: "x", state: "connected", type: "output", connection: "closed", open: async () => { output.connection = "open"; }, close: async () => { output.connection = "closed"; },
     send(m) {
       if (SILENT) return;
       const cmd = m[4], b = m.slice(5, -1);
@@ -89,6 +89,7 @@
       return reply(cmd,[1]);
     } };
   const access = { inputs: new Map([["i", input]]), outputs: new Map([["o", output]]), onstatechange: null };
+  window.__ports = { input, output };
   navigator.requestMIDIAccess = async () => access;
   const q = navigator.permissions.query.bind(navigator.permissions);
   navigator.permissions.query = async (d) => d.name === "midi" ? { state: "granted" } : q(d);
