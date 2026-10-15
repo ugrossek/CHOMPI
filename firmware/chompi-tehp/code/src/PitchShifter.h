@@ -25,6 +25,13 @@ namespace chompi
      *  spread over many samples, and all voices share a per-block budget, so
      *  playing many notes can't overload the audio callback.
      *  Both channels share the tap so the stereo image stays intact.
+     *
+     *  Input comes in with Push(), output with Out(). They needn't keep pace:
+     *  a sample voice pushes its sample's frames unchanged, one every `length`
+     *  output samples, and the tap reads them at the pitch ratio. So the delay
+     *  line holds the sample at its own speed, the shifter only does the pitch,
+     *  and its grains are the same length of sample however far it's stretched.
+     *  Process() is the classic in-step version (the looper).
      */
     class StereoPitchShifter
     {
@@ -34,7 +41,7 @@ namespace chompi
             buf_ = buff;
             ana_ = ana;
             acc_ = 0.f;
-            w_   = 0;
+            w_   = kMask; // Push steps first: the first frame lands at 0
             wet_ = 0.f;
             Reset();
         }
@@ -43,6 +50,8 @@ namespace chompi
         inline void Reset()
         {
             filled_ = 0;
+            pending_ = 0;
+            fresh_  = true;
             primed_ = false;
             state_  = State::IDLE;
             d0_     = 1.f;
@@ -65,49 +74,63 @@ namespace chompi
             PrimeGiven() = PrimeBudget() = std::min(std::max(next, 0), int(block_size) * kPrimePerSample);
         }
 
-        /** Read-ahead: shifting up reads faster than real time, so a new note
-         *  needs some history before it can sound. A source that knows its
-         *  future (a sample) can Feed() that many frames ahead instead of
-         *  waiting. Returns how many to feed now, limited by a per-block
-         *  budget all voices share. */
-        size_t Hunger(float ratio)
+        /** Read-ahead: when the tap reads faster than input comes in, a new
+         *  note needs some history before it can sound. A source that knows its
+         *  future (a sample) can Push() that many frames ahead instead of
+         *  waiting, calling Fed() for each. Returns how many to push now,
+         *  limited by a per-block budget all voices share.
+         *  @param close see Out() */
+        size_t Hunger(float close)
         {
-            if(primed_ || ratio <= 1.f || PrimeBudget() <= 0)
+            if(primed_ || close <= 0.f || PrimeBudget() <= 0)
                 return 0;
-            const size_t need = PrimeFrames(daisysp::fclamp(ratio, kMinRatio, kMaxRatio));
+            const size_t need = PrimeFrames(close);
             return need > filled_ ? std::min(need - filled_, size_t(PrimeBudget())) : 0;
         }
 
-        /** writes one frame of input without producing output (see Hunger) */
-        void Feed(float l, float r)
+        /** a read-ahead frame was pushed (see Hunger) */
+        inline void Fed() { PrimeBudget()--; }
+
+        /** one frame of input */
+        inline void Push(float l, float r)
         {
-            PrimeBudget()--;
+            w_ = (w_ + 1) & kMask;
             Write(l, r);
             if(filled_ < kShiftBufFrames)
                 filled_++;
-            d0_ = filled_; // still the note's start, as while waiting in Advance
-            w_  = (w_ + 1) & kMask;
+            pending_++;
         }
 
-        /** @param ratio pitch ratio, 1.0 = unchanged, 2.0 = octave up */
+        static inline float ClampRatio(float ratio) { return daisysp::fclamp(ratio, kMinRatio, kMaxRatio); }
+
+        /** input and output in step
+         *  @param ratio pitch ratio, 1.0 = unchanged, 2.0 = octave up */
         void Process(float ratio, float *l, float *r)
         {
-            Write(*l, *r);
+            Push(*l, *r);
+            const float rr = ClampRatio(ratio);
+            Out(rr, rr - 1.f, fabsf(ratio - 1.f) < .003f, l, r);
+        }
 
-            // at exactly 1.0 there's nothing to do, so fade to dry
-            const float target = fabsf(ratio - 1.f) < .003f ? 0.f : 1.f;
-            if(filled_ == 0)
+        /** one frame of output, replacing *l / *r (the dry signal)
+         *  @param ratio how fast the tap reads, in input frames per output frame
+         *  @param close how much faster the tap reads than input comes in (ratio
+         *      minus the push rate): > 0 runs into "now", < 0 falls behind
+         *  @param dry *l / *r already sound right: fade to them */
+        void Out(float ratio, float close, bool dry, float *l, float *r)
+        {
+            const float target = dry ? 0.f : 1.f;
+            if(fresh_)
                 wet_ = target; // new note: no fade from the wrong pitch
             else
                 daisysp::fonepole(wet_, target, .002f);
+            fresh_ = false;
 
-            if(filled_ < kShiftBufFrames)
-                filled_++;
-
-            if(wet_ > .0001f)
+            if(wet_ <= .0001f)
+                pending_ = 0; // the tap keeps its delay while dry
+            else
             {
-                const float rr = daisysp::fclamp(ratio, kMinRatio, kMaxRatio);
-                Advance(rr);
+                Advance(ratio, close);
 
                 float l0, r0;
                 Tap(d0_, &l0, &r0);
@@ -123,17 +146,16 @@ namespace chompi
                 *l += wet_ * (l0 - *l);
                 *r += wet_ * (r0 - *r);
             }
-
-            w_ = (w_ + 1) & kMask;
         }
+
+        static constexpr float  kMinRatio  = .0625f;
+        // 3 octaves, at any TEHP length. The highest splice target, kDLo + FadeUse
+        // + Margin + JumpUp + kSearch, stays inside kShiftBufFrames up to a
+        // closing speed of about 9
+        static constexpr float  kMaxRatio  = 8.f;
 
     private:
         static constexpr size_t kMask      = kShiftBufFrames - 1;
-        static constexpr float  kMinRatio  = .0625f;
-        // 3 octaves: TEHP's length stretches by shifting up, and every key keeps
-        // the length. The highest splice target, kDLo + FadeUse + Margin + JumpUp
-        // + kSearch, stays inside kShiftBufFrames up to about 10x
-        static constexpr float  kMaxRatio  = 8.f;
         static constexpr int    kCorrLen   = 320; // input frames compared per candidate
         static constexpr int    kFade      = 320; // splice crossfade, ~7ms
         static constexpr int    kGrain     = 768; // nominal splice jump, ~16ms
@@ -165,34 +187,35 @@ namespace chompi
             }
         }
 
-        // shifting up, the tap closes in on "now": above 2x the crossfade is
-        // shortened so it always uses the same delay, and the jump grows so
-        // every splice gains more room than the search and fade use up
-        static inline float FadeUse(float rr) { return rr > 1.f ? kFade * fminf(rr - 1.f, 1.f) : 0.f; }
-        static inline float Margin(float rr) { return kSearchSamps * fabsf(1.f - rr); }
-        static inline int   JumpUp(float rr)
+        // closing in on "now" (close > 0): above 1 the crossfade is shortened
+        // so it always uses the same delay, and the jump grows so every splice
+        // gains more room than the search and fade use up
+        static inline float FadeUse(float close) { return close > 0.f ? kFade * fminf(close, 1.f) : 0.f; }
+        static inline float Margin(float close) { return kSearchSamps * fabsf(close); }
+        static inline int   JumpUp(float close)
         {
-            return std::max(kGrain, int(FadeUse(rr) + .5f * Margin(rr)) + kSearch + 64);
+            return std::max(kGrain, int(FadeUse(close) + .5f * Margin(close)) + kSearch + 64);
         }
 
-        /** history a note needs before shifting up can start */
-        static inline size_t PrimeFrames(float rr)
+        /** history a note needs before closing in on "now" can start */
+        static inline size_t PrimeFrames(float close)
         {
-            return size_t(kDLo + FadeUse(rr) + Margin(rr) + JumpUp(rr));
+            return size_t(kDLo + FadeUse(close) + Margin(close) + JumpUp(close));
         }
 
-        void Advance(float rr)
+        void Advance(float rr, float close)
         {
-            const float inc      = 1.f - rr; // delay change per output sample
-            const float margin   = Margin(rr);
-            const float fade_use = FadeUse(rr);
-            const int   jump_up  = JumpUp(rr);
+            const float inc      = float(pending_) - rr; // delay change since the last output
+            pending_ = 0;
+            const float margin   = Margin(close);
+            const float fade_use = FadeUse(close);
+            const int   jump_up  = JumpUp(close);
 
             if(!primed_)
             {
-                // shifting up reads faster than real time: collect some history
-                // first (or get it fed ahead), then start at the beginning of the note
-                if(rr > 1.f && filled_ < PrimeFrames(rr))
+                // reading faster than input comes in: collect some history
+                // first (or get it pushed ahead), then start at the beginning of the note
+                if(close > 0.f && filled_ < PrimeFrames(close))
                 {
                     d0_ = filled_; // reads silence until primed
                     return;
@@ -208,8 +231,8 @@ namespace chompi
             {
                 case State::IDLE:
                 {
-                    const bool down = rr < 1.f && d0_ >= kDHi - margin;
-                    const bool up   = rr > 1.f && d0_ <= kDLo + fade_use + margin;
+                    const bool down = close < 0.f && d0_ >= kDHi - margin;
+                    const bool up   = close > 0.f && d0_ <= kDLo + fade_use + margin;
                     if(down || up)
                     {
                         jump_     = up ? jump_up : -kGrain;
@@ -224,8 +247,8 @@ namespace chompi
                 case State::SEARCH:
                 {
                     // out of time (budget starved by other voices): use the best so far
-                    const bool late = (rr < 1.f && d0_ >= kDHi)
-                                      || (rr > 1.f && d0_ <= kDLo + fade_use);
+                    const bool late = (close < 0.f && d0_ >= kDHi)
+                                      || (close > 0.f && d0_ <= kDLo + fade_use);
                     while(Budget() > 0 && lag_ <= kSearch && !late)
                     {
                         Budget()--;
@@ -241,7 +264,7 @@ namespace chompi
                         const float d_max = fminf(float(filled_) - 2.f, float(kShiftBufFrames) - 2.f);
                         d1_       = daisysp::fclamp(d0_ + best_off_, 1.f, d_max);
                         fade_     = 0;
-                        fade_len_ = rr > 2.f ? std::max(1, int(kFade / (rr - 1.f))) : kFade;
+                        fade_len_ = close > 1.f ? std::max(1, int(kFade / close)) : kFade;
                         state_ = State::FADE;
                     }
                     break;
@@ -355,6 +378,8 @@ namespace chompi
         float    acc_;
         size_t   w_;
         size_t filled_;
+        int    pending_; // frames pushed since the last Advance
+        bool   fresh_;   // no output since Reset
         bool   primed_;
         State  state_;
         float  d0_, d1_; // delay of the playing tap, and of the one fading in

@@ -390,11 +390,13 @@ namespace daisy
          *  card has its usual time to refill it */
         inline bool ReadAheadRoom() { return using_ram || read_samps.GetNumElements() > kMaxFileStreamingSamps / 2; }
 
-        /** moves the source on by one frame, at 1 / length times original speed
-         *  (pitch is handled by shifter_), running the click, loop and reverse envelopes */
-        inline void StepSource(float env_sig)
+        /** moves the source on by `step` frames, running the click, loop and
+         *  reverse envelopes, and pushes each new frame into shifter_ as it is:
+         *  at 1 / length speed the shifter gets the sample at its own pitch,
+         *  just slower (or faster), and does the pitch from there */
+        inline void StepSource(float env_sig, float step)
         {
-            rpos_frac_ += speed_;
+            rpos_frac_ += step;
             if (rpos_frac_ >= 1.f)
             {
                 /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
@@ -485,18 +487,21 @@ namespace daisy
                         read_left_b_ = read_samps.PopFront();
                         read_right_b_ = read_samps.PopFront();
                     }
+
+                    // click/loop/rev envs mask jumps in the source, so they go before the shifter
+                    const float pre = click_env * loop_env * rev_env;
+                    shifter_.Push(s162f(read_left_b_) * pre, s162f(read_right_b_) * pre);
                 }
             }
         }
 
-        /** the current source frame, envelopes applied */
+        /** the current source frame, envelopes applied (the dry signal) */
         inline void SourceFrame(float *sl, float *sr)
         {
             /** linear interpolation */
             float tl = read_left_a_ + (read_left_b_ - read_left_a_) * rpos_frac_;
             float tr = read_right_a_ + (read_right_b_ - read_right_a_) * rpos_frac_;                
 
-            // click/loop/rev envs mask jumps in the source, so they go before the shifter
             const float pre = click_env * loop_env * rev_env;
             *sl = s162f(tl) * pre;
             *sr = s162f(tr) * pre;
@@ -536,27 +541,28 @@ namespace daisy
             }
             else
             {
-                StepSource(env_sig);
+                StepSource(env_sig, speed_);
 
                 if(rev_wait == 2)
                 {
+                    // the source (and the dry signal) at 1 / length speed; the
+                    // shifter reads its frames at the pitch ratio
                     float sl, sr;
                     SourceFrame(&sl, &sr);
-                    // the source plays at 1 / length, the shifter takes that pitch change back out
-                    const float ratio = varispeed_factor * global_pitch * length_;
-                    shifter_.Process(ratio, &sl, &sr);
+                    const float pitch = varispeed_factor * global_pitch;
+                    const float ratio = chompi::StereoPitchShifter::ClampRatio(pitch);
+                    const float close = ratio - speed_;
+                    shifter_.Out(ratio, close, fabsf(pitch * length_ - 1.f) < .003f, &sl, &sr);
 
-                    /** TEHP read-ahead: shifting up reads faster than the sample
-                     *  comes in, so a new note would wait for history. The sample's
-                     *  future is right here, so feed the shifter ahead instead */
+                    /** TEHP read-ahead: when the shifter reads faster than the
+                     *  sample comes in, a new note would wait for history. The
+                     *  sample's future is right here, so push it ahead instead */
                     if(!deferred_trig && click_clear == 0)
                     {
-                        for(size_t n = shifter_.Hunger(ratio); n > 0 && ReadAheadRoom(); n--)
+                        for(size_t n = shifter_.Hunger(close); n > 0 && ReadAheadRoom(); n--)
                         {
-                            StepSource(env_sig);
-                            float al, ar;
-                            SourceFrame(&al, &ar);
-                            shifter_.Feed(al, ar);
+                            StepSource(env_sig, 1.f);
+                            shifter_.Fed();
                         }
                     }
 
