@@ -76,7 +76,7 @@ namespace chompi
                before a page is shown */
             SetTranspose(.5f);
             SetLevel(.75f);
-            SetEnvelope(.4f);
+            SetEnvelope(.5f); // a soft start: ~20 ms attack, ~390 ms release
             SetDoubler(0.f);
             SetSpread(0.f);
 

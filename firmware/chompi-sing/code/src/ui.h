@@ -20,7 +20,7 @@ namespace chompi
            chompi layer (MenuPage): -, width, doubler, -, envelope, mix (.5) */
         {.5f, .5f, .5f, .5f, .75f, .84f},
         {0.f, 0.f, 0.f, .5f, 0.f, .75f},
-        {0.f, 0.f, 0.f, 0.f, .4f, .5f},
+        {0.f, 0.f, 0.f, 0.f, .5f, .5f},
     };
 
     static const uint8_t midi2key[49] = {
