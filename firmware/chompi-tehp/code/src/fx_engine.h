@@ -68,6 +68,24 @@ namespace daisysp
 {
 #define TAIL , -1
 
+/** cos(2 pi p) for p in [0, 1), within 3e-5: the reverb's modulation ran two
+ *  cosf per sample (~2% CPU). Folded to a quarter wave, then Taylor to t^8 */
+static inline float FastCos2Pi(float p)
+{
+    float y    = fabsf(p - .5f); // cos(2 pi p) = -cos(2 pi y)
+    float sign = -1.f;
+    if(y > .25f)
+    {
+        y    = .5f - y; // cos(2 pi y) = -cos(2 pi (.5 - y))
+        sign = 1.f;
+    }
+    const float t  = 6.2831853f * y; // 0 .. pi / 2
+    const float t2 = t * t;
+    return sign
+           * (1.f
+              + t2 * (-.5f + t2 * (1.f / 24.f + t2 * (-1.f / 720.f + t2 * (1.f / 40320.f)))));
+}
+
 enum Format
 {
     FORMAT_12_BIT,
@@ -344,7 +362,7 @@ class FxEngine
                                     ? lfo_phase_[index] - 1.f
                                     : lfo_phase_[index];
 
-            offset += amplitude * cosf(lfo_phase_[index] * TWOPI_F);
+            offset += amplitude * FastCos2Pi(lfo_phase_[index]);
 
             int32_t offset_integral = static_cast<int32_t>(offset);
             float   offset_fractional

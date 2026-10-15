@@ -48,6 +48,8 @@ class BasicMMF
      * @todo make this take actual freq... */
     inline void SetFreq(float f)
     {
+        if(f == freq_)
+            return; // set every sample: skip the division when nothing moved
         freq_ = f;
         CalculateFeedback();
     }
@@ -55,6 +57,8 @@ class BasicMMF
 
     inline void SetRes(float r)
     {
+        if(r == res_)
+            return;
         res_ = r;
         CalculateFeedback();
     }

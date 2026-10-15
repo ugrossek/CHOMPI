@@ -688,12 +688,14 @@ namespace chompi
             SetPthLedFloat(led_map[5], r, g, b);
 
 #ifdef TEHP_DIAG
-            /* test builds: audio load on the white keys, low C = 0, high C =
-               100%. The average as a bar in parts: white = controls and UI,
-               then the keys: green = the voice itself, cyan = shifter input,
-               pink = shifter output, orange = splice search; blue = looper,
-               yellow = effects, purple = the rest. One red key for the peak
-               of the last 2 s. White key w (0 = low C) is LED 24 - w. */
+            /* test builds: the keys' audio time on the white keys, low C =
+               0, high C = 100% of the CPU, as a bar in parts: white =
+               envelope and slews, green = moving the source on, cyan =
+               shifter input, pink = shifter output, orange = splice search,
+               yellow = end/loop/SD requests, blue = the rest of the keys.
+               Everything else isn't shown. One red key for the peak of the
+               whole callback over the last 2 s. White key w (0 = low C) is
+               LED 24 - w. */
             {
                 static float    peak_hold = 0.f;
                 static uint32_t peak_t    = 0;
@@ -705,27 +707,28 @@ namespace chompi
                 }
                 const float peak = fmaxf(peak_hold, ::tehp_load_peak);
                 const int   peak_key = int(fminf(peak, .9999f) * 15.f);
-                static const float part_rgb[8][3] = {
+                static const float part_rgb[7][3] = {
                     {.3f, .3f, .3f}, {0.f, .6f, 0.f}, {0.f, .5f, .5f}, {.8f, 0.f, .3f},
-                    {.8f, .25f, 0.f}, {0.f, 0.f, .8f}, {.6f, .5f, 0.f}, {.4f, 0.f, .6f}};
+                    {.8f, .25f, 0.f}, {.6f, .5f, 0.f}, {0.f, 0.f, .8f}};
                 const float *sh = ::tehp_share;
-                const float out = fmaxf(sh[kTehpOut] - sh[kTehpSearch], 0.f);
-                const float own = fmaxf(sh[kTehpVoices] - sh[kTehpPush] - sh[kTehpOut], 0.f);
-                const float part[7] = {sh[kTehpUi], own, sh[kTehpPush], out, sh[kTehpSearch],
-                                       sh[kTehpLooper], sh[kTehpFx]};
-                float edge[8];
+                const float step = fmaxf(sh[kTehpStep] - sh[kTehpPush], 0.f);
+                const float out  = fmaxf(sh[kTehpOut] - sh[kTehpSearch], 0.f);
+                const float rest = fmaxf(sh[kTehpVoices] - sh[kTehpHead] - sh[kTehpStep]
+                                             - sh[kTehpOut] - sh[kTehpTail], 0.f);
+                const float part[7] = {sh[kTehpHead], step, sh[kTehpPush], out,
+                                       sh[kTehpSearch], sh[kTehpTail], rest};
+                float edge[7];
                 float sum = 0.f;
                 for(int k = 0; k < 7; k++)
                     edge[k] = (sum += part[k]) * 15.f;
-                edge[7] = ::tehp_load_avg * 15.f; // the rest of the engine
                 for(int w = 0; w < 15; w++)
                 {
                     int k = 0;
-                    while(k < 8 && w + .5f >= edge[k])
+                    while(k < 7 && w + .5f >= edge[k])
                         k++;
                     if(w == peak_key)
                         SetSmtLedFloat(24 - w, 1.f, 0.f, 0.f);
-                    else if(k < 8)
+                    else if(k < 7)
                         SetSmtLedFloat(24 - w, part_rgb[k][0], part_rgb[k][1], part_rgb[k][2]);
                     else
                         SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);

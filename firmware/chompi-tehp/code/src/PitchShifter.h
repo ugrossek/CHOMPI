@@ -108,7 +108,7 @@ namespace chompi
                 {
                     float l1, r1;
                     Tap(d1_, &l1, &r1);
-                    const float g = float(fade_) / fade_len_;
+                    const float g = float(fade_) * fade_inv_;
                     l0 += g * (l1 - l0);
                     r0 += g * (r1 - r0);
                 }
@@ -238,6 +238,7 @@ namespace chompi
                         d1_       = daisysp::fclamp(d0_ + best_off_, 1.f, d_max);
                         fade_     = 0;
                         fade_len_ = close > 1.f ? std::max(1, int(kFade / close)) : kFade;
+                        fade_inv_ = 1.f / fade_len_;
                         state_ = State::FADE;
                     }
                     break;
@@ -343,6 +344,7 @@ namespace chompi
         State  state_;
         float  d0_, d1_; // delay of the playing tap, and of the one fading in
         int    fade_, fade_len_;
+        float  fade_inv_; // 1 / fade_len_
         int    jump_, lag_;
         float  best_off_, best_, best_l_, prev_;
         bool   fit_;

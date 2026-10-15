@@ -307,6 +307,8 @@ namespace daisy
             }
 
             // delay, in its own block to optimize SDRAM access
+            // (the feedback curve once per block: powf per sample cost ~2% CPU)
+            const float fb_gain = powf(dly_feedback_, .7f);
             for(size_t i = 0; i < size; i++)
             {
                 // fonepole and set controls
@@ -324,7 +326,7 @@ namespace daisy
 
                 // write
                 const float mono_sum = (outl[i] + outr[i]) * .5f;
-                const float del_in = mono_sum + delsig_r * powf(dly_feedback_, .7f);
+                const float del_in = mono_sum + delsig_r * fb_gain;
                 const InterpolatedDelayLine::AudioSample del_write = {int16_t(f2s16(del_in)), int16_t(f2s16(delsig_l))};
                 del_.Write(del_write);
 
