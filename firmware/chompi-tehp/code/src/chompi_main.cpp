@@ -110,6 +110,8 @@ bool line_in_state;
 #ifdef TEHP_DIAG
 volatile uint32_t tehp_starved_at = 0;
 float tehp_load_avg = 0.f, tehp_load_peak = 0.f;
+uint32_t tehp_ticks[kTehpParts];  // this block, per part (DSPEngine.h)
+float    tehp_share[kTehpParts];  // smoothed, as a fraction of the block period
 #endif
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
@@ -134,6 +136,11 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     hw.ProcessAllControls();
     ui.GenerateEvents();
     engine.Prepare();
+#ifdef TEHP_DIAG
+    for(int k = 0; k < kTehpParts; k++)
+        tehp_ticks[k] = 0;
+    tehp_ticks[kTehpUi] = System::GetTick() - block_start;
+#endif
 
     // does this have to happen in the audio callback?
     if(hw.jack_detect.Read() != line_in_state)
@@ -160,6 +167,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     const float load = float(System::GetTick() - block_start) / (ticks_per_sample * size);
     tehp_load_avg += .01f * (load - tehp_load_avg);
     tehp_load_peak = fmaxf(tehp_load_peak, load);
+    for(int k = 0; k < kTehpParts; k++)
+        tehp_share[k] += .01f * (float(tehp_ticks[k]) / (ticks_per_sample * size) - tehp_share[k]);
 #endif
 
     // meter.OnBlockEnd();

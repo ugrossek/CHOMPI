@@ -8,6 +8,7 @@
 #ifdef TEHP_DIAG
 extern volatile uint32_t tehp_starved_at;
 extern float tehp_load_avg, tehp_load_peak;
+extern float tehp_share[];
 #endif
 
 namespace chompi
@@ -689,9 +690,11 @@ namespace chompi
 
 #ifdef TEHP_DIAG
             /* test builds: audio load on the white keys, low C = 0, high C =
-               100%: a dim bar for the average, one red key for the peak of
-               the last 2 s. The bar is blue while a key's sample ran dry in
-               the last 2 s. White key w (0 = low C) is LED 24 - w. */
+               100%. The average as a bar in parts: white = controls and UI,
+               green = keys, blue = looper, yellow = effects, purple = the
+               rest. One key for the peak of the last 2 s: red, or orange
+               while a key's sample ran dry in the last 2 s. White key w (0 =
+               low C) is LED 24 - w. */
             {
                 static float    peak_hold = 0.f;
                 static uint32_t peak_t    = 0;
@@ -704,14 +707,24 @@ namespace chompi
                 const bool  dry  = now - ::tehp_starved_at < 2000 && ::tehp_starved_at != 0;
                 const float peak = fmaxf(peak_hold, ::tehp_load_peak);
                 const int   peak_key = int(fminf(peak, .9999f) * 15.f);
+                static const float part_rgb[5][3] = {
+                    {.3f, .3f, .3f}, {0.f, .6f, 0.f}, {0.f, 0.f, .8f}, {.6f, .5f, 0.f}, {.4f, 0.f, .6f}};
+                float edge[5];
+                float sum = 0.f;
+                for(int k = 0; k < 4; k++)
+                    edge[k] = (sum += ::tehp_share[k]) * 15.f;
+                edge[4] = ::tehp_load_avg * 15.f; // the rest of the engine
                 for(int w = 0; w < 15; w++)
                 {
+                    int k = 0;
+                    while(k < 5 && w + .5f >= edge[k])
+                        k++;
                     if(w == peak_key)
-                        SetSmtLedFloat(24 - w, 1.f, 0.f, 0.f);
-                    else if(w / 15.f < ::tehp_load_avg)
-                        SetSmtLedFloat(24 - w, dry ? 0.f : .2f, dry ? 0.f : .2f, dry ? 1.f : .2f);
+                        SetSmtLedFloat(24 - w, 1.f, dry ? .4f : 0.f, 0.f);
+                    else if(k < 5)
+                        SetSmtLedFloat(24 - w, part_rgb[k][0], part_rgb[k][1], part_rgb[k][2]);
                     else
-                        SetSmtLedFloat(24 - w, 0.f, 0.f, dry ? .15f : 0.f);
+                        SetSmtLedFloat(24 - w, 0.f, 0.f, 0.f);
                 }
             }
 #endif

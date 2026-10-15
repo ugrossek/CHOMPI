@@ -26,6 +26,17 @@ static constexpr float kHpGain = .2f;
 static constexpr float kMicGain = 5.f;
 static constexpr float kLineInGain = 3.f;
 static constexpr size_t kMaxPoly = 7;
+#ifdef TEHP_DIAG
+/** test builds: where the audio callback's time goes (chompi_main.cpp) */
+enum { kTehpUi, kTehpVoices, kTehpLooper, kTehpFx, kTehpParts };
+extern uint32_t tehp_ticks[kTehpParts];
+#define TEHP_TIME_START const uint32_t tehp_t0 = System::GetTick();
+#define TEHP_TIME_END(part) tehp_ticks[part] += System::GetTick() - tehp_t0;
+#else
+#define TEHP_TIME_START
+#define TEHP_TIME_END(part)
+#endif
+
 static_assert(kMaxPoly == kLooperOutShifter, "the looper's shifters follow the voices'");
 
 namespace daisy
@@ -416,6 +427,8 @@ namespace daisy
             if(record != true && record != false)
                 record = false;
 
+            {
+            TEHP_TIME_START
             for (size_t voice = 0; voice < kMaxPoly; voice++)
                 // cache the first block of samples as needed
                 chompi_voice[voice].CacheSamples();
@@ -437,6 +450,8 @@ namespace daisy
                         out[1][i] += aor;
                     }
                 }
+            }
+            TEHP_TIME_END(kTehpVoices)
             }
 
             for(size_t i = 0; i < size; i++)
@@ -469,13 +484,25 @@ namespace daisy
 
             //fx_xfade_pre
             if(fx_pre_loop)
+            {
+                TEHP_TIME_START
                 ApplyFx(out[0], out[1], size);
+                TEHP_TIME_END(kTehpFx)
+            }
 
+            {
+            TEHP_TIME_START
             chompi::StereoPitchShifter::NewBlock(size); // the looper's own search budget
             looper.Process(out[0], out[1], size);
+            TEHP_TIME_END(kTehpLooper)
+            }
 
             if(!fx_pre_loop)
+            {
+                TEHP_TIME_START
                 ApplyFx(out[0], out[1], size);
+                TEHP_TIME_END(kTehpFx)
+            }
 
             if(fx_env_ < .01f)
             {
