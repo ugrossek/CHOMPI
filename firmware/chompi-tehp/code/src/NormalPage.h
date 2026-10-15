@@ -119,7 +119,7 @@ namespace chompi
     static const float dark_orange[3] = {.77f, .38f, .06f};
     static const float yellow_green[3] = {.706f, 1.f, 0.f};
 
-    static const uint8_t knob_num_pages[6] = {2, 2, 2, 3, 1, 2};
+    static const uint8_t knob_num_pages[6] = {3, 2, 2, 3, 1, 2}; // knob 1 page 3: TEHP length
 
     class NormalPage : public daisy::UiPage
     {
@@ -301,6 +301,12 @@ namespace chompi
                         b = color_triple_xfade(blue[2], pink[2], red[2], value);
 
                         fx_->SetGain(value);
+                    }
+                    else // length: pink shorter, purple 1x, blue longer
+                    {
+                        r = color_triple_xfade(pink[0], purple[0], blue[0], value);
+                        g = color_triple_xfade(pink[1], purple[1], blue[1], value);
+                        b = color_triple_xfade(pink[2], purple[2], blue[2], value);
                     }
 
                     SetPthLedFloat(1, r, g, b);
@@ -875,6 +881,7 @@ namespace chompi
                 enc_values[1][0] = enc_defaults[1][0];
                 enc_values[1][1] = enc_defaults[1][1];
                 enc_values[1][2] = enc_defaults[1][2];
+                enc_values[2][0] = enc_defaults[2][0];
             }
             else
             {
@@ -889,6 +896,7 @@ namespace chompi
 
                 enc_values[1][0] = presets_->GetValue(mode, bank, slot, 7);
                 pan = presets_->GetValue(mode, bank, slot, 8);
+                enc_values[2][0] = presets_->GetValue(mode, bank, slot, PresetManager::kLengthIdx);
             }
 
             // TODO: clean up pitch code repetition
@@ -906,7 +914,7 @@ namespace chompi
 
             fx_->OpenCubbiSlot(pitch, enc_values[0][1], enc_values[0][2], enc_values[1][1], 
             enc_values[1][2], loop, sustain, enc_values[1][0],
-            pan);
+            pan, fx_->KnobToLength(enc_values[2][0]));
         }
 
         bool OnEncoderTurned(uint16_t encoderID,
@@ -929,13 +937,13 @@ namespace chompi
             else{
                 float inc = turns * kEncoderCoarseStep;
 
-                // fine steps for pitch, sample start, and sample end
-                if((encoderID == 0 && page == 0 && quantized_pitch_)
+                // fine steps for pitch, length, sample start, and sample end
+                if((encoderID == 0 && page != 1 && quantized_pitch_)
                     || (encoderID == 4 && quantized_pitch_))
                 {
                     inc = 0.f;
                 }
-                else if ((encoderID == 0 && page == 0 && !quantized_pitch_)
+                else if ((encoderID == 0 && page != 1 && !quantized_pitch_)
                     || (encoderID == 1 && page == 0)
                     || (encoderID == 2 && page == 0)
                     || (encoderID == 4 && !quantized_pitch_))
@@ -955,6 +963,13 @@ namespace chompi
                     enc_values[0][0] = fx_->SetGlobalPitchQuantized(turns, enc_values[0][0]);
                 else
                     fx_->SetGlobalPitchFree(enc_values[0][0]);
+            }
+            else if (encoderID == 0 && page == 2)
+            {
+                if(quantized_pitch_)
+                    enc_values[2][0] = fx_->SetLengthStepped(turns, enc_values[2][0]);
+                else
+                    fx_->SetLength(fx_->KnobToLength(enc_values[2][0]));
             }
             else if (encoderID == 4)
             {
@@ -1000,7 +1015,7 @@ namespace chompi
 
             }
 
-            if (stepsPerRevolution == 0) {
+            if (stepsPerRevolution == 0 && cc_map[page][encoderID] != 0) {
                 hw_->SendCC(midi_channel, cc_map[page][encoderID], enc_values[page][encoderID] * 127);
             }
 
@@ -1029,7 +1044,7 @@ namespace chompi
 
             presets_->SetValue(enc_values[1][0], mode, bank, slot, 7);
             presets_->SetValue(fx_->GetPan(), mode, bank, slot, 8);
-
+            presets_->SetValue(enc_values[2][0], mode, bank, slot, PresetManager::kLengthIdx);
         }
 
         void SetSwitchState(bool state)
@@ -1050,6 +1065,7 @@ namespace chompi
             enc_values[1][0] = enc_defaults[1][0];
             enc_values[1][1] = enc_defaults[1][1];
             enc_values[1][2] = enc_defaults[1][2];
+            enc_values[2][0] = enc_defaults[2][0];
 
             fx_->StopRecording();
         }

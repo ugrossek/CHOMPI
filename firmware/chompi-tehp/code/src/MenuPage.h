@@ -260,6 +260,12 @@ namespace chompi
                     g = color_triple_xfade(purple[1], 0.f, yellow[1], fx_->GetPan());
                     b = color_triple_xfade(purple[2], 0.f, yellow[2], fx_->GetPan());
                 }
+                else // length, as on the normal page
+                {
+                    r = color_triple_xfade(pink[0], purple[0], blue[0], enc_values[2][0]);
+                    g = color_triple_xfade(pink[1], purple[1], blue[1], enc_values[2][0]);
+                    b = color_triple_xfade(pink[2], purple[2], blue[2], enc_values[2][0]);
+                }
 
                 SetPthLedFloat(1, r, g, b);
             }
@@ -437,6 +443,16 @@ namespace chompi
                     {
                         fx_->SetPan(fx_->GetPan() + inc);
                     }
+                    else // stepped length
+                    {
+                        if(quantized_pitch_)
+                            enc_values[2][0] = fx_->SetLengthStepped(turns, enc_values[2][0]);
+                        else
+                        {
+                            enc_values[2][0] = fclamp(enc_values[2][0] + turns * kEncoderFineStep, 0.f, 1.f);
+                            fx_->SetLength(fx_->KnobToLength(enc_values[2][0]));
+                        }
+                    }
 
                     DumpValuePresets();
                 }
@@ -560,7 +576,8 @@ namespace chompi
             presets_->SetValue(fx_->GetSustainActive(), mode, bank, slot, 6);
 
             presets_->SetValue(enc_values[1][0], mode, bank, slot, 7);
-            presets_->SetValue(fx_->GetPan(), mode, bank, slot, 8);        
+            presets_->SetValue(fx_->GetPan(), mode, bank, slot, 8);
+            presets_->SetValue(enc_values[2][0], mode, bank, slot, PresetManager::kLengthIdx);
         }
 
         void SetVoiceSlot(size_t slot)
@@ -578,6 +595,7 @@ namespace chompi
                 enc_values[1][0] = enc_defaults[1][0];
                 enc_values[1][1] = enc_defaults[1][1];
                 enc_values[1][2] = enc_defaults[1][2];
+                enc_values[2][0] = enc_defaults[2][0];
                 fx_->SetAutoLoop(true);
                 fx_->SetSustainActive(true);
                 fx_->SetPan(.5f);
@@ -594,6 +612,7 @@ namespace chompi
 
                 enc_values[1][0] = presets_->GetValue(mode, bank, slot, 7);
                 fx_->SetPan(presets_->GetValue(mode, bank, slot, 8));
+                enc_values[2][0] = presets_->GetValue(mode, bank, slot, PresetManager::kLengthIdx);
             }
 
             // TODO: clean up pitch code repetition
@@ -610,6 +629,7 @@ namespace chompi
                 pitch = (val - .66 * inv) * 2.941176 + 1.f * inv;
 
             fx_->SetGlobalPitch(fabsf(pitch));
+            fx_->SetLength(fx_->KnobToLength(enc_values[2][0]));
             fx_->SetReverse(pitch < 0.f);
 
             fx_->SetStartPointForce(enc_values[0][1]);
@@ -661,6 +681,12 @@ namespace chompi
                         enc_values[1][0] = enc_defaults[1][0];
                         fx_->SetPan(.5f);
                         fx_->SetGain(.704f);
+                    }
+                    else
+                    {
+                        enc_values[2][0] = enc_defaults[2][0];
+                        fx_->SetLength(1.f);
+                        fx_->ResetGlobalPitchQuant();
                     }
 
                     DumpValuePresets();

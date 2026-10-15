@@ -16,7 +16,7 @@ namespace chompi
     static const float enc_defaults[3][6] = {
         {.83f, 0.f, 1.f, 0.f, .75f, .84f}, // page 1
         {.704f, 0.f, 0.f, 0.f, 0.f, .75f},   // page 2
-        {0.f, 0.f, 0.f, .5f, 0.f, 0.f},   // page 3
+        {.5f, 0.f, 0.f, .5f, 0.f, 0.f},   // page 3 (knob 1: TEHP length, .5 = 1x)
     };
 
     static const uint8_t midi2key[49] = {
@@ -346,10 +346,10 @@ namespace chompi
         static const size_t kPreFileSize = 8192;
         char presets_file[kPreFileSize]; // too big? not big enough?
 
-        // pitch, start, end, att, decay, autoloop, sustainactive, gain, pan
-        const float defaults[9] = {   enc_defaults[0][0], enc_defaults[0][1], enc_defaults[0][2],
+        // pitch, start, end, att, decay, autoloop, sustainactive, gain, pan, length
+        const float defaults[10] = {   enc_defaults[0][0], enc_defaults[0][1], enc_defaults[0][2],
                                 enc_defaults[1][1], enc_defaults[1][2], 1.f,
-                                1.f, enc_defaults[1][0], .5f};
+                                1.f, enc_defaults[1][0], .5f, enc_defaults[2][0]};
 
         void InitFromPresets()
         {

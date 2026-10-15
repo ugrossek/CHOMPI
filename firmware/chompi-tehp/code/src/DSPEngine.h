@@ -740,6 +740,7 @@ namespace daisy
                 cubbi_slot_ = slot;
                 latest_voice = free_idx;
                 SetGlobalPitch(fabsf(cubbi_pitch));
+                SetLength(cubbi_length);
                 SetReverse(cubbi_pitch < 0.f);
                 SetStartPoint(cubbi_start);
                 SetEndPoint(cubbi_end);
@@ -941,10 +942,62 @@ namespace daisy
         {
             fifth = false;
             encoder_chunk = 0.f;
+            length_chunk = 0.f;
+        }
+
+        /** TEHP length (time stretch, pitch unchanged). Knob: 0 - .5 = 1/2x - 1x,
+         *  .5 - 1 = 1x - 4x, both halves log */
+        __attribute__((noinline)) static float KnobToLength(float val)
+        {
+            return powf(2.f, val < .5f ? (val - .5f) * 2.f : (val - .5f) * 4.f);
+        }
+
+        __attribute__((noinline)) static float LengthToKnob(float len)
+        {
+            const float oct = logf(len) * 1.442695f; // log2, with the libm already linked
+            return oct < 0.f ? oct * .5f + .5f : oct * .25f + .5f;
+        }
+
+        /** stepped length, like stepped pitch: dotted and straight values */
+        __attribute__((noinline)) float SetLengthStepped(int16_t turns, float enc_pos)
+        {
+            static const float steps[] = {.5f, .75f, 1.f, 1.5f, 2.f, 3.f, 4.f};
+            static const int kNumSteps = sizeof(steps) / sizeof(steps[0]);
+
+            length_chunk += turns * .25f;
+            if(length_chunk < 1.f && length_chunk > -1.f)
+                return enc_pos;
+
+            const bool up = length_chunk > 0.f;
+            length_chunk = 0.f;
+
+            // the next step past the current length, so free values snap too
+            const float len = KnobToLength(enc_pos);
+            int i = up ? 0 : kNumSteps - 1;
+            while(i >= 0 && i < kNumSteps && (up ? steps[i] <= len * 1.01f : steps[i] >= len * .99f))
+                i += up ? 1 : -1;
+            if(i < 0 || i >= kNumSteps)
+                return enc_pos;
+
+            SetLength(steps[i]);
+            return LengthToKnob(steps[i]);
+        }
+
+        __attribute__((noinline)) void SetLength(float len)
+        {
+            if(voice_mode == VoiceMode::CUBBI)
+            {
+                chompi_voice[latest_voice].SetLength(len);
+            }
+            else
+            {
+                for(size_t i = 0; i < kMaxPoly; i++)
+                    chompi_voice[i].SetLength(len);
+            }
         }
 
         // returns the value for the encoder tracking
-        float SetGlobalPitchQuantized(int16_t turns, float enc_pos)
+        __attribute__((noinline)) float SetGlobalPitchQuantized(int16_t turns, float enc_pos)
         {
             encoder_chunk += turns * .25f;
             if(encoder_chunk >= 1.f || encoder_chunk <= -1.f)
@@ -1431,9 +1484,12 @@ namespace daisy
         float cubbi_gain;
         float cubbi_pan;
 
-        void OpenCubbiSlot(float pitch, float start, float end, float attack, float decay, bool autoloop, bool sustain, float gain, float pan)
+        float cubbi_length = 1.f;
+
+        void OpenCubbiSlot(float pitch, float start, float end, float attack, float decay, bool autoloop, bool sustain, float gain, float pan, float length)
         {
             cubbi_pitch = pitch;
+            cubbi_length = length;
             cubbi_start = start;
             cubbi_end = end;
             cubbi_attack = attack;
@@ -1529,6 +1585,7 @@ namespace daisy
 
         float encoder_chunk = 0.f; // chunk up the quantized pitch controls
         float looper_encoder_chunk = 0.f;
+        float length_chunk = 0.f;
         bool fifth, looper_fifth;
         
         /** env followers for VU meters */

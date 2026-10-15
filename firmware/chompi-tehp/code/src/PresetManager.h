@@ -39,7 +39,11 @@ class PresetManager
     static constexpr int kMaxModes = 2; // jammi, cubbi
     static constexpr int kMaxBanks = 5; // a, b, c, d, e
     static constexpr int kMaxSlots = 14; // 1, 2, 3, etc.
-    static constexpr int kMaxControls = 9; // pitch, start, end, att, decay, autoloop, sustainactive, gain, pan
+    static constexpr int kMaxControls = 10; // pitch, start, end, att, decay, autoloop, sustainactive, gain, pan, length
+    /** TAPE shares presets.json and reads the valid flag after its 9 controls,
+     *  so TEHP's length goes after the flag, where TAPE doesn't look */
+    static constexpr int kTapeControls = 9;
+    static constexpr int kLengthIdx = 9;
 
     enum class Result
     {
@@ -86,7 +90,7 @@ class PresetManager
                     sprintf(append,"[");
                     StrAppend(buffer, append);
 
-                    for(int ctrl = 0; ctrl < kMaxControls; ctrl++)
+                    for(int ctrl = 0; ctrl < kTapeControls; ctrl++)
                     {
                         sprintf(append,"%d,", int(values[mode][bank][slot][ctrl] * 1000));
                         StrAppend(buffer, append);
@@ -99,7 +103,7 @@ class PresetManager
                     else
                         strcpy(valid, "false");
 
-                    sprintf(append,"%s],", valid);
+                    sprintf(append,"%s,%d],", valid, int(values[mode][bank][slot][kLengthIdx] * 1000));
                     StrAppend(buffer, append);
                 }
 
@@ -144,7 +148,7 @@ class PresetManager
             json_res = JSON_Search(
                 buffer, len, query, strlen(query), &value, &value_len);
 
-            uint8_t numcontrols = kMaxControls;
+            uint8_t numcontrols = kTapeControls;
             if(json_res != JSONSuccess) // V1
                 numcontrols = 7;
 
@@ -166,17 +170,25 @@ class PresetManager
 
                         if(json_res == JSONSuccess && valid)
                         {
-                            for(int ctrl = 0; ctrl < numcontrols; ctrl++)
+                            // one more than the flag's index: TEHP's length, after the flag
+                            for(int ctrl = 0; ctrl <= numcontrols; ctrl++)
                             {
+                                const bool length = ctrl == numcontrols;
+                                const int dest = length ? kLengthIdx : ctrl;
+
                                 /** and now check for the value */
-                                sprintf(query, "[%d][%d][%d][%d]",mode, bank, slot, ctrl);
+                                sprintf(query, "[%d][%d][%d][%d]",mode, bank, slot, ctrl + length);
 
                                 json_res = JSON_Search(
                                     buffer, len, query, strlen(query), &value, &value_len);
 
                                 if(json_res == JSONSuccess)
                                 {
-                                    values[mode][bank][slot][ctrl] = .001f * atof(value);
+                                    values[mode][bank][slot][dest] = .001f * atof(value);
+                                }
+                                else if(length) // TAPE wrote the file: 1x
+                                {
+                                    values[mode][bank][slot][dest] = defaults_[kLengthIdx];
                                 }
                             }
                             values_valid[mode][bank][slot] = true;
@@ -228,7 +240,7 @@ class PresetManager
         return values[mode][bank][slot][control];
     }
 
-    void SetValue(float value, size_t mode, size_t bank, size_t slot, size_t control)
+    __attribute__((noinline)) void SetValue(float value, size_t mode, size_t bank, size_t slot, size_t control)
     {
         slot -= 1;
         if(slot > kMaxSlots || mode >= kMaxModes || bank >= kMaxBanks || control >= kMaxControls)

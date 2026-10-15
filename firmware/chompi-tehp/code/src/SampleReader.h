@@ -237,6 +237,7 @@ namespace daisy
 
             SetGlobalPitch(1.f);
             SetVarispeed(1.f);
+            SetLength(1.f);
             SetReverse(false);
 
             SetStartPoint(0.f);
@@ -389,11 +390,11 @@ namespace daisy
          *  card has its usual time to refill it */
         inline bool ReadAheadRoom() { return using_ram || read_samps.GetNumElements() > kMaxFileStreamingSamps / 2; }
 
-        /** moves the source on by one frame, at original speed (pitch is handled
-         *  by shifter_), running the click, loop and reverse envelopes */
+        /** moves the source on by one frame, at 1 / length times original speed
+         *  (pitch is handled by shifter_), running the click, loop and reverse envelopes */
         inline void StepSource(float env_sig)
         {
-            rpos_frac_ += 1.f;
+            rpos_frac_ += speed_;
             if (rpos_frac_ >= 1.f)
             {
                 /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
@@ -541,7 +542,8 @@ namespace daisy
                 {
                     float sl, sr;
                     SourceFrame(&sl, &sr);
-                    const float ratio = varispeed_factor * global_pitch;
+                    // reading at speed_ shifts by speed_, the shifter takes it back out
+                    const float ratio = varispeed_factor * global_pitch * length_;
                     shifter_.Process(ratio, &sl, &sr);
 
                     /** TEHP read-ahead: shifting up reads faster than the sample
@@ -763,6 +765,9 @@ namespace daisy
         inline void SetGlobalPitch(float speed) { global_pitch = speed; }
         inline float GetGlobalPitch() { return global_pitch; }
 
+        /** TEHP time stretch, without changing pitch: 2.0 plays twice as long */
+        inline void SetLength(float len) { length_ = len; speed_ = 1.f / len; }
+
         void SetReverse(bool rev) 
         { 
             if(reverse_ != rev)
@@ -948,6 +953,7 @@ namespace daisy
         /** Varispeed handling */
         float varispeed_factor, varispeed_target;
         float global_pitch;
+        float length_, speed_;
         uint32_t varispeed_counter;
 
         bool reverse_;
