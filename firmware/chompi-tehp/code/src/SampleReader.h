@@ -512,7 +512,6 @@ namespace daisy
 
         void PopStereoSamps(float *l, float *r)
         {
-            TEHP_MARK(tehp_head)
             float env_sig = env_.Process(env_gate_);
 
             if(open_requests_ == 0 && deferred_jump)
@@ -547,7 +546,6 @@ namespace daisy
             }
 #endif
 
-            TEHP_ADD(tehp_head, kTehpHead)
             if ((Starved() || env_sig < .001f)
                 && !deferred_trig
             )
@@ -557,9 +555,7 @@ namespace daisy
             }
             else
             {
-                TEHP_MARK(tehp_step)
                 StepSource(env_sig, speed_);
-                TEHP_ADD(tehp_step, kTehpStep)
 
                 if(rev_wait == 2)
                 {
@@ -588,7 +584,6 @@ namespace daisy
 
             }
 
-            TEHP_MARK(tehp_tail)
             // Stop playing if we're not auto-looping
             if(OTE() && !auto_loop && env_.IsRunning() && seek_requests_ == 0) 
             {
@@ -712,7 +707,6 @@ namespace daisy
                     }                
                 }
             }
-            TEHP_ADD(tehp_tail, kTehpTail)
         }
 
         bool OTE()

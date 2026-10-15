@@ -120,7 +120,10 @@ namespace chompi
             external_sai_handle.Init(external_sai_cfg);
 
             AudioHandle::Config audio_cfg;
-            audio_cfg.blocksize = 24;
+            // TEHP: 48 (TAPE: 24). Half the blocks, so half the fixed cost per
+            // block, mostly scanning the buttons and encoders, which are only
+            // read once a millisecond anyway
+            audio_cfg.blocksize = 48;
             audio_cfg.samplerate = SaiHandle::Config::SampleRate::SAI_48KHZ;
             audio_cfg.postgain = 1.0f; /*< TODO: we may want to fine tune this */
 
@@ -376,7 +379,7 @@ namespace chompi
 
         bool GetToggleState()
         {
-            return tog_state < 100;
+            return tog_state < 50; // counts audio blocks (1 ms each)
         }
 
         uint32_t tog_state = 0;
@@ -390,7 +393,7 @@ namespace chompi
             else if(tog_state != 0)
                 tog_state--;
 
-            tog_state = tog_state > 200 ? 200 : tog_state;
+            tog_state = tog_state > 100 ? 100 : tog_state;
 
             for (size_t i = 0; i < 4; i++)
             {
