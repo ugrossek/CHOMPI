@@ -130,7 +130,10 @@ namespace chompi
     private:
         static constexpr size_t kMask      = kShiftBufFrames - 1;
         static constexpr float  kMinRatio  = .0625f;
-        static constexpr float  kMaxRatio  = 4.f;
+        // 3 octaves: TEHP's length stretches by shifting up, and every key keeps
+        // the length. The highest splice target, kDLo + FadeUse + Margin + JumpUp
+        // + kSearch, stays inside kShiftBufFrames up to about 10x
+        static constexpr float  kMaxRatio  = 8.f;
         static constexpr int    kCorrLen   = 320; // input frames compared per candidate
         static constexpr int    kFade      = 320; // splice crossfade, ~7ms
         static constexpr int    kGrain     = 768; // nominal splice jump, ~16ms

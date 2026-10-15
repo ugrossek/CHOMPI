@@ -390,11 +390,11 @@ namespace daisy
          *  card has its usual time to refill it */
         inline bool ReadAheadRoom() { return using_ram || read_samps.GetNumElements() > kMaxFileStreamingSamps / 2; }
 
-        /** moves the source on by one frame, at step_ times original speed
+        /** moves the source on by one frame, at 1 / length times original speed
          *  (pitch is handled by shifter_), running the click, loop and reverse envelopes */
         inline void StepSource(float env_sig)
         {
-            rpos_frac_ += step_;
+            rpos_frac_ += speed_;
             if (rpos_frac_ >= 1.f)
             {
                 /** increment that shouldn't be susceptible to f32 precision loss w/ long files*/
@@ -536,19 +536,14 @@ namespace daisy
             }
             else
             {
-                /** the source plays at 1 / length, the shifter takes that pitch
-                 *  change back out. Past what the shifter can do, the source plays
-                 *  faster instead: the pitch stays right, the note gets shorter */
-                const float pitch = varispeed_factor * global_pitch;
-                step_ = fmaxf(speed_, pitch * (1.f / kShiftTop));
-
                 StepSource(env_sig);
 
                 if(rev_wait == 2)
                 {
                     float sl, sr;
                     SourceFrame(&sl, &sr);
-                    const float ratio = pitch / step_;
+                    // the source plays at 1 / length, the shifter takes that pitch change back out
+                    const float ratio = varispeed_factor * global_pitch * length_;
                     shifter_.Process(ratio, &sl, &sr);
 
                     /** TEHP read-ahead: shifting up reads faster than the sample
@@ -958,8 +953,7 @@ namespace daisy
         /** Varispeed handling */
         float varispeed_factor, varispeed_target;
         float global_pitch;
-        float length_, speed_, step_ = 1.f;
-        static constexpr float kShiftTop = 4.f; // PitchShifter's highest ratio
+        float length_, speed_;
         uint32_t varispeed_counter;
 
         bool reverse_;
