@@ -92,12 +92,9 @@ FileCopier copier;
  *  Channel 4 - Master R
  */
 bool line_in_state;
-float audio_load; // last block: time in the callback / block period
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     // meter.OnBlockStart();
-    const uint32_t block_start = System::GetTick();
-
     if(booting && !ui.InTestMode())
     {
         hw.ProcessAllControls();
@@ -115,7 +112,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     hw.ProcessAllControls();
     ui.GenerateEvents();
     engine.Prepare();
-    chompi::StereoPitchShifter::PlanReadAhead(size, audio_load);
 
     // does this have to happen in the audio callback?
     if(hw.jack_detect.Read() != line_in_state)
@@ -136,10 +132,6 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     }
     else
         engine.Process(in, out, size);
-
-    // pitch shifter read-ahead only uses what's left over
-    static const float ticks_per_sample = float(System::GetTickFreq()) / hw.seed.AudioSampleRate();
-    audio_load = float(System::GetTick() - block_start) / (ticks_per_sample * size);
 
     // meter.OnBlockEnd();
 }

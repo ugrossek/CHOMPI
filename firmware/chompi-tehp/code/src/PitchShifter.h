@@ -60,37 +60,6 @@ namespace chompi
         /** call once per audio block, before processing any voice */
         static inline void NewBlock(size_t block_size) { Budget() = int(block_size) * kSearchPerSample; }
 
-        /** Read-ahead only spends CPU the audio callback leaves over. Call once
-         *  per audio block, before the voices run, with the last block's load
-         *  (time in the callback / block period). Its read-ahead is in that load,
-         *  so the budget settles where the load meets the target; above the
-         *  limit there is none, and notes start as if without read-ahead. */
-        static void PlanReadAhead(size_t block_size, float load)
-        {
-            const int used = PrimeGiven() - std::max(PrimeBudget(), 0);
-            int next = used + int((kPrimeTargetLoad - load) * kPrimeFullLoad * int(block_size));
-            if(load > kPrimeMaxLoad)
-                next = 0;
-            PrimeGiven() = PrimeBudget() = std::min(std::max(next, 0), int(block_size) * kPrimePerSample);
-        }
-
-        /** Read-ahead: when the tap reads faster than input comes in, a new
-         *  note needs some history before it can sound. A source that knows its
-         *  future (a sample) can Push() that many frames ahead instead of
-         *  waiting, calling Fed() for each. Returns how many to push now,
-         *  limited by a per-block budget all voices share.
-         *  @param close see Out() */
-        size_t Hunger(float close)
-        {
-            if(primed_ || close <= 0.f || PrimeBudget() <= 0)
-                return 0;
-            const size_t need = PrimeFrames(close);
-            return need > filled_ ? std::min(need - filled_, size_t(PrimeBudget())) : 0;
-        }
-
-        /** a read-ahead frame was pushed (see Hunger) */
-        inline void Fed() { PrimeBudget()--; }
-
         /** one frame of input */
         inline void Push(float l, float r)
         {
@@ -162,10 +131,6 @@ namespace chompi
         static constexpr int    kSearch    = 320; // +/- search around the jump
         static constexpr int    kLagStep   = int(kAnaDecim); // one analysis sample
         static constexpr int    kSearchPerSample = 2; // candidates per sample, all voices together
-        static constexpr int    kPrimePerSample  = 16; // most read-ahead frames per sample, all voices together
-        static constexpr int    kPrimeFullLoad   = 25; // read-ahead frames that take about one sample period (guess, on the safe side)
-        static constexpr float  kPrimeTargetLoad = .7f;
-        static constexpr float  kPrimeMaxLoad    = .85f;
         static constexpr float  kSearchSamps = (2 * kSearch) / kLagStep + 1;
         static constexpr float  kDLo = kCorrLen + 8;         // shortest delay a tap may reach
         static constexpr float  kDHi = 2 * kGrain + kSearch + kCorrLen; // longest
@@ -214,7 +179,7 @@ namespace chompi
             if(!primed_)
             {
                 // reading faster than input comes in: collect some history
-                // first (or get it pushed ahead), then start at the beginning of the note
+                // first, then start at the beginning of the note
                 if(close > 0.f && filled_ < PrimeFrames(close))
                 {
                     d0_ = filled_; // reads silence until primed
@@ -357,20 +322,6 @@ namespace chompi
         {
             static int budget = 0;
             return budget;
-        }
-
-        /** read-ahead frames left in this audio block, shared by all voices */
-        static int &PrimeBudget()
-        {
-            static int budget = 0;
-            return budget;
-        }
-
-        /** the read-ahead budget this block started with */
-        static int &PrimeGiven()
-        {
-            static int given = 0;
-            return given;
         }
 
         int16_t *buf_;

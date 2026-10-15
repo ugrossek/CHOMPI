@@ -386,10 +386,6 @@ namespace daisy
         /** the streaming FIFO ran dry */
         inline bool Starved() { return read_samps.GetNumElements() < 16 && !using_ram; }
 
-        /** read-ahead leaves a streamed sample's FIFO at least half full, so the
-         *  card has its usual time to refill it */
-        inline bool ReadAheadRoom() { return using_ram || read_samps.GetNumElements() > kMaxFileStreamingSamps / 2; }
-
         /** moves the source on by `step` frames, running the click, loop and
          *  reverse envelopes, and pushes each new frame into shifter_ as it is:
          *  at 1 / length speed the shifter gets the sample at its own pitch,
@@ -553,18 +549,6 @@ namespace daisy
                     const float ratio = chompi::StereoPitchShifter::ClampRatio(pitch);
                     const float close = ratio - speed_;
                     shifter_.Out(ratio, close, fabsf(pitch * length_ - 1.f) < .003f, &sl, &sr);
-
-                    /** TEHP read-ahead: when the shifter reads faster than the
-                     *  sample comes in, a new note would wait for history. The
-                     *  sample's future is right here, so push it ahead instead */
-                    if(!deferred_trig && click_clear == 0)
-                    {
-                        for(size_t n = shifter_.Hunger(close); n > 0 && ReadAheadRoom(); n--)
-                        {
-                            StepSource(env_sig, 1.f);
-                            shifter_.Fed();
-                        }
-                    }
 
                     const float post = env_sig * velocity * gain_;
                     *l = sl * post * pan_l_;
