@@ -937,13 +937,13 @@ namespace chompi
             else{
                 float inc = turns * kEncoderCoarseStep;
 
-                // fine steps for pitch, length, sample start, and sample end
+                // fine steps for pitch, sample start, and sample end
                 if((encoderID == 0 && page != 1 && quantized_pitch_)
                     || (encoderID == 4 && quantized_pitch_))
                 {
                     inc = 0.f;
                 }
-                else if ((encoderID == 0 && page != 1 && !quantized_pitch_)
+                else if ((encoderID == 0 && page == 0 && !quantized_pitch_)
                     || (encoderID == 1 && page == 0)
                     || (encoderID == 2 && page == 0)
                     || (encoderID == 4 && !quantized_pitch_))

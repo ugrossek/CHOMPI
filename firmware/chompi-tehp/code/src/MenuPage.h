@@ -449,7 +449,7 @@ namespace chompi
                             enc_values[2][0] = fx_->SetLengthStepped(turns, enc_values[2][0]);
                         else
                         {
-                            enc_values[2][0] = fclamp(enc_values[2][0] + turns * kEncoderFineStep, 0.f, 1.f);
+                            enc_values[2][0] = fclamp(enc_values[2][0] + inc, 0.f, 1.f);
                             fx_->SetLength(fx_->KnobToLength(enc_values[2][0]));
                         }
                     }
