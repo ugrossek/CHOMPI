@@ -184,7 +184,7 @@ class PresetManager
 
                                 if(json_res == JSONSuccess)
                                 {
-                                    values[mode][bank][slot][dest] = .001f * atof(value);
+                                    values[mode][bank][slot][dest] = .001f * atoi(value); // written as integers (x 1000); atof would pull in strtod, ~6 KB
                                 }
                                 else if(length) // TAPE wrote the file: 1x
                                 {
