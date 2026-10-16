@@ -133,20 +133,18 @@
   .screen[data-mood="bad"]  .dot { background: var(--pink);  box-shadow: 0 0 10px var(--pink); }
 
   .keys { display: grid; grid-template-columns: repeat(15, 1fr); gap: 6px; }
+  /* keys stay plain until the launcher says what is on them; then they wear
+     the colour that key breathes in on CHOMPI (--key, from LIST) */
   .key {
     --cap: var(--pop-yellow);
     position: relative; appearance: none; margin: 0; padding: 0; aspect-ratio: 1;
     border: 2.5px solid var(--outline); border-radius: 10px;
-    background: color-mix(in oklab, var(--cap) 55%, #fff);
+    background: #fff;
     box-shadow: 0 3px 0 var(--outline);
     cursor: pointer; font: inherit; color: #2A1B4F;
     transition: translate .08s, box-shadow .08s;
   }
-  .key:nth-child(5n+1) { --cap: var(--pop-pink); }
-  .key:nth-child(5n+2) { --cap: var(--pop-orange); }
-  .key:nth-child(5n+3) { --cap: var(--pop-yellow); }
-  .key:nth-child(5n+4) { --cap: var(--pop-green); }
-  .key:nth-child(5n)   { --cap: var(--pop-blue); }
+  .key[data-fw] { background: color-mix(in oklab, var(--key, #fff) 55%, #fff); }
   .key:disabled { cursor: default; }
   .key:not(:disabled):hover { translate: 0 -2px; box-shadow: 0 5px 0 var(--outline); }
   .key:not(:disabled):active { translate: 0 2px; box-shadow: 0 1px 0 var(--outline); }
@@ -154,10 +152,11 @@
   .key::before {
     content: ""; position: absolute; left: 50%; top: 16%;
     width: 28%; aspect-ratio: 1; translate: -50% 0; border-radius: 50%;
-    border: 2px solid #2A1B4F; background: var(--led, #fff);
+    border: 2px solid #2A1B4F; background: var(--led, var(--key, #fff));
     box-shadow: 0 0 0 0 var(--led, transparent);
   }
   .key[data-led]::before, .key[data-busy]::before { box-shadow: 0 0 8px 2px var(--led); }
+  .key[data-fw]:not([data-led])::before { box-shadow: 0 0 6px 1px var(--key, transparent); }
   .key[data-busy="send"]  { --led: var(--cyan); }
   .key[data-busy="store"] { --led: var(--amber); }
   .key[data-busy="done"]  { --led: var(--green); }
@@ -593,7 +592,7 @@
       <span class="peek" aria-hidden="true"><span class="peek-head"><svg viewBox="0 0 110 66"><path class="outline" d="M55 22V12" fill="none"/><circle class="knob outline" cx="55" cy="8" r="6"/><path class="body outline" d="M8 72V50a30 30 0 0 1 30-30h34a30 30 0 0 1 30 30v22"/><circle class="eye outline" cx="38" cy="47" r="11"/><circle class="eye outline" cx="72" cy="47" r="11"/><g class="pupils"><circle cx="39" cy="51" r="4.5"/><circle cx="73" cy="51" r="4.5"/></g><g class="lids"><circle cx="38" cy="47" r="12.5"/><circle cx="72" cy="47" r="12.5"/></g></svg></span><svg class="peek-paws" viewBox="0 0 110 22"><rect class="body outline" x="14" y="3" width="24" height="16" rx="8"/><rect class="body outline" x="72" y="3" width="24" height="16" rx="8"/><path class="outline" d="M22 12v5M30 12v5M80 12v5M88 12v5" fill="none"/></svg></span>
       <h2><span class="num">3</span>Pick a slot and a name</h2>
       <div class="inner">
-        <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced.</p>
+        <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced. With launcher 1.6 or newer, the keys here wear the colours they have on CHOMPI.</p>
         <section class="chompi" aria-label="CHOMPI keybed: the slots">
           <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
             <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
@@ -634,7 +633,7 @@
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, NAME_RE, defaultName } from "./chompi-midi.js?v=2026-10-14";
+import { Launcher, ProtocolError, NAME_RE, FEATURE, defaultName } from "./chompi-midi.js?v=2026-10-14";
 
 const SLOTS_DEFAULT = 15;
 /* The firmwares on the launcher-v1.1 release card, unchanged (sha256 of the
@@ -650,7 +649,8 @@ const STANDARD = Object.fromEntries(STOCK.map((s) => [s.slot, s]));
 
 const $ = (id) => document.getElementById(id);
 const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false,
-                connecting: false, autoTimer: 0 };
+                connecting: false, autoTimer: 0,
+                onKeys: [] }; // per slot (index 0 = slot 1): LIST's { file, size, color }, from launchers that have LIST
 
 /* ---- keybed ------------------------------------------------------------ */
 const keys = [];
@@ -669,6 +669,37 @@ function buildKeys(n) {
     keys.push(k);
   }
 }
+/** Keys holding a firmware wear its colour, as CHOMPI's LEDs do; empty
+ *  and unknown keys stay plain. Launchers before 1.6 report no colour:
+ *  then a full key is only a little grey. */
+function paintCards() {
+  keys.forEach((k, i) => {
+    const c = state.onKeys[i];
+    if (c?.file) {
+      k.dataset.fw = "";
+      k.style.setProperty("--key", c.color || "#C9C3D6");
+      k.setAttribute("aria-label", `Slot ${i + 1}: ${c.file}`);
+    } else {
+      delete k.dataset.fw;
+      k.style.removeProperty("--key");
+      k.setAttribute("aria-label", c ? `Slot ${i + 1}: empty` : `Slot ${i + 1}`);
+    }
+  });
+}
+/** Ask the launcher what each key holds (ports open). Never fails the
+ *  caller: without LIST, or if it goes wrong, the keys just stay plain. */
+async function readCards() {
+  state.onKeys = [];
+  if (!(state.info.features & FEATURE.LIST)) return;
+  try {
+    const on = [];
+    for (let n = 1; n <= state.info.slots; n++) on.push(await state.launcher.list(n));
+    state.onKeys = on;
+  } catch (e) {
+    logLines.push(`· couldn't read the keys: ${e.message}`);
+  }
+}
+
 function paintKeys(color, fraction) {
   const lit = Math.round(fraction * keys.length);
   keys.forEach((k, i) => { if (i < lit) k.dataset.led = color; else delete k.dataset.led; });
@@ -759,6 +790,8 @@ async function connectTo(pair, quiet = false) {
     await openPorts();
     state.info = await state.launcher.ping();
     buildKeys(state.info.slots);
+    await readCards();
+    paintCards();
     if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
     screen(`Connected to ${pair.name}. Pick a slot.`, "ok");
     show("connect-result", `Connected. The launcher has ${state.info.slots} slots.`);
@@ -844,6 +877,8 @@ function refreshPorts(connectNow, quiet = false) {
     /* a device came or went (one event per port, so wait for them to settle) */
     if (state.pair && !(live(state.pair.in) && live(state.pair.out)) && !state.busy) {
       state.info = null;
+      state.onKeys = []; // may change before it's back
+      paintCards();
       $("step-connect").classList.remove("done");
       show("connect-result", "");
       screen("CHOMPI went away. Turn it on with the launcher showing; this page connects by itself.", "idle");
@@ -942,7 +977,9 @@ function update() {
   const nn = state.slot ? String(state.slot).padStart(2, "0") : "NN";
   $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
   const std = STANDARD[state.slot];
-  show("slot-warn", std && name !== std.name ? `On the release card, slot ${state.slot} holds ${std.label}. Sending replaces it.` : "");
+  const now = state.onKeys[state.slot - 1];
+  show("slot-warn", now ? (now.file ? `Slot ${state.slot} holds ${now.file}. Sending replaces it.` : "")
+    : std && name !== std.name ? `On the release card, slot ${state.slot} holds ${std.label}. Sending replaces it.` : "");
   $("step-slot").classList.toggle("done", !!state.slot && NAME_RE.test(name));
 
   const ready = state.info && state.image && state.slot && NAME_RE.test(name) && !state.busy;
@@ -977,6 +1014,8 @@ $("send").addEventListener("click", async () => {
     }
     paintKeys("white", 1);
     const file = `${String(state.slot).padStart(2, "0")}_${name}.bin`;
+    /* its colour is the launcher's to give: known again on the next connect */
+    if (state.onKeys.length) { state.onKeys[state.slot - 1] = { file, size: state.image.length, color: null }; paintCards(); }
     screen(`Stored as ${file}. CHOMPI is starting it.`, "ok");
     show("send-result", `Stored in slot ${state.slot} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI with the launcher showing; this page connects by itself.`);
     $("step-send").classList.add("done");
