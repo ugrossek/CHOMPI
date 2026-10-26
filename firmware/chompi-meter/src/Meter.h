@@ -108,6 +108,11 @@ public:
                 key_flash_[k] = 1.f;
                 if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
+                } else if (chompi) {
+                    // CHOMPI + C#: octave down, CHOMPI + D#: up. Other black keys: nothing yet.
+                    Channel& c = ch_[sel_];
+                    if (k == kOctDown) c.octave = std::max(c.octave - 1, -2);
+                    if (k == kOctUp) c.octave = std::min(c.octave + 1, 2);
                 } else {
                     const Channel& c = ch_[sel_];
                     NoteOn(sel_, kKeys[k].note + 12 * c.octave);
@@ -124,16 +129,12 @@ public:
             const int inc = hw.enc[kKnobs[n].enc].Increment();
             if (inc) Turn(n, inc, chompi);
         }
-        // Transport: the selected channel's preset; CHOMPI + turn: its octave.
+        // Transport: the selected channel's preset.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Channel& c = ch_[sel_];
-            if (chompi) {
-                c.octave = std::min(std::max(c.octave + inc, -2), 2);
-            } else {
-                c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
-                c.p = kMalletPresets[c.preset].p;
-                Update(sel_);
-            }
+            c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
+            c.p = kMalletPresets[c.preset].p;
+            Update(sel_);
         }
         // Volume.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment())
@@ -216,6 +217,13 @@ public:
                 const float* col = kPresetColor[ch_[c].preset];
                 const float b = c == sel_ ? 1.f : .15f;
                 for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
+            } else if (chompi && (k == kOctDown || k == kOctUp)) {
+                // The octave: dim white at home, brighter the further down (C#) or up (D#).
+                const int o = ch_[sel_].octave;
+                const int away = k == kOctDown ? std::max(-o, 0) : std::max(o, 0);
+                rgb[0] = rgb[1] = rgb[2] = away == 0 ? .1f : away == 1 ? .5f : 1.f;
+            } else if (chompi) {
+                // other black keys stay dark while CHOMPI is held
             } else {
                 for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * key_flash_[k];
             }
@@ -241,6 +249,7 @@ public:
 private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
 
+    static constexpr int kOctDown = 1, kOctUp = 3; // C# and D#, the lowest black keys
     static constexpr int kRebootBlocks = 2000; // 2 s of 1 ms blocks
     static constexpr float kGreen[3] = {0.f, 1.f, 0.f};
     static constexpr float kYellow[3] = {1.f, .8f, 0.f};
