@@ -63,6 +63,10 @@ static float   guard_load = 0.f;
 static int32_t guard_wait = 0;
 static float   room_set   = -1.f;
 
+/* Output limiter: above kLimitLevel the sum is scaled down. */
+static constexpr float kLimitLevel = .6f, kLimitAttack = .2f, kLimitRelease = .99996f;
+static float limit_env = 0.f;
+
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     const uint32_t start = DWT->CYCCNT;
@@ -88,7 +92,14 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     for(size_t i = 0; i < size; i++)
     {
         reverb.Process(&l[i], &r[i]);
-        const float a = tanhf(l[i]), b = tanhf(r[i]);
+
+        /* Limiter: many long notes add up, so the sum is turned down smoothly
+         * (fast down, about half a second back up) before it can distort. */
+        const float peak = std::max(fabsf(l[i]), fabsf(r[i]));
+        limit_env = peak > limit_env ? limit_env + kLimitAttack * (peak - limit_env)
+                                     : limit_env * kLimitRelease;
+        const float g = limit_env > kLimitLevel ? kLimitLevel / limit_env : 1.f;
+        const float a = tanhf(l[i] * g), b = tanhf(r[i] * g);
         out[0][i] = a * kHpGain * vol;
         out[1][i] = b * kHpGain * vol;
         out[2][i] = a * kLineGain * vol;

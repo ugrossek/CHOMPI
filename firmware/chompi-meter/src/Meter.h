@@ -78,7 +78,7 @@ public:
         for (int c = 0; c < kChannels; ++c) {
             ch_[c].preset = c % kNumMalletPresets;
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            ch_[c].pan = .5f + .3f * std::sin(c * 2.1f); // spread across the stereo field
+            ch_[c].pan = .5f + .15f * std::sin(c * 2.1f); // spread across the stereo field
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
         }
         for (int v = 0; v < kVoices; ++v) {
