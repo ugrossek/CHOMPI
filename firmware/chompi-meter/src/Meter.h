@@ -93,10 +93,18 @@ public:
         const bool chompi = sr.State(int(Sw::KEY_26));
         ensemble_ = !hw.GetToggleState();
 
+        // Presses: a switch that is down now and was up last block. (The shift
+        // register's own RisingEdge only re-arms after FallingEdge is asked.)
+        uint64_t down = 0;
+        for (int i = 0; i < kSwitches; ++i)
+            if (sr.State(i)) down |= uint64_t(1) << i;
+        pressed_ = down & ~held_;
+        held_ = down;
+
         // Keys: CHOMPI + white key selects a channel, otherwise play.
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
-            if (sr.RisingEdge(i)) {
+            if (Pressed(i)) {
                 key_flash_[k] = 1.f;
                 if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
@@ -109,7 +117,7 @@ public:
 
         // Knob pushes: switch between the two pages of the channel view.
         for (int n = 0; n < 4; ++n)
-            if (sr.RisingEdge(kKnobs[n].push) && !ensemble_) page_ ^= 1;
+            if (Pressed(kKnobs[n].push) && !ensemble_) page_ ^= 1;
 
         // Sample knobs.
         for (int n = 0; n < 4; ++n) {
@@ -133,7 +141,7 @@ public:
 
         // Play held: show voices and load. Loop: add a cluster (voice test).
         show_load_ = sr.State(int(Sw::KEY_27));
-        if (sr.RisingEdge(int(Sw::KEY_28))) {
+        if (Pressed(int(Sw::KEY_28))) {
             static const int kCluster[6] = {0, 7, 12, 16, 19, 24};
             for (int n : kCluster) NoteOn(sel_, 48 + n + 12 * ch_[sel_].octave + (cluster_++ % 12));
         }
@@ -316,6 +324,10 @@ private:
         }
         Update(sel_);
     }
+
+    static constexpr int kSwitches = 40; // 5 shift registers of 8
+    bool Pressed(int i) const { return (pressed_ >> i) & 1; }
+    uint64_t held_ = 0, pressed_ = 0;
 
     float sr_ = 48000.f;
     Channel ch_[kChannels];
