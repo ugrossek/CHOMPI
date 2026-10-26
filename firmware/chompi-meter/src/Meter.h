@@ -163,8 +163,10 @@ public:
             Slot& s = slot_[v];
             if (!s.v.Active()) continue;
             const Channel& c = ch_[s.ch];
-            const float gl = c.level * std::cos(c.pan * float(M_PI) / 2.f);
-            const float gr = c.level * std::sin(c.pan * float(M_PI) / 2.f);
+            // The ensemble's width spreads or gathers every channel around the middle.
+            const float pan = Clamp01(.5f + (c.pan - .5f) * width_);
+            const float gl = c.level * std::cos(pan * float(M_PI) / 2.f);
+            const float gr = c.level * std::sin(pan * float(M_PI) / 2.f);
             for (size_t i = 0; i < n; ++i) {
                 const float x = s.v.Process();
                 l[i] += x * gl;
@@ -301,7 +303,10 @@ private:
                 case 0: off_bright_ = std::min(std::max(off_bright_ + d, -.5f), .5f); break;
                 case 1: off_decay_ = std::min(std::max(off_decay_ + d, -.5f), .5f); break;
                 case 2: off_strike_ = std::min(std::max(off_strike_ + d, -.5f), .5f); break;
-                case 3: room_ = Clamp01(room_ + d); return;
+                case 3: // room; CHOMPI + turn: stereo width (mono .. twice the spread)
+                    if (chompi) width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
+                    else room_ = Clamp01(room_ + d);
+                    return;
             }
             UpdateAll();
             return;
@@ -319,7 +324,10 @@ private:
                     if (chompi) p.buzz_kind = inc > 0 ? 1 : 0;
                     else p.buzz = Clamp01(p.buzz + d);
                     break;
-                case 3: c.level = Clamp01(c.level + d); return;
+                case 3: // level; CHOMPI + turn: pan
+                    if (chompi) c.pan = Clamp01(c.pan + d);
+                    else c.level = Clamp01(c.level + d);
+                    return;
             }
         }
         Update(sel_);
@@ -337,7 +345,7 @@ private:
     int sel_ = 0, page_ = 0, cluster_ = 0;
     bool ensemble_ = false, show_load_ = false;
     float off_bright_ = 0.f, off_decay_ = 0.f, off_strike_ = 0.f;
-    float room_ = .5f, volume_ = .8f, load_ = 0.f;
+    float room_ = .5f, width_ = 1.f, volume_ = .8f, load_ = 0.f;
     float key_flash_[25] = {};
     int reboot_hold_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
