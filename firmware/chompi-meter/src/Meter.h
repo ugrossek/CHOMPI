@@ -222,6 +222,7 @@ public:
                         if (!all_ && c != loop_ch_) continue;
                         loop_[c].count = 0;
                         hist_[c].since = now_;
+                        ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                     }
                     loop_down_ = false;
                 }
