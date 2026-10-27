@@ -154,12 +154,13 @@ public:
                     if (from >= 0) Copy(from, WhiteIndex(k));
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
-                    // CHOMPI + black key: the selected channel's ratio, at once (wild);
-                    // with the switch on all: every channel's, from the next L0 beat,
-                    // where all loops start together again.
-                    if (all_ && running_) pending_ratio_ = BlackIndex(k);
-                    else if (all_) AllToRatio(BlackIndex(k)); // stopped: no beat to wait for
-                    else ch_[sel_].ratio = BlackIndex(k);
+                    // CHOMPI + black key: the selected channel's ratio, from the next
+                    // L0 beat, where its loop starts again (its own ratio again: back
+                    // in step). With the switch on all: the ensemble's ratio, a
+                    // multiplier on every channel's length (1: as recorded).
+                    if (all_) pending_ens_ = BlackIndex(k);
+                    else pending_[sel_] = BlackIndex(k);
+                    if (!running_) ApplyPending(); // stopped: no beat to wait for
                 } else {
                     Channel& c = ch_[sel_];
                     c.last_note = kKeys[k].note;
@@ -183,13 +184,15 @@ public:
         }
         // Wheel: the tempo, L0, smoothly (right is faster); every loop follows.
         // CHOMPI + turn: the selected channel's ratio a step up or down every few
-        // clicks, at once; with the switch on all: every channel's.
+        // clicks, from the next beat; with the switch on all: the ensemble's.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             if (!chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
             } else if (const int step = Steps(inc, all_ ? -1 : -2 - sel_)) {
-                for (int c = 0; c < kChannels; ++c)
-                    if (all_ || c == sel_) ch_[c].ratio = std::min(std::max(ch_[c].ratio + step, 0), kNumRatios - 1);
+                int& r = all_ ? pending_ens_ : pending_[sel_];
+                const int from = r >= 0 ? r : all_ ? ens_ : ch_[sel_].ratio;
+                r = std::min(std::max(from + step, 0), kNumRatios - 1);
+                if (!running_) ApplyPending();
             }
         }
         if (step_idle_ > 0) step_idle_--;
@@ -229,7 +232,8 @@ public:
             if (play_used_) {
             } else if (play_chompi_) {
                 const uint32_t gap = play_t_ - last_tap_;
-                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap);
+                // The taps give the beat; L0 is the beat without the ensemble's ratio.
+                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap) / kRatios[ens_];
                 last_tap_ = play_t_;
                 have_tap_ = true;
             } else {
@@ -258,6 +262,7 @@ public:
                     loop_[c].count = 0;
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
+                    pending_[c] = -1;
                 }
                 loop_used_ = true;
             }
@@ -273,11 +278,11 @@ public:
 
         // The loops run: each note strikes again whenever its channel passes its place.
         if (running_) {
-            l0_pos_ += block / l0_;
+            l0_pos_ += block / Beat();
             if (l0_pos_ >= 1.f) {
                 l0_pos_ -= 1.f;
                 l0_flash_ = 1.f;
-                if (pending_ratio_ >= 0) AllToRatio(pending_ratio_);
+                ApplyPending();
             }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
         }
@@ -369,11 +374,11 @@ public:
                 const float b = (c == sel_ ? .6f : .06f) + .4f * note_flash_[c];
                 for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
             } else if (chompi) {
-                // The ratios on the black keys: the selected channel's bright; one
-                // waiting for the next beat (all channels) blinks.
+                // The ratios on the black keys: the selected channel's (switch on
+                // all: the ensemble's) bright; one waiting for the next beat blinks.
                 const int b = BlackIndex(k);
-                float v = b == ch_[sel_].ratio ? 1.f : .08f;
-                if (b == pending_ratio_) v = std::fmod(led_time_, .25f) < .125f ? 1.f : .08f;
+                float v = b == (all_ ? ens_ : ch_[sel_].ratio) ? 1.f : .08f;
+                if (b == (all_ ? pending_ens_ : pending_[sel_])) v = std::fmod(led_time_, .25f) < .125f ? 1.f : .08f;
                 rgb[0] = rgb[1] = rgb[2] = v;
             } else if (oct_show_ > 0 && OctaveKey(k) >= -2) {
                 // The octave on the five lowest black keys, -2 .. +2: the current one bright.
@@ -458,21 +463,26 @@ private:
         return b;
     }
 
-    // Every channel to one ratio, every loop from its start.
-    void AllToRatio(int r) {
+    // On the beat: the ensemble's new ratio (every loop keeps its place, all
+    // lengths scale together), and each channel's new ratio, its loop from the start.
+    void ApplyPending() {
+        if (pending_ens_ >= 0) ens_ = pending_ens_;
+        pending_ens_ = -1;
         for (int c = 0; c < kChannels; ++c) {
-            ch_[c].ratio = r;
+            if (pending_[c] < 0) continue;
+            ch_[c].ratio = pending_[c];
+            pending_[c] = -1;
             loop_[c].pos = 0.f;
             for (int i = 0; i < loop_[c].count; ++i) {
                 loop_[c].n[i].armed = true;
                 loop_[c].n[i].jit = 0.f;
             }
         }
-        l0_pos_ = 0.f;
-        pending_ratio_ = -1;
     }
 
-    float LoopSamples(int c) const { return l0_ * kRatios[ch_[c].ratio]; }
+    // The beat: L0 times the ensemble's ratio. A channel's loop: the beat times its ratio.
+    float Beat() const { return l0_ * kRatios[ens_]; }
+    float LoopSamples(int c) const { return Beat() * kRatios[ch_[c].ratio]; }
 
     void Remember(int c, int note) {
         History& h = hist_[c];
@@ -576,6 +586,7 @@ private:
         ch_[to] = ch_[from];
         ch_[to].pan = pan;
         loop_[to] = loop_[from];
+        pending_[to] = pending_[from];
         swell_[to] = swell_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
         Update(to);
@@ -745,7 +756,8 @@ private:
     uint32_t play_t_ = 0;
     bool muted_[kChannels] = {}, solo_[kChannels] = {};
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
-    int pending_ratio_ = -1;
+    int ens_ = kRatioOne, pending_ens_ = -1;
+    int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     int loop_hold_ = 0, loop_ch_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
