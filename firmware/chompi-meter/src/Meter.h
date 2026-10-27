@@ -142,7 +142,11 @@ public:
                 key_flash_[k] = 1.f;
                 if ((play_held || loop_held) && !chompi) {
                     if (kKeys[k].white && play_held) { muted_[WhiteIndex(k)] ^= 1; play_used_ = true; }
-                    if (kKeys[k].white && loop_held) { solo_[WhiteIndex(k)] ^= 1; loop_used_ = true; }
+                    if (kKeys[k].white && loop_held) {
+                        solo_[WhiteIndex(k)] ^= 1;
+                        if (!loop_used_) UndoCapture(); // loop was for soloing, not capturing
+                        loop_used_ = true;
+                    }
                 } else if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
@@ -174,21 +178,13 @@ public:
             if (inc) Turn(n, inc, chompi, sr.State(kKnobs[n].push));
         }
         // Wheel: the tempo, L0, smoothly (right is faster); every loop follows.
-        // CHOMPI + turn: the selected channel's preset, heard as a preview once
-        // the wheel rests; with the switch on all: every ratio a step up or down.
+        // CHOMPI + turn with the switch on all: every ratio a step up or down.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             if (!chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
             } else if (all_) {
                 if (const int step = Steps(inc, -1))
                     for (Channel& c : ch_) c.ratio = std::min(std::max(c.ratio + step, 0), kNumRatios - 1);
-            } else {
-                Channel& c = ch_[sel_];
-                c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
-                c.p = kMalletPresets[c.preset].p;
-                Update(sel_);
-                preview_ch_ = sel_;
-                preview_wait_ = kPreviewBlocks;
             }
         }
         if (step_idle_ > 0) step_idle_--;
@@ -224,34 +220,31 @@ public:
             if (!play_used_) running_ = !running_;
         }
 
-        // Loop, on release: a short press turns what was just played on the
-        // selected channel into its loop (CHOMPI + loop: adds to the loop); held
-        // 1 s (the light turns red), it clears it, or every loop with the switch
-        // on all. Unless it soloed channels.
+        // Loop: a press turns what was just played on the selected channel into
+        // its loop, at once (CHOMPI + loop: adds to the loop). Held 2 s (the
+        // light turns red after 1 s): clears it, or every loop with the switch
+        // on all. A white key while it is held solos instead, and the capture
+        // is taken back.
         if (Pressed(int(Sw::KEY_28))) {
             loop_down_ = true;
             loop_used_ = false;
             loop_hold_ = 0;
             loop_ch_ = sel_;
-            loop_add_ = chompi;
-            loop_t_ = now_;
+            undo_loop_ = loop_[sel_];
+            undo_since_ = hist_[sel_].since;
+            Capture(sel_, now_, chompi);
         }
         if (loop_down_) {
-            if (loop_held) {
-                loop_hold_++;
-            } else {
+            if (!loop_held) {
                 loop_down_ = false;
-                if (loop_used_) {
-                } else if (loop_hold_ >= kClearBlocks) {
-                    for (int c = 0; c < kChannels; ++c) {
-                        if (!all_ && c != loop_ch_) continue;
-                        loop_[c].count = 0;
-                        hist_[c].since = now_;
-                        ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
-                    }
-                } else {
-                    Capture(loop_ch_, loop_t_, loop_add_);
+            } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
+                for (int c = 0; c < kChannels; ++c) {
+                    if (!all_ && c != loop_ch_) continue;
+                    loop_[c].count = 0;
+                    hist_[c].since = now_;
+                    ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                 }
+                loop_used_ = true;
             }
         }
 
@@ -384,24 +377,18 @@ public:
         }
         SetPthLedFloat(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
 
-        // The wheel's two lights: a beat on every L0 (the tempo lives here);
-        // with CHOMPI held, the selected channel's colour (its preset).
-        if (chompi) {
-            SetPthLedFloat(kWheelLeds[0], sel_col[0], sel_col[1], sel_col[2]);
-            SetPthLedFloat(kWheelLeds[1], sel_col[0], sel_col[1], sel_col[2]);
-        } else {
-            const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
-            SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
-            SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
-        }
+        // The wheel's two lights: a beat on every L0 (the tempo lives here).
+        const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
+        SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
+        SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
         SetPthLedFloat(kKnobs[kVolume].led, .3f * volume_, .3f * volume_, .3f * volume_);
 
         // Play: lit while the loops run. Loop: a beat on every loop of the
         // selected channel, brighter when it has a loop.
         SetPthLedFloat(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
-        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearBlocks)
-            SetPthLedFloat(kLoopLed, 1.f, 0.f, 0.f); // let go to clear
+        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks)
+            SetPthLedFloat(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
         else
             SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
         fill_led_data();
@@ -433,7 +420,16 @@ private:
     static constexpr float kYellow[3] = {1.f, .8f, 0.f};
     static constexpr float kRed[3] = {1.f, 0.f, 0.f};
 
-    static constexpr int kClearBlocks = 1000;     // loop held 1 s: clear
+    static constexpr int kClearBlocks = 2000;     // loop held 2 s: clear
+    static constexpr int kClearWarnBlocks = 1000; // ... the light red from 1 s
+
+    // Loop pressed for a solo after all: the loop as it was before the press.
+    void UndoCapture() {
+        const float pos = loop_[loop_ch_].pos;
+        loop_[loop_ch_] = undo_loop_;
+        loop_[loop_ch_].pos = pos;
+        hist_[loop_ch_].since = undo_since_;
+    }
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
@@ -595,17 +591,17 @@ private:
     }
 
     // Knobs 1-4, no pages: turn | CHOMPI + turn | turn while pushed in.
-    //   K1 material | strike    | -
+    //   K1 preset (preview) | strike | material
     //   K2 brightness | feel (variation) | shimmer
     //   K3 decay    | buzz      | -        (a push: rattle / muffle)
     //   K4 level    | pan       | octave
     // With the switch on all: the same knobs as offsets on every channel, so each
-    // keeps its character; level of all, CHOMPI + K4: the stereo width.
+    // keeps its character (K1: strike); level of all, CHOMPI + K4: the stereo width.
     void Turn(int knob, int inc, bool chompi, bool pushed) {
         const float d = inc * .02f;
         if (all_) {
             switch (knob) {
-                case 0: Offset(chompi ? off_strike_ : off_material_, d); break;
+                case 0: Offset(pushed ? off_material_ : off_strike_, d); break;
                 case 1: Offset(pushed ? off_shimmer_ : chompi ? off_variation_ : off_bright_, d); break;
                 case 2: Offset(chompi ? off_buzz_ : off_decay_, d); break;
                 case 3:
@@ -621,8 +617,16 @@ private:
         MalletParams& p = c.p;
         switch (knob) {
             case 0:
-                if (chompi) p.strike = Clamp01(p.strike + d);
-                else p.material = Clamp01(p.material + d);
+                if (pushed) {
+                    p.material = Clamp01(p.material + d);
+                } else if (chompi) {
+                    p.strike = Clamp01(p.strike + d);
+                } else { // the preset, heard as a preview once the knob rests
+                    c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
+                    c.p = kMalletPresets[c.preset].p;
+                    preview_ch_ = sel_;
+                    preview_wait_ = kPreviewBlocks;
+                }
                 break;
             case 1:
                 if (pushed) p.shimmer = Clamp01(p.shimmer + d);
@@ -693,13 +697,14 @@ private:
     bool running_ = true;
     uint32_t last_tap_ = 0;
     bool have_tap_ = false;
-    bool loop_down_ = false, loop_add_ = false, loop_used_ = false;
+    bool loop_down_ = false, loop_used_ = false;
+    Loop undo_loop_;
+    uint32_t undo_since_ = 0;
     bool play_down_ = false, play_used_ = false;
     bool muted_[kChannels] = {}, solo_[kChannels] = {};
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     int pending_ratio_ = -1;
     int loop_hold_ = 0, loop_ch_ = 0;
-    uint32_t loop_t_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 
