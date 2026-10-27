@@ -133,16 +133,24 @@ public:
         pressed_ = down & ~held_;
         held_ = down;
 
-        // Keys: CHOMPI + white key selects a channel, otherwise play.
+        // Keys: CHOMPI + white key selects a channel, play + white key mutes it,
+        // loop + white key solos it; otherwise the key plays.
+        const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
                 key_flash_[k] = 1.f;
-                if (chompi && kKeys[k].white) {
+                if ((play_held || loop_held) && !chompi) {
+                    if (kKeys[k].white && play_held) { muted_[WhiteIndex(k)] ^= 1; play_used_ = true; }
+                    if (kKeys[k].white && loop_held) { solo_[WhiteIndex(k)] ^= 1; loop_used_ = true; }
+                } else if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
-                    // CHOMPI + black key: the ratio of the selected channel, or of all.
-                    if (all_) for (Channel& c : ch_) c.ratio = BlackIndex(k);
+                    // CHOMPI + black key: the selected channel's ratio, at once (wild);
+                    // with the switch on all: every channel's, from the next L0 beat,
+                    // where all loops start together again.
+                    if (all_ && running_) pending_ratio_ = BlackIndex(k);
+                    else if (all_) AllToRatio(BlackIndex(k)); // stopped: no beat to wait for
                     else ch_[sel_].ratio = BlackIndex(k);
                 } else {
                     Channel& c = ch_[sel_];
@@ -198,49 +206,71 @@ public:
         // Right knob held: show voices and load.
         show_load_ = sr.State(kKnobs[kVolume].push);
 
-        // Play: start and stop all loops. CHOMPI + play, tapped: L0 is the time
-        // between two taps.
+        // Play: on release, starts and stops all loops (unless it muted channels).
+        // CHOMPI + play, tapped: L0 is the time between two taps.
         if (Pressed(int(Sw::KEY_27))) {
+            play_down_ = true;
+            play_used_ = false;
             if (chompi) {
                 const uint32_t gap = now_ - last_tap_;
                 if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap);
                 last_tap_ = now_;
                 have_tap_ = true;
-            } else {
-                running_ = !running_;
+                play_used_ = true;
             }
         }
+        if (play_down_ && !play_held) {
+            play_down_ = false;
+            if (!play_used_) running_ = !running_;
+        }
 
-        // Loop: a short press turns what was just played on the selected channel
-        // into its loop (CHOMPI + loop: adds to the loop). Held 1 s: clears it.
+        // Loop, on release: a short press turns what was just played on the
+        // selected channel into its loop (CHOMPI + loop: adds to the loop); held
+        // 1 s (the light turns red), it clears it, or every loop with the switch
+        // on all. Unless it soloed channels.
         if (Pressed(int(Sw::KEY_28))) {
             loop_down_ = true;
+            loop_used_ = false;
             loop_hold_ = 0;
             loop_ch_ = sel_;
             loop_add_ = chompi;
             loop_t_ = now_;
         }
         if (loop_down_) {
-            if (sr.State(int(Sw::KEY_28))) {
-                if (++loop_hold_ == kClearBlocks) { // the switch on all: clears every loop
+            if (loop_held) {
+                loop_hold_++;
+            } else {
+                loop_down_ = false;
+                if (loop_used_) {
+                } else if (loop_hold_ >= kClearBlocks) {
                     for (int c = 0; c < kChannels; ++c) {
                         if (!all_ && c != loop_ch_) continue;
                         loop_[c].count = 0;
                         hist_[c].since = now_;
                         ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                     }
-                    loop_down_ = false;
+                } else {
+                    Capture(loop_ch_, loop_t_, loop_add_);
                 }
-            } else {
-                Capture(loop_ch_, loop_t_, loop_add_);
-                loop_down_ = false;
             }
+        }
+
+        // Mute and solo: a short fade, the loops keep running underneath.
+        bool any_solo = false;
+        for (bool so : solo_) any_solo |= so;
+        for (int c = 0; c < kChannels; ++c) {
+            const float target = muted_[c] || (any_solo && !solo_[c]) ? 0.f : 1.f;
+            gate_[c] += (target - gate_[c]) * .2f;
         }
 
         // The loops run: each note strikes again whenever its channel passes its place.
         if (running_) {
             l0_pos_ += block / l0_;
-            if (l0_pos_ >= 1.f) { l0_pos_ -= 1.f; l0_flash_ = 1.f; }
+            if (l0_pos_ >= 1.f) {
+                l0_pos_ -= 1.f;
+                l0_flash_ = 1.f;
+                if (pending_ratio_ >= 0) AllToRatio(pending_ratio_);
+            }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
         }
 
@@ -265,7 +295,7 @@ public:
             const Channel& c = ch_[s.ch];
             // The ensemble's width spreads or gathers every channel around the middle.
             const float pan = Clamp01(.5f + (c.pan - .5f) * width_);
-            const float level = c.level * all_level_;
+            const float level = c.level * all_level_ * gate_[s.ch];
             const float gl = level * std::cos(pan * float(M_PI) / 2.f);
             const float gr = level * std::sin(pan * float(M_PI) / 2.f);
             for (size_t i = 0; i < n; ++i) {
@@ -311,6 +341,14 @@ public:
                     const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
                     std::copy(col, col + 3, rgb);
                 }
+            } else if ((play_down_ || loop_down_) && !chompi) {
+                // Mute (play held): muted channels dark. Solo (loop held): soloed bright.
+                if (kKeys[k].white) {
+                    const int c = WhiteIndex(k);
+                    const float* col = kPresetColor[ch_[c].preset];
+                    const float b = play_down_ ? (muted_[c] ? 0.f : .5f) : (solo_[c] ? 1.f : .06f);
+                    for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
+                }
             } else if (chompi && kKeys[k].white) {
                 // The channels: each white key in its channel's colour, the selected one bright.
                 const int c = WhiteIndex(k);
@@ -319,8 +357,12 @@ public:
                 const float b = (c == sel_ ? .6f : .06f) + .4f * note_flash_[c];
                 for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
             } else if (chompi) {
-                // The ratios on the black keys: the selected channel's bright.
-                rgb[0] = rgb[1] = rgb[2] = BlackIndex(k) == ch_[sel_].ratio ? 1.f : .08f;
+                // The ratios on the black keys: the selected channel's bright; one
+                // waiting for the next beat (all channels) blinks.
+                const int b = BlackIndex(k);
+                float v = b == ch_[sel_].ratio ? 1.f : .08f;
+                if (b == pending_ratio_) v = std::fmod(led_time_, .25f) < .125f ? 1.f : .08f;
+                rgb[0] = rgb[1] = rgb[2] = v;
             } else if (oct_show_ > 0 && OctaveKey(k) >= -2) {
                 // The octave on the five lowest black keys, -2 .. +2: the current one bright.
                 const float b = OctaveKey(k) == ch_[sel_].octave ? 1.f : .1f;
@@ -358,7 +400,10 @@ public:
         // selected channel, brighter when it has a loop.
         SetPthLedFloat(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
-        SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
+        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearBlocks)
+            SetPthLedFloat(kLoopLed, 1.f, 0.f, 0.f); // let go to clear
+        else
+            SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
         fill_led_data();
 
         const float fade = std::exp(-dt / .15f);
@@ -397,6 +442,20 @@ private:
         int b = 0;
         for (int i = 0; i < k; ++i) b += !kKeys[i].white;
         return b;
+    }
+
+    // Every channel to one ratio, every loop from its start.
+    void AllToRatio(int r) {
+        for (int c = 0; c < kChannels; ++c) {
+            ch_[c].ratio = r;
+            loop_[c].pos = 0.f;
+            for (int i = 0; i < loop_[c].count; ++i) {
+                loop_[c].n[i].armed = true;
+                loop_[c].n[i].jit = 0.f;
+            }
+        }
+        l0_pos_ = 0.f;
+        pending_ratio_ = -1;
     }
 
     float LoopSamples(int c) const { return l0_ * kRatios[ch_[c].ratio]; }
@@ -634,7 +693,11 @@ private:
     bool running_ = true;
     uint32_t last_tap_ = 0;
     bool have_tap_ = false;
-    bool loop_down_ = false, loop_add_ = false;
+    bool loop_down_ = false, loop_add_ = false, loop_used_ = false;
+    bool play_down_ = false, play_used_ = false;
+    bool muted_[kChannels] = {}, solo_[kChannels] = {};
+    float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
+    int pending_ratio_ = -1;
     int loop_hold_ = 0, loop_ch_ = 0;
     uint32_t loop_t_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
