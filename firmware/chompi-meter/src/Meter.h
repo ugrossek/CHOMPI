@@ -1,6 +1,7 @@
 #pragma once
-// The meter instrument, first hardware version: 15 channels, each a mallet
-// sound; the keys play the selected channel. No latch or loops yet.
+// The meter instrument: 15 channels, each a mallet sound; the keys play the
+// selected channel. Loops are recorded afterwards: loop turns what you just
+// played on a channel (its last loop length) into that channel's loop.
 //
 // Everything here runs in the audio callback (controls once per block, then
 // the sound), except DrawLeds(), which the main loop calls.
@@ -61,6 +62,11 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {.60f, .20f, 1.0f}, // muffled
 };
 
+// Loop lengths as ratios of L0, one per black key from the lowest.
+constexpr int kNumRatios = 10, kRatioOne = 4;
+static const float kRatios[kNumRatios] = {1.f / 3, 1.f / 2, 2.f / 3, 3.f / 4, 1.f,
+                                          5.f / 4, 4.f / 3, 3.f / 2, 2.f, 3.f};
+
 static float MidiToHz(float n) { return 440.f * std::pow(2.f, (n - 69.f) / 12.f); }
 static float Clamp01(float x) { return std::min(std::max(x, 0.f), 1.f); }
 
@@ -70,12 +76,33 @@ struct Channel {
     float level = .8f, pan = .5f;
     int octave = 0;
     int last_note = 60; // the last key played, before the octave: the preview note
+    int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
+};
+
+// A channel's loop: notes at fixed places (phases, 0..1) in its loop length,
+// so they keep their places when L0 or the ratio changes.
+struct LoopNote { float phase; int note; };
+constexpr int kLoopNotes = 32;
+struct Loop {
+    LoopNote n[kLoopNotes];
+    int count = 0;
+    float pos = 0.f; // where the channel is in its loop, 0..1
+};
+
+// What was played by hand on a channel, newest last; loop takes from here.
+struct Played { uint32_t t; int note; };
+constexpr int kHistory = 48;
+struct History {
+    Played e[kHistory];
+    int head = 0, count = 0;
+    uint32_t since = 0; // only notes after the last loop press (or clear) count
 };
 
 class Instrument {
 public:
     void Init(float sample_rate) {
         sr_ = sample_rate;
+        l0_ = 2.f * sample_rate;
         for (int c = 0; c < kChannels; ++c) {
             ch_[c].preset = c % kNumMalletPresets;
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
@@ -89,7 +116,7 @@ public:
     }
 
     // ---- Controls (audio callback, once per block) --------------------------
-    void Controls(Hardware& hw) {
+    void Controls(Hardware& hw, size_t block) {
         auto& sr = hw.button_sr;
         const bool chompi = sr.State(int(Sw::KEY_26));
         ensemble_ = !hw.GetToggleState();
@@ -110,11 +137,14 @@ public:
                 if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
-                    // CHOMPI + black key: nothing yet.
+                    // CHOMPI + black key: the selected channel's ratio.
+                    ch_[sel_].ratio = BlackIndex(k);
                 } else {
                     Channel& c = ch_[sel_];
                     c.last_note = kKeys[k].note;
-                    NoteOn(sel_, kKeys[k].note + 12 * c.octave);
+                    const int note = kKeys[k].note + 12 * c.octave;
+                    NoteOn(sel_, note);
+                    Remember(sel_, note);
                 }
             }
         }
@@ -161,11 +191,49 @@ public:
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment())
             volume_ = Clamp01(volume_ + inc * .02f);
 
-        // Play held: show voices and load. Loop: add a cluster (voice test).
-        show_load_ = sr.State(int(Sw::KEY_27));
+        // Volume knob held: show voices and load.
+        show_load_ = sr.State(kKnobs[kVolume].push);
+
+        // Play: start and stop all loops. CHOMPI + play, tapped: L0 is the time
+        // between two taps.
+        if (Pressed(int(Sw::KEY_27))) {
+            if (chompi) {
+                const uint32_t gap = now_ - last_tap_;
+                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap);
+                last_tap_ = now_;
+                have_tap_ = true;
+            } else {
+                running_ = !running_;
+            }
+        }
+
+        // Loop: a short press turns what was just played on the selected channel
+        // into its loop (CHOMPI + loop: adds to the loop). Held 1 s: clears it.
         if (Pressed(int(Sw::KEY_28))) {
-            static const int kCluster[6] = {0, 7, 12, 16, 19, 24};
-            for (int n : kCluster) NoteOn(sel_, 48 + n + 12 * ch_[sel_].octave + (cluster_++ % 12));
+            loop_down_ = true;
+            loop_hold_ = 0;
+            loop_ch_ = sel_;
+            loop_add_ = chompi;
+            loop_t_ = now_;
+        }
+        if (loop_down_) {
+            if (sr.State(int(Sw::KEY_28))) {
+                if (++loop_hold_ == kClearBlocks) {
+                    loop_[loop_ch_].count = 0;
+                    hist_[loop_ch_].since = now_;
+                    loop_down_ = false;
+                }
+            } else {
+                Capture(loop_ch_, loop_t_, loop_add_);
+                loop_down_ = false;
+            }
+        }
+
+        // The loops run: each note strikes again whenever its channel passes its place.
+        if (running_) {
+            l0_pos_ += block / l0_;
+            if (l0_pos_ >= 1.f) { l0_pos_ -= 1.f; l0_flash_ = 1.f; }
+            for (int c = 0; c < kChannels; ++c) Advance(c, block);
         }
 
         // Reboot: CHOMPI + lowest and highest white key, held 2 s, then let go.
@@ -177,6 +245,8 @@ public:
         // Parameter changes reach the ringing voices once per block.
         for (int c = 0; c < kChannels; ++c)
             if (dirty_[c]) { dirty_[c] = false; UpdateVoices(c); }
+
+        now_ += block;
     }
 
     // ---- Sound (audio callback) ----------------------------------------------
@@ -235,15 +305,18 @@ public:
             } else if (chompi && kKeys[k].white) {
                 // The channels: each white key in its channel's colour, the selected one bright.
                 const int c = WhiteIndex(k);
+                // A channel with a loop pulses on it.
                 const float* col = kPresetColor[ch_[c].preset];
-                const float b = c == sel_ ? 1.f : .15f;
+                const float pulse = loop_[c].count ? ch_flash_[c] : 0.f;
+                const float b = (c == sel_ ? .7f : .1f) + .3f * pulse;
                 for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
-            } else if ((chompi || oct_show_ > 0) && OctaveKey(k) >= -2) {
+            } else if (chompi) {
+                // The ratios on the black keys: the selected channel's bright.
+                rgb[0] = rgb[1] = rgb[2] = BlackIndex(k) == ch_[sel_].ratio ? 1.f : .08f;
+            } else if (oct_show_ > 0 && OctaveKey(k) >= -2) {
                 // The octave on the five lowest black keys, -2 .. +2: the current one bright.
                 const float b = OctaveKey(k) == ch_[sel_].octave ? 1.f : .1f;
                 rgb[0] = rgb[1] = rgb[2] = b;
-            } else if (chompi) {
-                // other black keys stay dark while CHOMPI is held
             } else {
                 for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * key_flash_[k];
             }
@@ -263,7 +336,18 @@ public:
         }
         SetPthLedFloat(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
         SetPthLedFloat(kKnobs[kVolume].led, .3f * volume_, .3f * volume_, .3f * volume_);
+
+        // Play: lit while the loops run, a beat on every L0. Loop: a beat on
+        // every loop of the selected channel, brighter when it has a loop.
+        const float pb = running_ ? .15f + .85f * l0_flash_ : 0.f;
+        SetPthLedFloat(kPlayLed, 0.f, pb, 0.f);
+        const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
+        SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
         fill_led_data();
+
+        const float fade = std::exp(-dt / .15f);
+        l0_flash_ *= fade;
+        for (float& f : ch_flash_) f *= fade;
     }
 
 private:
@@ -285,6 +369,73 @@ private:
     static constexpr float kGreen[3] = {0.f, 1.f, 0.f};
     static constexpr float kYellow[3] = {1.f, .8f, 0.f};
     static constexpr float kRed[3] = {1.f, 0.f, 0.f};
+
+    static constexpr int kClearBlocks = 1000;     // loop held 1 s: clear
+    static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds, for tap tempo
+
+    static int BlackIndex(int k) {
+        int b = 0;
+        for (int i = 0; i < k; ++i) b += !kKeys[i].white;
+        return b;
+    }
+
+    float LoopSamples(int c) const { return l0_ * kRatios[ch_[c].ratio]; }
+
+    void Remember(int c, int note) {
+        History& h = hist_[c];
+        h.e[h.head] = {now_, note};
+        h.head = (h.head + 1) % kHistory;
+        if (h.count < kHistory) h.count++;
+    }
+
+    // Loop pressed at time t: the notes played on channel c in the loop length
+    // before t, and since the last loop press, become its loop (or join it).
+    void Capture(int c, uint32_t t, bool add) {
+        History& h = hist_[c];
+        Loop& lp = loop_[c];
+        const float len = LoopSamples(c);
+        LoopNote got[kLoopNotes];
+        int n = 0;
+        for (int i = 0; i < h.count; ++i) {
+            const Played& e = h.e[(h.head - h.count + i + kHistory) % kHistory];
+            if (int32_t(e.t - h.since) <= 0 || int32_t(t - e.t) < 0 || float(t - e.t) >= len) continue;
+            // Its place: as far behind the loop's position now as it was played before now.
+            float ph = lp.pos - float(now_ - e.t) / len;
+            ph -= std::floor(ph);
+            if (n < kLoopNotes) got[n++] = {ph, e.note};
+            else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = {ph, e.note}; }
+        }
+        if (n == 0) return; // nothing played: the loop stays as it is
+        h.since = t;
+        if (!add) lp.count = 0;
+        for (int i = 0; i < n; ++i) {
+            bool twin = false; // the same note at the same place is already there
+            for (int j = 0; j < lp.count; ++j)
+                if (lp.n[j].note == got[i].note && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
+            if (!twin && lp.count < kLoopNotes) lp.n[lp.count++] = got[i];
+        }
+    }
+
+    void Advance(int c, size_t block) {
+        Loop& lp = loop_[c];
+        const float from = lp.pos;
+        float to = from + block / LoopSamples(c);
+        const bool wrap = to >= 1.f;
+        if (wrap) { to -= 1.f; ch_flash_[c] = 1.f; }
+        lp.pos = to;
+        for (int i = 0; i < lp.count; ++i) {
+            const float ph = lp.n[i].phase;
+            if (wrap ? (ph >= from || ph < to) : (ph >= from && ph < to)) {
+                NoteOn(c, lp.n[i].note);
+                if (c == sel_) FlashNote(lp.n[i].note - 12 * ch_[c].octave);
+            }
+        }
+    }
+
+    void FlashNote(int note) {
+        for (int k = 0; k < 25; ++k)
+            if (kKeys[k].note == note) key_flash_[k] = 1.f;
+    }
 
     static int WhiteIndex(int k) {
         int w = 0;
@@ -382,7 +533,7 @@ private:
     Slot slot_[kVoices];
     bool dirty_[kChannels] = {};
     uint32_t clock_ = 0;
-    int sel_ = 0, page_ = 0, cluster_ = 0;
+    int sel_ = 0, page_ = 0;
     bool ensemble_ = false, show_load_ = false;
     float off_bright_ = 0.f, off_decay_ = 0.f, off_strike_ = 0.f;
     float room_ = .5f, width_ = 1.f, volume_ = .8f, load_ = 0.f;
@@ -390,6 +541,18 @@ private:
     int oct_clicks_ = 0, oct_ch_ = 0, oct_idle_ = 0, oct_show_ = 0;
     int preview_ch_ = 0, preview_wait_ = 0;
     int reboot_hold_ = 0;
+
+    Loop loop_[kChannels];
+    History hist_[kChannels];
+    uint32_t now_ = 0;      // samples since start
+    float l0_ = 96000.f;    // L0 in samples (2 s)
+    float l0_pos_ = 0.f, l0_flash_ = 0.f, ch_flash_[kChannels] = {};
+    bool running_ = true;
+    uint32_t last_tap_ = 0;
+    bool have_tap_ = false;
+    bool loop_down_ = false, loop_add_ = false;
+    int loop_hold_ = 0, loop_ch_ = 0;
+    uint32_t loop_t_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 

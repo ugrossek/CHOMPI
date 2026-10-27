@@ -72,7 +72,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     const uint32_t start = DWT->CYCCNT;
 
     hw.ProcessAllControls();
-    instrument.Controls(hw);
+    instrument.Controls(hw, size);
 
     const float room = instrument.Room();
     if(room != room_set)
