@@ -69,6 +69,7 @@ struct Channel {
     MalletParams p;
     float level = .8f, pan = .5f;
     int octave = 0;
+    int last_note = 60; // the last key played, before the octave: the preview note
 };
 
 class Instrument {
@@ -109,12 +110,10 @@ public:
                 if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
-                    // CHOMPI + C#: octave down, CHOMPI + D#: up. Other black keys: nothing yet.
-                    Channel& c = ch_[sel_];
-                    if (k == kOctDown) c.octave = std::max(c.octave - 1, -2);
-                    if (k == kOctUp) c.octave = std::min(c.octave + 1, 2);
+                    // CHOMPI + black key: nothing yet.
                 } else {
-                    const Channel& c = ch_[sel_];
+                    Channel& c = ch_[sel_];
+                    c.last_note = kKeys[k].note;
                     NoteOn(sel_, kKeys[k].note + 12 * c.octave);
                 }
             }
@@ -129,12 +128,34 @@ public:
             const int inc = hw.enc[kKnobs[n].enc].Increment();
             if (inc) Turn(n, inc, chompi);
         }
-        // Transport: the selected channel's preset.
+        // Transport: the selected channel's octave, one step every few clicks.
+        // CHOMPI + turn: its preset, heard as a preview once the wheel rests.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Channel& c = ch_[sel_];
-            c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
-            c.p = kMalletPresets[c.preset].p;
-            Update(sel_);
+            if (chompi) {
+                c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
+                c.p = kMalletPresets[c.preset].p;
+                Update(sel_);
+                preview_ch_ = sel_;
+                preview_wait_ = kPreviewBlocks;
+            } else {
+                if (oct_idle_ == 0 || oct_ch_ != sel_) oct_clicks_ = 0;
+                oct_ch_ = sel_;
+                oct_clicks_ += inc;
+                if (oct_clicks_ >= kClicksPerOctave || oct_clicks_ <= -kClicksPerOctave) {
+                    const int step = oct_clicks_ > 0 ? 1 : -1;
+                    c.octave = std::min(std::max(c.octave + step, -2), 2);
+                    oct_clicks_ = 0;
+                }
+                oct_idle_ = kOctaveIdleBlocks;
+                oct_show_ = kOctaveShowBlocks;
+            }
+        }
+        if (oct_idle_ > 0) oct_idle_--;
+        if (oct_show_ > 0) oct_show_--;
+        if (preview_wait_ > 0 && --preview_wait_ == 0) {
+            const Channel& c = ch_[preview_ch_];
+            NoteOn(preview_ch_, c.last_note + 12 * c.octave);
         }
         // Volume.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment())
@@ -217,11 +238,10 @@ public:
                 const float* col = kPresetColor[ch_[c].preset];
                 const float b = c == sel_ ? 1.f : .15f;
                 for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
-            } else if (chompi && (k == kOctDown || k == kOctUp)) {
-                // The octave: dim white at home, brighter the further down (C#) or up (D#).
-                const int o = ch_[sel_].octave;
-                const int away = k == kOctDown ? std::max(-o, 0) : std::max(o, 0);
-                rgb[0] = rgb[1] = rgb[2] = away == 0 ? .1f : away == 1 ? .5f : 1.f;
+            } else if ((chompi || oct_show_ > 0) && OctaveKey(k) >= -2) {
+                // The octave on the five lowest black keys, -2 .. +2: the current one bright.
+                const float b = OctaveKey(k) == ch_[sel_].octave ? 1.f : .1f;
+                rgb[0] = rgb[1] = rgb[2] = b;
             } else if (chompi) {
                 // other black keys stay dark while CHOMPI is held
             } else {
@@ -249,7 +269,18 @@ public:
 private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
 
-    static constexpr int kOctDown = 1, kOctUp = 3; // C# and D#, the lowest black keys
+    static constexpr int kClicksPerOctave = 4;
+    static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
+    static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
+    static constexpr int kPreviewBlocks = 150;     // the wheel rests 150 ms: preview
+
+    // C# D# F# G# A#, the five lowest black keys, show octaves -2 .. +2.
+    static int OctaveKey(int k) {
+        switch (k) {
+            case 1: return -2; case 3: return -1; case 6: return 0; case 8: return 1; case 10: return 2;
+            default: return -99;
+        }
+    }
     static constexpr int kRebootBlocks = 2000; // 2 s of 1 ms blocks
     static constexpr float kGreen[3] = {0.f, 1.f, 0.f};
     static constexpr float kYellow[3] = {1.f, .8f, 0.f};
@@ -356,6 +387,8 @@ private:
     float off_bright_ = 0.f, off_decay_ = 0.f, off_strike_ = 0.f;
     float room_ = .5f, width_ = 1.f, volume_ = .8f, load_ = 0.f;
     float key_flash_[25] = {};
+    int oct_clicks_ = 0, oct_ch_ = 0, oct_idle_ = 0, oct_show_ = 0;
+    int preview_ch_ = 0, preview_wait_ = 0;
     int reboot_hold_ = 0;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
