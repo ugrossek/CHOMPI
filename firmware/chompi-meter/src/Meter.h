@@ -208,15 +208,7 @@ public:
         }
 
         // Right knob held: show voices and load.
-        // A short push steps through the reverbs (for comparing them); held
-        // longer, it shows voices and load.
-        const bool k6 = sr.State(kKnobs[kVolume].push);
-        if (k6) k6_hold_++;
-        else if (k6_hold_ > 0) {
-            if (k6_hold_ < kShortPushBlocks) reverb_ = (reverb_ + 1) % kReverbs;
-            k6_hold_ = 0;
-        }
-        show_load_ = k6_hold_ >= kShortPushBlocks;
+        show_load_ = sr.State(kKnobs[kVolume].push);
 
         // Play, on release, unless it muted or soloed channels: starts and stops
         // all loops; CHOMPI + play is a tap instead (L0 is the time between two
@@ -334,9 +326,6 @@ public:
     }
 
     float Room() const { return room_; }
-    // 0 room, 1 plate, 2 the old Rings reverb.
-    static constexpr int kReverbs = 3;
-    int Reverb() const { return reverb_; }
     float Volume() const { return volume_; }
     bool RebootNow() const { return reboot_now_; }
     void SetLoad(float load) { load_ = load; }
@@ -405,11 +394,9 @@ public:
         const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
         SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
         SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
-        // K6: the reverb in use, as bright as the volume. Room green, plate gold, Rings white.
-        static constexpr float kReverbColor[kReverbs][3] = {{.2f, 1.f, .3f}, {1.f, .7f, .1f}, {1.f, 1.f, 1.f}};
-        const float* rc = kReverbColor[reverb_];
+        // K6: as bright as the volume.
         const float vb = .1f + .5f * volume_;
-        SetPthLedFloat(kKnobs[kVolume].led, rc[0] * vb, rc[1] * vb, rc[2] * vb);
+        SetPthLedFloat(kKnobs[kVolume].led, vb, vb, vb);
 
         // Play: lit while the loops run. Loop: a beat on every loop of the
         // selected channel, brighter when it has a loop.
@@ -578,18 +565,17 @@ private:
         return -1;
     }
 
-    // Channel `to` becomes a copy of `from`: sound, octave, level, ratio and loop,
-    // in step with it. It keeps its own place in the stereo field.
+    // Channel `to` takes over the pattern of `from`: its loop and ratio, in step
+    // with it, moved into `to`'s octave. Everything else stays: `to` plays the
+    // figure on its own instrument, with its own level, pan and swell.
     void Copy(int from, int to) {
         if (from == to) return;
-        const float pan = ch_[to].pan;
-        ch_[to] = ch_[from];
-        ch_[to].pan = pan;
+        const int shift = 12 * (ch_[to].octave - ch_[from].octave);
         loop_[to] = loop_[from];
+        for (int i = 0; i < loop_[to].count; ++i) loop_[to].n[i].note += shift;
+        ch_[to].ratio = ch_[from].ratio;
         pending_[to] = pending_[from];
-        swell_[to] = swell_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
-        Update(to);
     }
 
     static bool AnyKeyHeld(Hardware& hw) {
@@ -732,8 +718,6 @@ private:
     float swell_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     uint32_t rng_ = 12345;
     bool all_ = false, show_load_ = false;
-    int reverb_ = 0, k6_hold_ = 0;
-    static constexpr int kShortPushBlocks = 300;
     float off_material_ = 0.f, off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float all_level_ = 1.f;

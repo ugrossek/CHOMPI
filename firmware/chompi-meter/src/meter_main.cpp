@@ -8,29 +8,22 @@
 #include "board/hardware.h"
 #include "board/temp_led_stuff.h"
 #include "Meter.h"
-#include "../dsp/reverb.h"
-#include "../dsp/plate.h"
 #include "../dsp/room.h"
 
 #include <cerrno>
 #include <cstddef>
-
-#define DSY_DTCMRAM_BSS __attribute__((section(".dtcmram_bss")))
 
 using namespace daisy;
 using namespace chompi;
 
 Hardware hw;
 meter::Instrument instrument;
-daisysp::Reverb DSY_DTCMRAM_BSS reverb;
-meter::Plate plate;
-meter::Room  room_rv;
-static float DSY_SDRAM_BSS plate_mem[meter::Plate::kMemory];
+meter::Room room_rv;
 static float DSY_SDRAM_BSS room_mem[meter::Room::kMemory];
 
-/* Wet level of the new reverbs at room .5, matched to sit about 10 dB under the
- * dry sound (measured on an impulse). */
-static constexpr float kPlateWet = .44f, kRoomWet = .77f;
+/* Wet level of the room at room .5, about 10 dB under the dry sound (measured
+ * on an impulse). */
+static constexpr float kRoomWet = .77f;
 
 /* A bounded heap in D2 RAM, for the few things that malloc (the USB stack).
  * newlib's own _sbrk doesn't stop at the end of RAM. */
@@ -85,18 +78,13 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     instrument.Controls(hw, size);
 
     const float room = instrument.Room();
-    const int   rv   = instrument.Reverb();
     if(room != room_set)
     {
         room_set = room;
-        reverb.SetAmount(room * room * .8f);
-        reverb.SetLowpass(room * .6f + .4f);
-        reverb.SetDiffusion(room * .6f);
-        plate.SetDecay(room);
         room_rv.SetDecay(room);
     }
     /* The room knob also sets how much: none at 0, twice the matched level at 1. */
-    const float wet = 2.f * room * (rv == 0 ? kRoomWet : kPlateWet);
+    const float wet = 2.f * room * kRoomWet;
 
     float l[64], r[64];
     std::fill(l, l + size, 0.f);
@@ -106,18 +94,10 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     const float vol = instrument.Volume();
     for(size_t i = 0; i < size; i++)
     {
-        if(rv == 2)
-            reverb.Process(&l[i], &r[i]);
-        else
-        {
-            float wl, wr;
-            if(rv == 0)
-                room_rv.Process(l[i], r[i], &wl, &wr);
-            else
-                plate.Process(l[i], r[i], &wl, &wr);
-            l[i] += wet * wl;
-            r[i] += wet * wr;
-        }
+        float wl, wr;
+        room_rv.Process(l[i], r[i], &wl, &wr);
+        l[i] += wet * wl;
+        r[i] += wet * wr;
 
         /* Limiter: many long notes add up, so the sum is turned down smoothly
          * (fast down, about half a second back up) before it can distort. */
@@ -180,11 +160,6 @@ int main(void)
 
     const float sr = hw.seed.AudioSampleRate();
     instrument.Init(sr);
-    reverb.Init(sr);
-    reverb.Clear();
-    reverb.SetInputGain(.3f);
-    reverb.SetTime(.9f);
-    plate.Init(sr, plate_mem);
     room_rv.Init(sr, room_mem);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // cycle counter for the load guard
