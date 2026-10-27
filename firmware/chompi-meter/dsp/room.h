@@ -37,9 +37,9 @@ public:
         SetDamping(.6f);
     }
 
-    // 0 dry room .. 1 a bigger hall (RT60 about 0.4 .. 2 s).
+    // 0 small room .. 1 a bigger hall (RT60 about 0.7 .. 3 s).
     void SetDecay(float d) {
-        const float rt60 = .4f + 1.6f * d * d;
+        const float rt60 = .7f + 2.3f * d * d;
         for (int i = 0; i < kLines; ++i)
             g_[i] = std::pow(10.f, -3.f * float(len_[i]) / (rt60 * sr_));
     }
