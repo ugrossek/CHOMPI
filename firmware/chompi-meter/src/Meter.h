@@ -147,6 +147,9 @@ public:
                     }
                     play_used_ = true;
                 } else if (chompi && kKeys[k].white) {
+                    // A second white key while one is still held: copy that channel here.
+                    const int from = HeldWhite(k);
+                    if (from >= 0) Copy(from, WhiteIndex(k));
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
                     // CHOMPI + black key: the selected channel's ratio, at once (wild);
@@ -552,6 +555,27 @@ private:
         int w = 0;
         for (int i = 0; i < k; ++i) w += kKeys[i].white;
         return w;
+    }
+
+    // The channel of a white key held from before this block (not key k), or -1.
+    int HeldWhite(int k) const {
+        const uint64_t before = held_ & ~pressed_;
+        for (int i = 0; i < 25; ++i)
+            if (i != k && kKeys[i].white && ((before >> int(kKeys[i].sw)) & 1)) return WhiteIndex(i);
+        return -1;
+    }
+
+    // Channel `to` becomes a copy of `from`: sound, octave, level, ratio and loop,
+    // in step with it. It keeps its own place in the stereo field.
+    void Copy(int from, int to) {
+        if (from == to) return;
+        const float pan = ch_[to].pan;
+        ch_[to] = ch_[from];
+        ch_[to].pan = pan;
+        loop_[to] = loop_[from];
+        swell_[to] = swell_[from];
+        hist_[to].since = now_; // older notes played on `to` are not looped any more
+        Update(to);
     }
 
     static bool AnyKeyHeld(Hardware& hw) {
