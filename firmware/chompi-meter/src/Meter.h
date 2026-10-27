@@ -133,20 +133,19 @@ public:
         pressed_ = down & ~held_;
         held_ = down;
 
-        // Keys: CHOMPI + white key selects a channel, play + white key mutes it,
-        // loop + white key solos it; otherwise the key plays.
+        // Keys: CHOMPI + white key selects a channel; play + white key mutes it,
+        // CHOMPI + play + white key solos it; otherwise the key plays.
         const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
                 key_flash_[k] = 1.f;
-                if ((play_held || loop_held) && !chompi) {
-                    if (kKeys[k].white && play_held) { muted_[WhiteIndex(k)] ^= 1; play_used_ = true; }
-                    if (kKeys[k].white && loop_held) {
-                        solo_[WhiteIndex(k)] ^= 1;
-                        if (!loop_used_) UndoCapture(); // loop was for soloing, not capturing
-                        loop_used_ = true;
+                if (play_held) {
+                    if (kKeys[k].white) {
+                        if (chompi) solo_[WhiteIndex(k)] ^= 1;
+                        else muted_[WhiteIndex(k)] ^= 1;
                     }
+                    play_used_ = true;
                 } else if (chompi && kKeys[k].white) {
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
@@ -178,13 +177,14 @@ public:
             if (inc) Turn(n, inc, chompi, sr.State(kKnobs[n].push));
         }
         // Wheel: the tempo, L0, smoothly (right is faster); every loop follows.
-        // CHOMPI + turn with the switch on all: every ratio a step up or down.
+        // CHOMPI + turn: the selected channel's ratio a step up or down every few
+        // clicks, at once; with the switch on all: every channel's.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             if (!chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
-            } else if (all_) {
-                if (const int step = Steps(inc, -1))
-                    for (Channel& c : ch_) c.ratio = std::min(std::max(c.ratio + step, 0), kNumRatios - 1);
+            } else if (const int step = Steps(inc, all_ ? -1 : -2 - sel_)) {
+                for (int c = 0; c < kChannels; ++c)
+                    if (all_ || c == sel_) ch_[c].ratio = std::min(std::max(ch_[c].ratio + step, 0), kNumRatios - 1);
             }
         }
         if (step_idle_ > 0) step_idle_--;
@@ -202,36 +202,38 @@ public:
         // Right knob held: show voices and load.
         show_load_ = sr.State(kKnobs[kVolume].push);
 
-        // Play: on release, starts and stops all loops (unless it muted channels).
-        // CHOMPI + play, tapped: L0 is the time between two taps.
+        // Play, on release, unless it muted or soloed channels: starts and stops
+        // all loops; CHOMPI + play is a tap instead (L0 is the time between two
+        // taps, counted from the presses).
         if (Pressed(int(Sw::KEY_27))) {
             play_down_ = true;
             play_used_ = false;
-            if (chompi) {
-                const uint32_t gap = now_ - last_tap_;
-                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap);
-                last_tap_ = now_;
-                have_tap_ = true;
-                play_used_ = true;
-            }
+            play_chompi_ = chompi;
+            play_t_ = now_;
         }
         if (play_down_ && !play_held) {
             play_down_ = false;
-            if (!play_used_) running_ = !running_;
+            if (play_used_) {
+            } else if (play_chompi_) {
+                const uint32_t gap = play_t_ - last_tap_;
+                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap);
+                last_tap_ = play_t_;
+                have_tap_ = true;
+            } else {
+                running_ = !running_;
+            }
         }
 
         // Loop: a press turns what was just played on the selected channel into
         // its loop, at once (CHOMPI + loop: adds to the loop). Held 2 s (the
-        // light turns red after 1 s): clears it, or every loop with the switch
-        // on all. A white key while it is held solos instead, and the capture
-        // is taken back.
+        // light turns red after 1 s): clears the channel; CHOMPI + loop held
+        // 2 s: clears every channel.
         if (Pressed(int(Sw::KEY_28))) {
             loop_down_ = true;
             loop_used_ = false;
             loop_hold_ = 0;
             loop_ch_ = sel_;
-            undo_loop_ = loop_[sel_];
-            undo_since_ = hist_[sel_].since;
+            loop_chompi_ = chompi;
             Capture(sel_, now_, chompi);
         }
         if (loop_down_) {
@@ -239,7 +241,7 @@ public:
                 loop_down_ = false;
             } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
                 for (int c = 0; c < kChannels; ++c) {
-                    if (!all_ && c != loop_ch_) continue;
+                    if (!loop_chompi_ && c != loop_ch_) continue;
                     loop_[c].count = 0;
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
@@ -334,12 +336,13 @@ public:
                     const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
                     std::copy(col, col + 3, rgb);
                 }
-            } else if ((play_down_ || loop_down_) && !chompi) {
-                // Mute (play held): muted channels dark. Solo (loop held): soloed bright.
+            } else if (play_down_) {
+                // Play held: mute view, muted channels dark; with CHOMPI: solo view,
+                // soloed channels bright.
                 if (kKeys[k].white) {
                     const int c = WhiteIndex(k);
                     const float* col = kPresetColor[ch_[c].preset];
-                    const float b = play_down_ ? (muted_[c] ? 0.f : .5f) : (solo_[c] ? 1.f : .06f);
+                    const float b = chompi ? (solo_[c] ? 1.f : .06f) : (muted_[c] ? 0.f : .5f);
                     for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
                 }
             } else if (chompi && kKeys[k].white) {
@@ -423,13 +426,7 @@ private:
     static constexpr int kClearBlocks = 2000;     // loop held 2 s: clear
     static constexpr int kClearWarnBlocks = 1000; // ... the light red from 1 s
 
-    // Loop pressed for a solo after all: the loop as it was before the press.
-    void UndoCapture() {
-        const float pos = loop_[loop_ch_].pos;
-        loop_[loop_ch_] = undo_loop_;
-        loop_[loop_ch_].pos = pos;
-        hist_[loop_ch_].since = undo_since_;
-    }
+
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
@@ -697,10 +694,9 @@ private:
     bool running_ = true;
     uint32_t last_tap_ = 0;
     bool have_tap_ = false;
-    bool loop_down_ = false, loop_used_ = false;
-    Loop undo_loop_;
-    uint32_t undo_since_ = 0;
-    bool play_down_ = false, play_used_ = false;
+    bool loop_down_ = false, loop_used_ = false, loop_chompi_ = false;
+    bool play_down_ = false, play_used_ = false, play_chompi_ = false;
+    uint32_t play_t_ = 0;
     bool muted_[kChannels] = {}, solo_[kChannels] = {};
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     int pending_ratio_ = -1;
