@@ -200,7 +200,15 @@ public:
         }
 
         // Right knob held: show voices and load.
-        show_load_ = sr.State(kKnobs[kVolume].push);
+        // A short push steps through the reverbs (for comparing them); held
+        // longer, it shows voices and load.
+        const bool k6 = sr.State(kKnobs[kVolume].push);
+        if (k6) k6_hold_++;
+        else if (k6_hold_ > 0) {
+            if (k6_hold_ < kShortPushBlocks) reverb_ = (reverb_ + 1) % kReverbs;
+            k6_hold_ = 0;
+        }
+        show_load_ = k6_hold_ >= kShortPushBlocks;
 
         // Play, on release, unless it muted or soloed channels: starts and stops
         // all loops; CHOMPI + play is a tap instead (L0 is the time between two
@@ -316,6 +324,9 @@ public:
     }
 
     float Room() const { return room_; }
+    // 0 room, 1 plate, 2 the old Rings reverb.
+    static constexpr int kReverbs = 3;
+    int Reverb() const { return reverb_; }
     float Volume() const { return volume_; }
     bool RebootNow() const { return reboot_now_; }
     void SetLoad(float load) { load_ = load; }
@@ -384,7 +395,11 @@ public:
         const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
         SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
         SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
-        SetPthLedFloat(kKnobs[kVolume].led, .3f * volume_, .3f * volume_, .3f * volume_);
+        // K6: the reverb in use, as bright as the volume. Room green, plate gold, Rings white.
+        static constexpr float kReverbColor[kReverbs][3] = {{.2f, 1.f, .3f}, {1.f, .7f, .1f}, {1.f, 1.f, 1.f}};
+        const float* rc = kReverbColor[reverb_];
+        const float vb = .1f + .5f * volume_;
+        SetPthLedFloat(kKnobs[kVolume].led, rc[0] * vb, rc[1] * vb, rc[2] * vb);
 
         // Play: lit while the loops run. Loop: a beat on every loop of the
         // selected channel, brighter when it has a loop.
@@ -677,6 +692,8 @@ private:
     float swell_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     uint32_t rng_ = 12345;
     bool all_ = false, show_load_ = false;
+    int reverb_ = 0, k6_hold_ = 0;
+    static constexpr int kShortPushBlocks = 300;
     float off_material_ = 0.f, off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float all_level_ = 1.f;
