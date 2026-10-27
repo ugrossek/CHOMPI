@@ -47,6 +47,7 @@ static const Knob kKnobs[6] = {
 };
 constexpr int kTransport = 4, kVolume = 5;
 constexpr int kPlayLed = 7, kLoopLed = 8;
+constexpr int kWheelLeds[2] = {5, 6};
 
 // A colour per preset, so a channel's sound shows on its key: ten hues as far
 // apart as the LEDs allow.
@@ -82,7 +83,9 @@ struct Channel {
 
 // A channel's loop: notes at fixed places (phases, 0..1) in its loop length,
 // so they keep their places when L0 or the ratio changes.
-struct LoopNote { float phase; int note; };
+// jit: this repeat lands a little early or late (the feel); armed: not yet
+// played in this round.
+struct LoopNote { float phase; int note; float jit = 0.f; bool armed = true; };
 constexpr int kLoopNotes = 32;
 struct Loop {
     LoopNote n[kLoopNotes];
@@ -151,14 +154,16 @@ public:
             }
         }
 
-        // Knob pushes: switch between the two pages.
-        for (int n = 0; n < 4; ++n)
-            if (Pressed(kKnobs[n].push)) page_ ^= 1;
+        // K3 pushed: the buzz switches between rattle and muffle.
+        if (Pressed(kKnobs[2].push) && !all_) {
+            ch_[sel_].p.buzz_kind ^= 1;
+            Update(sel_);
+        }
 
-        // Sample knobs.
+        // Knobs 1-4.
         for (int n = 0; n < 4; ++n) {
             const int inc = hw.enc[kKnobs[n].enc].Increment();
-            if (inc) Turn(n, inc, chompi);
+            if (inc) Turn(n, inc, chompi, sr.State(kKnobs[n].push));
         }
         // Wheel: the tempo, L0, smoothly (right is faster); every loop follows.
         // CHOMPI + turn: the selected channel's preset, heard as a preview once
@@ -327,20 +332,31 @@ public:
             key_flash_[k] *= std::exp(-dt / .25f);
         }
 
-        // Knobs: the channel's colour, warm white with the switch on all; page 2 paler.
-        static constexpr float kWarm[3] = {1.f, .7f, .4f};
-        const float* kc = all_ ? kWarm : sel_col;
-        const float w = page_ ? .5f : 0.f;
-        for (int n = 0; n < 4; ++n)
-            SetPthLedFloat(kKnobs[n].led, kc[0] + (1.f - kc[0]) * w, kc[1] + (1.f - kc[1]) * w,
-                           kc[2] + (1.f - kc[2]) * w);
+        // Knobs: the selected channel's colour; with the switch on all, the
+        // colours of all channels, slowly passing along the four knobs.
+        led_time_ += dt;
+        for (int n = 0; n < 4; ++n) {
+            const float* kc = sel_col;
+            if (all_) kc = kPresetColor[ch_[(int(led_time_ * 1.5f) + n) % kChannels].preset];
+            SetPthLedFloat(kKnobs[n].led, kc[0], kc[1], kc[2]);
+        }
         SetPthLedFloat(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
+
+        // The wheel's two lights: a beat on every L0 (the tempo lives here);
+        // with CHOMPI held, the selected channel's colour (its preset).
+        if (chompi) {
+            SetPthLedFloat(kWheelLeds[0], sel_col[0], sel_col[1], sel_col[2]);
+            SetPthLedFloat(kWheelLeds[1], sel_col[0], sel_col[1], sel_col[2]);
+        } else {
+            const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
+            SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
+            SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
+        }
         SetPthLedFloat(kKnobs[kVolume].led, .3f * volume_, .3f * volume_, .3f * volume_);
 
-        // Play: lit while the loops run, a beat on every L0. Loop: a beat on
-        // every loop of the selected channel, brighter when it has a loop.
-        const float pb = running_ ? .15f + .85f * l0_flash_ : 0.f;
-        SetPthLedFloat(kPlayLed, 0.f, pb, 0.f);
+        // Play: lit while the loops run. Loop: a beat on every loop of the
+        // selected channel, brighter when it has a loop.
+        SetPthLedFloat(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
         SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
         fill_led_data();
@@ -375,6 +391,7 @@ private:
     static constexpr int kClearBlocks = 1000;     // loop held 1 s: clear
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
+    static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
 
     static int BlackIndex(int k) {
         int b = 0;
@@ -426,13 +443,37 @@ private:
         const bool wrap = to >= 1.f;
         if (wrap) { to -= 1.f; ch_flash_[c] = 1.f; }
         lp.pos = to;
+        auto crossed = [&](float x) {
+            x -= std::floor(x);
+            return wrap ? (x >= from || x < to) : (x >= from && x < to);
+        };
+
+        // The feel (variation): a player, not a machine. Each repeat lands a
+        // little early or late, a little louder or softer, the channel swells
+        // and ebbs over the loops, and a loose player now and then leaves one out.
+        const float feel = Effective(c).variation;
+        if (wrap) swell_[c] += (1.f - feel * .5f * Rand() - swell_[c]) * .35f;
+        const float jit_max = feel * kFeelSeconds * sr_ / LoopSamples(c);
+        const float skip = std::max(feel - .5f, 0.f) * .3f;
+
         for (int i = 0; i < lp.count; ++i) {
-            const float ph = lp.n[i].phase;
-            if (wrap ? (ph >= from || ph < to) : (ph >= from && ph < to)) {
-                NoteOn(c, lp.n[i].note);
-                if (c == sel_) FlashNote(lp.n[i].note - 12 * ch_[c].octave);
+            LoopNote& n = lp.n[i];
+            if (!n.armed) {
+                if (crossed(n.phase + .5f)) n.armed = true; // half a loop later: ready again
+                continue;
             }
+            if (!crossed(n.phase + n.jit)) continue;
+            n.armed = false;
+            n.jit = jit_max * (Rand() + Rand() - 1.f);
+            if (Rand() < skip) continue;
+            NoteOn(c, n.note, swell_[c] * (1.f - feel * .35f * Rand()));
+            if (c == sel_) FlashNote(n.note - 12 * ch_[c].octave);
         }
+    }
+
+    float Rand() {
+        rng_ = rng_ * 1664525u + 1013904223u;
+        return float(rng_ >> 8) * (1.f / 16777216.f);
     }
 
     void FlashNote(int note) {
@@ -461,10 +502,11 @@ private:
         p.strike = Clamp01(p.strike + off_strike_);
         p.shimmer = Clamp01(p.shimmer + off_shimmer_);
         p.buzz = Clamp01(p.buzz + off_buzz_);
+        p.variation = Clamp01(p.variation + off_variation_);
         return p;
     }
 
-    void NoteOn(int c, int note) {
+    void NoteOn(int c, int note, float velocity = 1.f) {
         // The same key on the same channel strikes its ringing voice again.
         int pick = -1;
         for (int v = 0; v < kVoices && pick < 0; ++v)
@@ -481,7 +523,7 @@ private:
         s.ch = c;
         s.note = note;
         s.age = ++clock_;
-        s.v.Strike(MidiToHz(float(note)), Effective(c));
+        s.v.Strike(MidiToHz(float(note)), Effective(c), velocity);
     }
 
     void Update(int c) { dirty_[c] = true; }
@@ -493,62 +535,55 @@ private:
             if (s.v.Active() && s.ch == c) s.v.SetParams(p);
     }
 
-    // Knobs 1-4. Page 1: material, brightness, decay | level (CHOMPI: pan).
-    // Page 2: strike (CHOMPI: variation), shimmer, buzz (CHOMPI: its kind) | octave.
+    // Knobs 1-4, no pages: turn | CHOMPI + turn | turn while pushed in.
+    //   K1 material | strike    | -
+    //   K2 brightness | feel (variation) | shimmer
+    //   K3 decay    | buzz      | -        (a push: rattle / muffle)
+    //   K4 level    | pan       | octave
     // With the switch on all: the same knobs as offsets on every channel, so each
-    // keeps its character; level of all, CHOMPI + level: the stereo width.
-    void Turn(int knob, int inc, bool chompi) {
+    // keeps its character; level of all, CHOMPI + K4: the stereo width.
+    void Turn(int knob, int inc, bool chompi, bool pushed) {
         const float d = inc * .02f;
         if (all_) {
-            if (page_ == 0) {
-                switch (knob) {
-                    case 0: Offset(off_material_, d); break;
-                    case 1: Offset(off_bright_, d); break;
-                    case 2: Offset(off_decay_, d); break;
-                    case 3:
-                        if (chompi) width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
-                        else all_level_ = std::min(std::max(all_level_ + d, 0.f), 1.5f);
-                        return;
-                }
-            } else {
-                switch (knob) {
-                    case 0: Offset(off_strike_, d); break;
-                    case 1: Offset(off_shimmer_, d); break;
-                    case 2: Offset(off_buzz_, d); break;
-                    case 3: return; // the octave is per channel
-                }
+            switch (knob) {
+                case 0: Offset(chompi ? off_strike_ : off_material_, d); break;
+                case 1: Offset(pushed ? off_shimmer_ : chompi ? off_variation_ : off_bright_, d); break;
+                case 2: Offset(chompi ? off_buzz_ : off_decay_, d); break;
+                case 3:
+                    if (pushed) return; // the octave is per channel
+                    if (chompi) width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
+                    else all_level_ = std::min(std::max(all_level_ + d, 0.f), 1.5f);
+                    return;
             }
             UpdateAll();
             return;
         }
         Channel& c = ch_[sel_];
         MalletParams& p = c.p;
-        if (page_ == 0) {
-            switch (knob) {
-                case 0: p.material = Clamp01(p.material + d); break;
-                case 1: p.brightness = Clamp01(p.brightness + d); break;
-                case 2: p.decay = Clamp01(p.decay + d); break;
-                case 3:
-                    if (chompi) c.pan = Clamp01(c.pan + d);
-                    else c.level = Clamp01(c.level + d);
-                    return;
-            }
-        } else {
-            switch (knob) {
-                case 0:
-                    if (chompi) p.variation = Clamp01(p.variation + d);
-                    else p.strike = Clamp01(p.strike + d);
-                    break;
-                case 1: p.shimmer = Clamp01(p.shimmer + d); break;
-                case 2: // buzz; CHOMPI + turn: its kind (left rattle, right muffle)
-                    if (chompi) p.buzz_kind = inc > 0 ? 1 : 0;
-                    else p.buzz = Clamp01(p.buzz + d);
-                    break;
-                case 3: // the octave, a step every few clicks, shown on the black keys
+        switch (knob) {
+            case 0:
+                if (chompi) p.strike = Clamp01(p.strike + d);
+                else p.material = Clamp01(p.material + d);
+                break;
+            case 1:
+                if (pushed) p.shimmer = Clamp01(p.shimmer + d);
+                else if (chompi) p.variation = Clamp01(p.variation + d);
+                else p.brightness = Clamp01(p.brightness + d);
+                break;
+            case 2:
+                if (chompi) p.buzz = Clamp01(p.buzz + d);
+                else p.decay = Clamp01(p.decay + d);
+                break;
+            case 3:
+                if (pushed) { // the octave, a step every few clicks, shown on the black keys
                     if (const int step = Steps(inc, sel_)) c.octave = std::min(std::max(c.octave + step, -2), 2);
                     oct_show_ = kOctaveShowBlocks;
-                    return;
-            }
+                } else if (chompi) {
+                    c.pan = Clamp01(c.pan + d);
+                } else {
+                    c.level = Clamp01(c.level + d);
+                }
+                return;
         }
         Update(sel_);
     }
@@ -577,10 +612,13 @@ private:
     Slot slot_[kVoices];
     bool dirty_[kChannels] = {};
     uint32_t clock_ = 0;
-    int sel_ = 0, page_ = 0;
+    int sel_ = 0;
+    float led_time_ = 0.f;
+    float swell_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
+    uint32_t rng_ = 12345;
     bool all_ = false, show_load_ = false;
     float off_material_ = 0.f, off_bright_ = 0.f, off_decay_ = 0.f;
-    float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f;
+    float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float all_level_ = 1.f;
     float room_ = .5f, width_ = 1.f, volume_ = .8f, load_ = 0.f;
     float key_flash_[25] = {}, note_flash_[kChannels] = {};
