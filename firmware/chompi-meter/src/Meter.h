@@ -113,6 +113,8 @@ public:
             ch_[c].pan = .5f + .15f * std::sin(c * 2.1f); // spread across the stereo field
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
         }
+        for (int i = 0; i < kNumMalletPresets; ++i)
+            preset_gain_[i] = std::pow(10.f, kMalletPresets[i].gain_db / 20.f);
         for (int v = 0; v < kVoices; ++v) {
             slot_[v].v.Init(sample_rate, v + 1);
             slot_[v].ch = slot_[v].note = -1;
@@ -301,7 +303,7 @@ public:
             const Channel& c = ch_[s.ch];
             // The ensemble's width spreads or gathers every channel around the middle.
             const float pan = Clamp01(.5f + (c.pan - .5f) * width_);
-            const float level = c.level * all_level_ * gate_[s.ch];
+            const float level = c.level * preset_gain_[c.preset] * all_level_ * gate_[s.ch];
             const float gl = level * std::cos(pan * float(M_PI) / 2.f);
             const float gr = level * std::sin(pan * float(M_PI) / 2.f);
             for (size_t i = 0; i < n; ++i) {
@@ -425,6 +427,7 @@ private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
 
     static constexpr int kClicksPerOctave = 4;
+    static constexpr int kClicksPerPreset = 3;
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
     static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
     static constexpr int kPreviewBlocks = 150;     // the wheel rests 150 ms: preview
@@ -657,8 +660,9 @@ private:
                     p.material = Clamp01(p.material + d);
                 } else if (chompi) {
                     p.strike = Clamp01(p.strike + d);
-                } else { // the preset, heard as a preview once the knob rests
-                    c.preset = (c.preset + (inc > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
+                } else if (const int step = Steps(inc, 100 + sel_, kClicksPerPreset)) {
+                    // the preset, a step every few clicks, heard as a preview once the knob rests
+                    c.preset = (c.preset + (step > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
                     c.p = kMalletPresets[c.preset].p;
                     preview_ch_ = sel_;
                     preview_wait_ = kPreviewBlocks;
@@ -691,12 +695,12 @@ private:
 
     // Clicks that only count every few: a step (+1 or -1) once enough have
     // gathered on the same thing (id) within a second, else 0.
-    int Steps(int inc, int id) {
+    int Steps(int inc, int id, int clicks = kClicksPerOctave) {
         if (step_idle_ == 0 || step_id_ != id) step_clicks_ = 0;
         step_id_ = id;
         step_idle_ = kOctaveIdleBlocks;
         step_clicks_ += inc;
-        if (std::abs(step_clicks_) < kClicksPerOctave) return 0;
+        if (std::abs(step_clicks_) < clicks) return 0;
         const int step = step_clicks_ > 0 ? 1 : -1;
         step_clicks_ = 0;
         return step;
@@ -707,6 +711,7 @@ private:
     uint64_t held_ = 0, pressed_ = 0;
 
     float sr_ = 48000.f;
+    float preset_gain_[kNumMalletPresets] = {};
     Channel ch_[kChannels];
     Slot slot_[kVoices];
     bool dirty_[kChannels] = {};
