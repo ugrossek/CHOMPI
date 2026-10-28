@@ -48,6 +48,11 @@ public:
             state_t_ = now;
         }
 
+        if (now - clock_t_ >= kClockMs) {
+            clock_t_ = now;
+            Add(0x45, b, in.DescribeClock(b));
+        }
+
         int sent = 0;
         for (int i = 0; i < kChannels && sent < kChannelsPerSend; ++i) {
             const int c = (next_ch_ + i) % kChannels;
@@ -72,6 +77,7 @@ private:
     static constexpr uint32_t kSendMs = 10;    // a message bundle at most so often
     static constexpr uint32_t kAgainMs = 500;  // the state at least so often
     static constexpr int kChannelsPerSend = 3;
+    static constexpr uint32_t kClockMs = 100;  // where everyone is, so often
     static constexpr int kOut = 600;           // a bundle; USB-MIDI fits 768 bytes in one go
 
     void Receive(Instrument& in, const uint8_t* d, int n, uint32_t now) {
@@ -107,7 +113,7 @@ private:
     }
 
     bool active_ = false;
-    uint32_t hello_ = 0, sent_ = 0, state_t_ = 0;
+    uint32_t hello_ = 0, sent_ = 0, state_t_ = 0, clock_t_ = 0;
     uint8_t out_[kOut];
     int n_ = 0;
     uint8_t state_[Instrument::kDescribeMax];

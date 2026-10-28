@@ -396,7 +396,7 @@ public:
     // Controls by id: the 25 keys low to high (0-24), CHOMPI 25, play 26, loop
     // 27, the knobs K1-K4 28-31, the wheel 32, K6 33, the switch 34.
     static constexpr int kIdChompi = 25, kIdKnob = 28, kIdSwitch = 34;
-    enum EventKind { kEvPress = 1, kEvRelease, kEvTurn, kEvSwitch, kEvBeat };
+    enum EventKind { kEvPress = 1, kEvRelease, kEvTurn, kEvSwitch, kEvBeat, kEvNote };
 
     // The next input or beat, three 7-bit bytes: kind, id, value (a turn's
     // clicks + 64; the switch 1 on all; a beat its count).
@@ -478,6 +478,15 @@ public:
         return n;
     }
     static constexpr int kDescribeMax = 14 + 3 * kLoopNotes;
+
+    // Where everyone is: L0's place and each channel's place in its loop (0..1 as 14 bits).
+    int DescribeClock(uint8_t* o) const {
+        int n = 0;
+        auto put = [&](float x) { const int v = std::min(std::max(int(x * 16384.f), 0), 16383); o[n++] = v & 127; o[n++] = v >> 7; };
+        put(l0_pos_);
+        for (int c = 0; c < kChannels; ++c) put(loop_[c].pos);
+        return n;
+    }
 
     // ---- LEDs (main loop) ------------------------------------------------------
     void DrawLeds(Hardware& hw, float dt) {
@@ -881,6 +890,7 @@ private:
         }
         Slot& s = slot_[pick];
         note_flash_[c] = 1.f;
+        Event(kEvNote, c, note);
         s.ch = c;
         s.note = note;
         s.age = ++clock_;

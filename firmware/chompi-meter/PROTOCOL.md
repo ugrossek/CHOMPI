@@ -41,6 +41,7 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 | 42  | state   | see below |
 | 43  | channel | c, preset, octave+2, ratio, pending+1, level q7, pan q7, strike, brightness, decay, shimmer, feel, buzz (q7), count, count × (phase lo, phase hi, note) |
 | 44  | event   | kind, id, value |
+| 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi; about 10 a second |
 
 **state:** selected, flags, ensemble ratio, pending ensemble ratio+1, L0 ms lo,
 L0 ms hi, volume q7, room q7, width q7 (0..2), turn q7 (−.5..+.5), the all-mode
@@ -53,7 +54,8 @@ Flags: running 1, switch on all 2, sounds on the keys 4, octave on the keys 8,
 meter on the keys 16, reboot armed 32.
 
 **event** kinds: 1 press, 2 release, 3 turn (value: clicks + 64), 4 switch
-(value 1: all), 5 L0 beat (value: count mod 64).
+(value 1: all), 5 L0 beat (value: count mod 64), 6 note (id: channel, value:
+the note sounding, octave included; played by hand or by the loop).
 
 ## Control ids
 
