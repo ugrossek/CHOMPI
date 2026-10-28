@@ -281,6 +281,7 @@ public:
             if (l0_pos_ >= 1.f) {
                 l0_pos_ -= 1.f;
                 l0_flash_ = 1.f;
+                l0_beats_++;
                 ApplyPending();
             }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
@@ -392,11 +393,11 @@ public:
         }
 
         // Knobs: the selected channel's colour; with the switch on all, the
-        // colours of all channels, slowly passing along the four knobs.
+        // colours of all channels, passing along the four knobs a step per L0 beat.
         led_time_ += dt;
         for (int n = 0; n < 4; ++n) {
             const float* kc = sel_col;
-            if (all_) kc = kPresetColor[ch_[(int(led_time_ * 1.5f) + n) % kChannels].preset];
+            if (all_) kc = kPresetColor[ch_[(l0_beats_ + n) % kChannels].preset];
             SetPthLedFloat(kKnobs[n].led, kc[0], kc[1], kc[2]);
         }
         SetPthLedFloat(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
@@ -721,6 +722,7 @@ private:
     uint32_t now_ = 0;      // samples since start
     float l0_ = 96000.f;    // L0 in samples (2 s)
     float l0_pos_ = 0.f, l0_flash_ = 0.f, ch_flash_[kChannels] = {};
+    uint32_t l0_beats_ = 0; // L0 beats so far
     bool running_ = true;
     bool loop_down_ = false, loop_used_ = false, loop_chompi_ = false;
     bool play_down_ = false, play_used_ = false;
