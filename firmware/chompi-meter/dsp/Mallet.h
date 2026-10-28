@@ -144,8 +144,8 @@ public:
             }
             out += y * buzz_ * buzz_gain_;
         }
-        // Free the voice once it has died away.
-        if (ex_left_ == 0 && std::fabs(out) < 1e-5f) {
+        // Free the voice once it has died away (-80 dB: far below the others and the room).
+        if (ex_left_ == 0 && std::fabs(out) < 1e-4f) {
             if (++quiet_ > 2400) active_ = false;
         } else {
             quiet_ = 0;

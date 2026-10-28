@@ -40,7 +40,8 @@ public:
 
         uint8_t b[Instrument::kDescribeMax];
         int len = in.Describe(b);
-        if (len != state_len_ || std::memcmp(b, state_, len) || now - state_t_ > kAgainMs) {
+        // (The last three bytes, the load, change all the time: they ride along.)
+        if (len != state_len_ || std::memcmp(b, state_, len - 3) || now - state_t_ > kAgainMs) {
             Add(0x42, b, len);
             std::memcpy(state_, b, len);
             state_len_ = len;

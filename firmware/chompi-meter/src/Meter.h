@@ -378,7 +378,7 @@ public:
         int oldest = -1;
         for (int v = 0; v < kVoices; ++v)
             if (slot_[v].v.Active() && (oldest < 0 || slot_[v].age < slot_[oldest].age)) oldest = v;
-        if (oldest >= 0) slot_[oldest].v.Stop();
+        if (oldest >= 0) { slot_[oldest].v.Stop(); shed_++; }
     }
 
     int ActiveVoices() const {
@@ -447,6 +447,10 @@ public:
             o[n++] = (m >> 14) & 127;
         }
         o[n++] = uint8_t(Held(int(Sw::KEY_26)) | Held(int(Sw::KEY_27)) << 1 | Held(int(Sw::KEY_28)) << 2);
+        // How busy: the load (0..1), the voices sounding, voices cut by the load guard so far.
+        o[n++] = Q7(load_);
+        o[n++] = uint8_t(ActiveVoices());
+        o[n++] = uint8_t(shed_ & 127);
         return n;
     }
 
@@ -489,17 +493,19 @@ public:
             float rgb[3] = {0.f, 0.f, 0.f};
             if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
+            } else if (show_load_) {
+                // A bar of active voices from the lowest key; green, yellow, red by
+                // load. (Before the meter: turning K6 while holding it shows the meter
+                // otherwise.)
+                if (k < ActiveVoices()) {
+                    const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
+                    std::copy(col, col + 3, rgb);
+                }
             } else if (meter_wait_ > 0) {
                 // The meter, with the selected channel's notes over it in its colour.
                 static constexpr float kWhite[3] = {1.f, 1.f, 1.f};
                 MeterKey(k, meter_white_ ? kWhite : sel_col, rgb);
                 for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], sel_col[j] * key_flash_[k]);
-            } else if (show_load_) {
-                // A bar of active voices from the lowest key; green, yellow, red by load.
-                if (k < ActiveVoices()) {
-                    const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
-                    std::copy(col, col + 3, rgb);
-                }
             } else if (sound_view_ && kKeys[k].white) {
                 // The sounds on the first white keys, in their colours; the channel's bright.
                 const int s = WhiteIndex(k);
@@ -977,6 +983,7 @@ private:
     float off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float room_ = .5f, volume_ = .8f, load_ = 0.f;
+    uint32_t shed_ = 0; // voices the load guard has cut
     float width_ = 1.f, turn_ = 0.f; // the ensemble's stereo field
 
     // The meter: while a knob turns (and a moment after), the keys show its value.

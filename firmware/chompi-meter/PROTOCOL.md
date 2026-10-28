@@ -46,7 +46,8 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 L0 ms hi, volume q7, room q7, width q7 (0..2), turn q7 (−.5..+.5), the all-mode
 offsets strike, brightness, decay, shimmer, feel, buzz (q7, −.5..+.5), muted
 (3 bytes, a bit per channel), listened to (3 bytes), held (CHOMPI 1, play 2,
-loop 4).
+loop 4), load q7 (share of the audio callback's time), voices sounding, voices
+cut by the load guard so far (mod 128).
 
 Flags: running 1, switch on all 2, sounds on the keys 4, octave on the keys 8,
 meter on the keys 16, reboot armed 32.
