@@ -110,7 +110,10 @@ public:
         for (int c = 0; c < kChannels; ++c) {
             ch_[c].preset = c % kNumMalletPresets;
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            ch_[c].pan = .5f + .15f * std::sin(c * 2.1f); // spread across the stereo field
+            // Spread across the stereo field: 1 in the middle, then outwards,
+            // neighbours on opposite sides (2 left, 3 right, 4 further left ...).
+            const int out = (c + 1) / 2;
+            ch_[c].pan = .5f + (c & 1 ? -.35f : .35f) * out / 7.f;
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
         }
         for (int i = 0; i < kNumMalletPresets; ++i)
@@ -135,23 +138,36 @@ public:
         pressed_ = down & ~held_;
         held_ = down;
 
-        // Keys: CHOMPI + white key selects a channel; play + white key mutes it,
-        // CHOMPI + play + white key solos it; otherwise the key plays.
+        // Keys: CHOMPI + white key selects a channel (the selected one again: its
+        // sound on the white keys); play + white key held listens to that channel,
+        // CHOMPI + play + white key mutes it; otherwise the key plays.
         const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
+        if (!chompi) sound_view_ = false;
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
                 key_flash_[k] = 1.f;
                 if (play_held) {
                     if (kKeys[k].white) {
-                        if (chompi) solo_[WhiteIndex(k)] ^= 1;
-                        else muted_[WhiteIndex(k)] ^= 1;
+                        if (chompi) muted_[WhiteIndex(k)] ^= 1;
+                        else listen_ |= 1u << WhiteIndex(k);
                     }
                     play_used_ = true;
+                } else if (sound_view_ && kKeys[k].white) {
+                    // The sounds on the first white keys: pick one, heard at once.
+                    if (WhiteIndex(k) < kNumMalletPresets) {
+                        Channel& c = ch_[sel_];
+                        c.preset = WhiteIndex(k);
+                        c.p = kMalletPresets[c.preset].p;
+                        Update(sel_);
+                        NoteOn(sel_, c.last_note + 12 * c.octave);
+                    }
                 } else if (chompi && kKeys[k].white) {
-                    // A second white key while one is still held: copy that channel here.
+                    // A second white key while one is still held: copy that channel's
+                    // pattern here. The selected channel's key again: its sound.
                     const int from = HeldWhite(k);
                     if (from >= 0) Copy(from, WhiteIndex(k));
+                    else if (WhiteIndex(k) == sel_) sound_view_ = true;
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
                     // CHOMPI + black key: the selected channel's ratio, from the next
@@ -171,36 +187,24 @@ public:
             }
         }
 
-        // K3 pushed: the buzz switches between rattle and muffle.
-        if (Pressed(kKnobs[2].push) && !all_) {
-            ch_[sel_].p.buzz_kind ^= 1;
-            Update(sel_);
-        }
-
         // Knobs 1-4.
         for (int n = 0; n < 4; ++n) {
             const int inc = hw.enc[kKnobs[n].enc].Increment();
-            if (inc) Turn(n, inc, chompi, sr.State(kKnobs[n].push));
+            if (inc) Turn(n, inc, chompi);
         }
-        // Wheel: the tempo, L0, smoothly (right is faster); every loop follows.
-        // CHOMPI + turn: the selected channel's ratio a step up or down every few
-        // clicks, from the next beat; with the switch on all: the ensemble's.
+        // Wheel: the selected channel's octave, a step every few clicks, shown on
+        // the black keys (the keys stay free to try it). CHOMPI + turn: the
+        // tempo, L0, smoothly (right is faster); every loop follows.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
-            if (!chompi) {
+            if (chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
-            } else if (const int step = Steps(inc, all_ ? -1 : -2 - sel_)) {
-                int& r = all_ ? pending_ens_ : pending_[sel_];
-                const int from = r >= 0 ? r : all_ ? ens_ : ch_[sel_].ratio;
-                r = std::min(std::max(from + step, 0), kNumRatios - 1);
-                if (!running_) ApplyPending();
+            } else {
+                if (const int step = Steps(inc, sel_)) ch_[sel_].octave = std::min(std::max(ch_[sel_].octave + step, -2), 2);
+                oct_show_ = kOctaveShowBlocks;
             }
         }
         if (step_idle_ > 0) step_idle_--;
         if (oct_show_ > 0) oct_show_--;
-        if (preview_wait_ > 0 && --preview_wait_ == 0) {
-            const Channel& c = ch_[preview_ch_];
-            NoteOn(preview_ch_, c.last_note + 12 * c.octave);
-        }
         // Right knob: volume; CHOMPI + turn: the room.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment()) {
             if (chompi) room_ = Clamp01(room_ + inc * .02f);
@@ -210,28 +214,20 @@ public:
         // Right knob held: show voices and load.
         show_load_ = sr.State(kKnobs[kVolume].push);
 
-        // Play, on release, unless it muted or soloed channels: starts and stops
-        // all loops; CHOMPI + play is a tap instead (L0 is the time between two
-        // taps, counted from the presses).
+        // Play, on release, unless it listened or muted (or CHOMPI was held):
+        // starts and stops all loops.
         if (Pressed(int(Sw::KEY_27))) {
             play_down_ = true;
-            play_used_ = false;
-            play_chompi_ = chompi;
-            play_t_ = now_;
+            play_used_ = chompi;
         }
         if (play_down_ && !play_held) {
             play_down_ = false;
-            if (play_used_) {
-            } else if (play_chompi_) {
-                const uint32_t gap = play_t_ - last_tap_;
-                // The taps give the beat; L0 is the beat without the ensemble's ratio.
-                if (have_tap_ && gap >= kMinL0 * sr_ && gap <= kMaxL0 * sr_) l0_ = float(gap) / kRatios[ens_];
-                last_tap_ = play_t_;
-                have_tap_ = true;
-            } else {
-                running_ = !running_;
-            }
+            if (!play_used_) running_ = !running_;
         }
+        // Listening lasts as long as play and the white key are held.
+        if (!play_held) listen_ = 0;
+        for (int k = 0; k < 25; ++k)
+            if (kKeys[k].white && !sr.State(int(kKeys[k].sw))) listen_ &= ~(1u << WhiteIndex(k));
 
         // Loop: a press turns what was just played on the selected channel into
         // its loop, at once (CHOMPI + loop: adds to the loop). Held 2 s (the
@@ -260,11 +256,11 @@ public:
             }
         }
 
-        // Mute and solo: a short fade, the loops keep running underneath.
-        bool any_solo = false;
-        for (bool so : solo_) any_solo |= so;
+        // Mute and listen: a short fade, the loops keep running underneath. A
+        // channel listened to plays (even when muted), the others step back.
         for (int c = 0; c < kChannels; ++c) {
-            const float target = muted_[c] || (any_solo && !solo_[c]) ? 0.f : 1.f;
+            float target = muted_[c] ? 0.f : 1.f;
+            if (listen_) target = listen_ & (1u << c) ? 1.f : target * kListenOthers;
             gate_[c] += (target - gate_[c]) * .2f;
         }
 
@@ -298,9 +294,8 @@ public:
             Slot& s = slot_[v];
             if (!s.v.Active()) continue;
             const Channel& c = ch_[s.ch];
-            // The ensemble's width spreads or gathers every channel around the middle.
-            const float pan = Clamp01(.5f + (c.pan - .5f) * width_);
-            const float level = c.level * preset_gain_[c.preset] * all_level_ * gate_[s.ch];
+            const float pan = c.pan;
+            const float level = c.level * preset_gain_[c.preset] * gate_[s.ch];
             const float gl = level * std::cos(pan * float(M_PI) / 2.f);
             const float gr = level * std::sin(pan * float(M_PI) / 2.f);
             for (size_t i = 0; i < n; ++i) {
@@ -346,22 +341,27 @@ public:
                     const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
                     std::copy(col, col + 3, rgb);
                 }
-            } else if (play_down_) {
-                // Play held: mute view, muted channels dark; with CHOMPI: solo view,
-                // soloed channels bright.
-                if (kKeys[k].white) {
-                    const int c = WhiteIndex(k);
+            } else if (sound_view_ && kKeys[k].white) {
+                // The sounds on the first white keys, in their colours; the channel's bright.
+                const int s = WhiteIndex(k);
+                if (s < kNumMalletPresets) {
+                    const float b = s == ch_[sel_].preset ? 1.f : .1f;
+                    for (int j = 0; j < 3; ++j) rgb[j] = kPresetColor[s][j] * b;
+                }
+            } else if ((play_down_ || chompi) && kKeys[k].white) {
+                // The channels: each white key in its channel's colour, flashing on
+                // its notes. CHOMPI: the selected one bright; play: the ones
+                // listened to bright. Muted channels blink red.
+                const int c = WhiteIndex(k);
+                if (muted_[c]) {
+                    rgb[0] = std::fmod(led_time_, 1.f) < .5f ? .6f : 0.f;
+                } else {
                     const float* col = kPresetColor[ch_[c].preset];
-                    const float b = chompi ? (solo_[c] ? 1.f : .06f) : (muted_[c] ? 0.f : .5f);
+                    const bool lit = play_down_ ? listen_ & (1u << c) : c == sel_;
+                    const float b = (lit ? .6f : play_down_ ? .2f : .06f) + .4f * note_flash_[c];
                     for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
                 }
-            } else if (chompi && kKeys[k].white) {
-                // The channels: each white key in its channel's colour, the selected one bright.
-                const int c = WhiteIndex(k);
-                // Each flashes whenever its channel plays a note.
-                const float* col = kPresetColor[ch_[c].preset];
-                const float b = (c == sel_ ? .6f : .06f) + .4f * note_flash_[c];
-                for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
+            } else if (play_down_) {
             } else if (chompi) {
                 // The ratios on the black keys: the selected channel's (switch on
                 // all: the ensemble's) bright; one waiting for the next beat blinks.
@@ -419,10 +419,9 @@ private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
 
     static constexpr int kClicksPerOctave = 4;
-    static constexpr int kClicksPerPreset = 3;
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
     static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
-    static constexpr int kPreviewBlocks = 150;     // the wheel rests 150 ms: preview
+    static constexpr float kListenOthers = .25f;   // the others while listening: -12 dB
 
     // C# D# F# G# A#, the five lowest black keys, show octaves -2 .. +2.
     static int OctaveKey(int k) {
@@ -587,7 +586,6 @@ private:
 
     MalletParams Effective(int c) const {
         MalletParams p = ch_[c].p;
-        p.material = Clamp01(p.material + off_material_);
         p.brightness = Clamp01(p.brightness + off_bright_);
         p.decay = Clamp01(p.decay + off_decay_);
         p.strike = Clamp01(p.strike + off_strike_);
@@ -626,25 +624,22 @@ private:
             if (s.v.Active() && s.ch == c) s.v.SetParams(p);
     }
 
-    // Knobs 1-4, no pages: turn | CHOMPI + turn | turn while pushed in.
-    //   K1 preset (preview) | strike | material
-    //   K2 brightness | feel (variation) | shimmer
-    //   K3 decay    | buzz      | -        (a push: rattle / muffle)
-    //   K4 level    | pan       | octave
-    // With the switch on all: the same knobs as offsets on every channel, so each
-    // keeps its character (K1: strike); level of all, CHOMPI + K4: the stereo width.
-    void Turn(int knob, int inc, bool chompi, bool pushed) {
+    // Knobs 1-4, no pages: turn | CHOMPI + turn. (The sound: CHOMPI + the
+    // selected channel's key again; the octave: the wheel.)
+    //   K1 strike     | shimmer
+    //   K2 brightness | feel (variation)
+    //   K3 decay      | buzz
+    //   K4 level      | pan
+    // With the switch on all: K1-K3 as offsets on every channel, so each keeps
+    // its character; K4 does nothing there (level and pan are the channel's).
+    void Turn(int knob, int inc, bool chompi) {
         const float d = inc * .02f;
         if (all_) {
             switch (knob) {
-                case 0: Offset(pushed ? off_material_ : off_strike_, d); break;
-                case 1: Offset(pushed ? off_shimmer_ : chompi ? off_variation_ : off_bright_, d); break;
+                case 0: Offset(chompi ? off_shimmer_ : off_strike_, d); break;
+                case 1: Offset(chompi ? off_variation_ : off_bright_, d); break;
                 case 2: Offset(chompi ? off_buzz_ : off_decay_, d); break;
-                case 3:
-                    if (pushed) return; // the octave is per channel
-                    if (chompi) width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
-                    else all_level_ = std::min(std::max(all_level_ + d, 0.f), 1.5f);
-                    return;
+                default: return;
             }
             UpdateAll();
             return;
@@ -653,21 +648,11 @@ private:
         MalletParams& p = c.p;
         switch (knob) {
             case 0:
-                if (pushed) {
-                    p.material = Clamp01(p.material + d);
-                } else if (chompi) {
-                    p.strike = Clamp01(p.strike + d);
-                } else if (const int step = Steps(inc, 100 + sel_, kClicksPerPreset)) {
-                    // the preset, a step every few clicks, heard as a preview once the knob rests
-                    c.preset = (c.preset + (step > 0 ? 1 : kNumMalletPresets - 1)) % kNumMalletPresets;
-                    c.p = kMalletPresets[c.preset].p;
-                    preview_ch_ = sel_;
-                    preview_wait_ = kPreviewBlocks;
-                }
+                if (chompi) p.shimmer = Clamp01(p.shimmer + d);
+                else p.strike = Clamp01(p.strike + d);
                 break;
             case 1:
-                if (pushed) p.shimmer = Clamp01(p.shimmer + d);
-                else if (chompi) p.variation = Clamp01(p.variation + d);
+                if (chompi) p.variation = Clamp01(p.variation + d);
                 else p.brightness = Clamp01(p.brightness + d);
                 break;
             case 2:
@@ -675,14 +660,8 @@ private:
                 else p.decay = Clamp01(p.decay + d);
                 break;
             case 3:
-                if (pushed) { // the octave, a step every few clicks, shown on the black keys
-                    if (const int step = Steps(inc, sel_)) c.octave = std::min(std::max(c.octave + step, -2), 2);
-                    oct_show_ = kOctaveShowBlocks;
-                } else if (chompi) {
-                    c.pan = Clamp01(c.pan + d);
-                } else {
-                    c.level = Clamp01(c.level + d);
-                }
+                if (chompi) c.pan = Clamp01(c.pan + d);
+                else c.level = Clamp01(c.level + d);
                 return;
         }
         Update(sel_);
@@ -718,13 +697,11 @@ private:
     float swell_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     uint32_t rng_ = 12345;
     bool all_ = false, show_load_ = false;
-    float off_material_ = 0.f, off_bright_ = 0.f, off_decay_ = 0.f;
+    float off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
-    float all_level_ = 1.f;
-    float room_ = .5f, width_ = 1.f, volume_ = .8f, load_ = 0.f;
+    float room_ = .5f, volume_ = .8f, load_ = 0.f;
     float key_flash_[25] = {}, note_flash_[kChannels] = {};
     int step_clicks_ = 0, step_id_ = 0, step_idle_ = 0, oct_show_ = 0;
-    int preview_ch_ = 0, preview_wait_ = 0;
     int reboot_hold_ = 0;
 
     Loop loop_[kChannels];
@@ -733,12 +710,11 @@ private:
     float l0_ = 96000.f;    // L0 in samples (2 s)
     float l0_pos_ = 0.f, l0_flash_ = 0.f, ch_flash_[kChannels] = {};
     bool running_ = true;
-    uint32_t last_tap_ = 0;
-    bool have_tap_ = false;
     bool loop_down_ = false, loop_used_ = false, loop_chompi_ = false;
-    bool play_down_ = false, play_used_ = false, play_chompi_ = false;
-    uint32_t play_t_ = 0;
-    bool muted_[kChannels] = {}, solo_[kChannels] = {};
+    bool play_down_ = false, play_used_ = false;
+    bool muted_[kChannels] = {};
+    uint32_t listen_ = 0;     // channels listened to (play + white key held), a bit each
+    bool sound_view_ = false; // the selected channel's sound on the white keys
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     int ens_ = kRatioOne, pending_ens_ = -1;
     int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
