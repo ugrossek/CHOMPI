@@ -139,11 +139,11 @@ public:
         pressed_ = down & ~held_;
         held_ = down;
 
-        // Keys: CHOMPI + white key selects a channel (the selected one again: its
-        // sound on the white keys); play + white key held listens to that channel,
+        // Keys: CHOMPI + white key selects a channel (tapped twice: its sound on
+        // the white keys); play + white key held listens to that channel,
         // CHOMPI + play + white key mutes it; otherwise the key plays.
         const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
-        if (!chompi) sound_view_ = false;
+        if (!chompi) { sound_view_ = false; tap_key_ = -1; }
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
@@ -165,13 +165,14 @@ public:
                     }
                 } else if (chompi && kKeys[k].white) {
                     // A second white key while one is still held: copy that channel's
-                    // pattern here. The selected channel's key again, tapped (let go
-                    // with no copy in between): its sound.
+                    // pattern here. The same key tapped twice while CHOMPI stays
+                    // down: its sound (on letting go, so a copy never opens it).
                     const int from = HeldWhite(k);
                     if (from >= 0) {
                         Copy(from, WhiteIndex(k));
                         tap_key_ = -1;
-                    } else if (WhiteIndex(k) == sel_) {
+                    } else {
+                        tap_again_ = k == tap_key_;
                         tap_key_ = k;
                     }
                     sel_ = WhiteIndex(k);
@@ -192,9 +193,9 @@ public:
             }
         }
 
-        if (tap_key_ >= 0 && !sr.State(int(kKeys[tap_key_].sw))) {
-            if (chompi) sound_view_ = true;
-            tap_key_ = -1;
+        if (tap_again_ && tap_key_ >= 0 && !sr.State(int(kKeys[tap_key_].sw))) {
+            sound_view_ = true;
+            tap_again_ = false;
         }
 
         // Knobs 1-4.
@@ -636,7 +637,7 @@ private:
     }
 
     // Knobs 1-4, no pages: turn | CHOMPI + turn. (The sound: CHOMPI + the
-    // selected channel's key again; the octave: the wheel.)
+    // channel's key tapped twice; the octave: the wheel.)
     //   K1 strike     | shimmer
     //   K2 brightness | feel (variation)
     //   K3 decay      | buzz
@@ -726,7 +727,8 @@ private:
     bool muted_[kChannels] = {};
     uint32_t listen_ = 0;     // channels listened to (play + white key held), a bit each
     bool sound_view_ = false; // the selected channel's sound on the white keys
-    int tap_key_ = -1;        // the selected channel's key, pressed again with CHOMPI
+    int tap_key_ = -1;        // the white key last tapped with CHOMPI held
+    bool tap_again_ = false;  // ... and it was tapped before: the sounds on letting go
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     int ens_ = kRatioOne, pending_ens_ = -1;
     int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
