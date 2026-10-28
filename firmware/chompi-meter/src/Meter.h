@@ -216,10 +216,12 @@ public:
         }
         if (step_idle_ > 0) step_idle_--;
         if (oct_show_ > 0) oct_show_--;
+        if (meter_wait_ > 0) meter_wait_--;
         // Right knob: volume; CHOMPI + turn: the room.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment()) {
-            if (chompi) room_ = Clamp01(room_ + inc * .02f);
-            else volume_ = Clamp01(volume_ + inc * .02f);
+            float& v = chompi ? room_ : volume_;
+            v = Clamp01(v + inc * .02f);
+            ShowMeter(kMeterBar, v, -1.f, true);
         }
 
         // Right knob held: show voices and load.
@@ -306,7 +308,9 @@ public:
             Slot& s = slot_[v];
             if (!s.v.Active()) continue;
             const Channel& c = ch_[s.ch];
-            const float pan = c.pan;
+            // The ensemble's field: width spreads or gathers the channels around
+            // the middle, turn moves all of them to one side.
+            const float pan = Clamp01(.5f + (c.pan - .5f) * width_ + turn_);
             const float level = c.level * preset_gain_[c.preset] * gate_[s.ch];
             const float gl = level * std::cos(pan * float(M_PI) / 2.f);
             const float gr = level * std::sin(pan * float(M_PI) / 2.f);
@@ -347,6 +351,8 @@ public:
             float rgb[3] = {0.f, 0.f, 0.f};
             if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
+            } else if (meter_wait_ > 0) {
+                MeterKey(k, sel_col, rgb);
             } else if (show_load_) {
                 // A bar of active voices from the lowest key; green, yellow, red by load.
                 if (k < ActiveVoices()) {
@@ -429,6 +435,33 @@ public:
 
 private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
+
+    // One key of the meter. The 25 keys in keyboard order are the range; the
+    // bar's last key glows partly, so every click shows. A bar grows from the
+    // left, a centre bar from the middle C either way, a dot sits at its place
+    // (the middle marked). The mark: a white key where the value started.
+    void MeterKey(int k, const float* col, float* rgb) const {
+        static constexpr float kWhite[3] = {1.f, 1.f, 1.f};
+        if (meter_white_) col = kWhite;
+        auto cover = [k](float a, float b) {
+            const float lo = std::max(std::min(a, b), k - .5f), hi = std::min(std::max(a, b), k + .5f);
+            return Clamp01(hi - lo);
+        };
+        float b = .03f;
+        switch (meter_kind_) {
+            case kMeterBar: b += .7f * cover(-.5f, -.5f + meter_v_ * 25.f); break;
+            case kMeterCentre: b += .7f * (k == 12 ? 1.f : cover(12.f, 12.f + meter_v_ * 12.5f)); break;
+            case kMeterDot: {
+                const float d = std::fabs(k - meter_v_ * 24.f);
+                b += .7f * Clamp01(1.f - d);
+                if (k == 12) b = std::max(b, .15f);
+                break;
+            }
+        }
+        for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
+        if (meter_mark_ >= 0.f && k == int(meter_mark_ * 24.f + .5f))
+            for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], .35f);
+    }
 
     static constexpr int kClicksPerOctave = 4;
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
@@ -644,39 +677,50 @@ private:
     //   K3 decay      | buzz
     //   K4 level      | pan
     // With the switch on all: K1-K3 as offsets on every channel, so each keeps
-    // its character; K4 does nothing there (level and pan are the channel's).
+    // its character; K4 the stereo field: width | turn.
+    // Every turn shows its value on the keys (the meter).
     void Turn(int knob, int inc, bool chompi) {
         const float d = inc * .02f;
         if (all_) {
-            switch (knob) {
-                case 0: Offset(chompi ? off_shimmer_ : off_strike_, d); break;
-                case 1: Offset(chompi ? off_variation_ : off_bright_, d); break;
-                case 2: Offset(chompi ? off_buzz_ : off_decay_, d); break;
-                default: return;
+            if (knob == 3) {
+                if (chompi) {
+                    turn_ = std::min(std::max(turn_ + d, -.5f), .5f);
+                    ShowMeter(kMeterDot, turn_ + .5f, -1.f, true);
+                } else {
+                    width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
+                    ShowMeter(kMeterBar, width_ * .5f, .5f, true); // the mark: as set
+                }
+                return;
             }
+            float& off = knob == 0 ? (chompi ? off_shimmer_ : off_strike_)
+                       : knob == 1 ? (chompi ? off_variation_ : off_bright_)
+                                   : (chompi ? off_buzz_ : off_decay_);
+            Offset(off, d);
+            ShowMeter(kMeterCentre, off * 2.f, -1.f, true);
             UpdateAll();
             return;
         }
         Channel& c = ch_[sel_];
         MalletParams& p = c.p;
-        switch (knob) {
-            case 0:
-                if (chompi) p.shimmer = Clamp01(p.shimmer + d);
-                else p.strike = Clamp01(p.strike + d);
-                break;
-            case 1:
-                if (chompi) p.variation = Clamp01(p.variation + d);
-                else p.brightness = Clamp01(p.brightness + d);
-                break;
-            case 2:
-                if (chompi) p.buzz = Clamp01(p.buzz + d);
-                else p.decay = Clamp01(p.decay + d);
-                break;
-            case 3:
-                if (chompi) c.pan = Clamp01(c.pan + d);
-                else c.level = Clamp01(c.level + d);
-                return;
+        const MalletParams& orig = kMalletPresets[c.preset].p;
+        if (knob == 3) {
+            if (chompi) {
+                c.pan = Clamp01(c.pan + d);
+                ShowMeter(kMeterDot, c.pan);
+            } else {
+                c.level = Clamp01(c.level + d);
+                ShowMeter(kMeterBar, c.level, Channel().level);
+            }
+            return;
         }
+        float& v = knob == 0 ? (chompi ? p.shimmer : p.strike)
+                 : knob == 1 ? (chompi ? p.variation : p.brightness)
+                             : (chompi ? p.buzz : p.decay);
+        const float o = knob == 0 ? (chompi ? orig.shimmer : orig.strike)
+                      : knob == 1 ? (chompi ? orig.variation : orig.brightness)
+                                  : (chompi ? orig.buzz : orig.decay);
+        v = Clamp01(v + d);
+        ShowMeter(kMeterBar, v, o); // the mark: where the sound started
         Update(sel_);
     }
 
@@ -713,6 +757,21 @@ private:
     float off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float room_ = .5f, volume_ = .8f, load_ = 0.f;
+    float width_ = 1.f, turn_ = 0.f; // the ensemble's stereo field
+
+    // The meter: while a knob turns (and a moment after), the keys show its value.
+    enum MeterKind { kMeterBar, kMeterDot, kMeterCentre };
+    static constexpr int kMeterBlocks = 500; // half a second after the last click
+    int meter_wait_ = 0, meter_kind_ = kMeterBar;
+    float meter_v_ = 0.f, meter_mark_ = -1.f; // 0..1 (centre: -1..1); mark < 0: none
+    bool meter_white_ = false; // the ensemble's and the instrument's: white, else the channel's colour
+    void ShowMeter(int kind, float v, float mark = -1.f, bool white = false) {
+        meter_kind_ = kind;
+        meter_v_ = v;
+        meter_mark_ = mark;
+        meter_white_ = white;
+        meter_wait_ = kMeterBlocks;
+    }
     float key_flash_[25] = {}, note_flash_[kChannels] = {};
     int step_clicks_ = 0, step_id_ = 0, step_idle_ = 0, oct_show_ = 0;
     int reboot_hold_ = 0;
