@@ -8,6 +8,7 @@
 #include "board/hardware.h"
 #include "board/temp_led_stuff.h"
 #include "Meter.h"
+#include "Link.h"
 #include "../dsp/room.h"
 
 #include <cerrno>
@@ -18,6 +19,7 @@ using namespace chompi;
 
 Hardware hw;
 meter::Instrument instrument;
+meter::Link page_link;
 meter::Room room_rv;
 static float DSY_SDRAM_BSS room_mem[meter::Room::kMemory];
 
@@ -194,6 +196,8 @@ int main(void)
             instrument.DrawLeds(hw, (now - ledt) * .001f);
             ledt = now;
         }
+
+        page_link.Poll(hw, instrument, now);
 
         /* Battery and USB, as in the CHOMPI's firmware. */
         const bool int_state = hw.mpc_int.Read();

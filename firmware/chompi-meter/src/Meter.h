@@ -107,16 +107,7 @@ class Instrument {
 public:
     void Init(float sample_rate) {
         sr_ = sample_rate;
-        l0_ = 2.f * sample_rate;
-        for (int c = 0; c < kChannels; ++c) {
-            ch_[c].preset = c % kNumMalletPresets;
-            ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            // Spread across the stereo field: 1 in the middle, then outwards,
-            // neighbours on opposite sides (2 left, 3 right, 4 further left ...).
-            const int out = (c + 1) / 2;
-            ch_[c].pan = .5f + (c & 1 ? -.35f : .35f) * out / 7.f;
-            ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
-        }
+        Start();
         for (int i = 0; i < kNumMalletPresets; ++i)
             preset_gain_[i] = std::pow(10.f, kMalletPresets[i].gain_db / 20.f);
         for (int v = 0; v < kVoices; ++v) {
@@ -125,11 +116,62 @@ public:
         }
     }
 
+    // As at power-on: every channel on its own sound, no loops, everything at
+    // its start. (The volume and the room stay as they are.)
+    void Start() {
+        l0_ = 2.f * sr_;
+        for (int c = 0; c < kChannels; ++c) {
+            ch_[c] = Channel();
+            ch_[c].preset = c % kNumMalletPresets;
+            ch_[c].p = kMalletPresets[ch_[c].preset].p;
+            // Spread across the stereo field: 1 in the middle, then outwards,
+            // neighbours on opposite sides (2 left, 3 right, 4 further left ...).
+            const int out = (c + 1) / 2;
+            ch_[c].pan = .5f + (c & 1 ? -.35f : .35f) * out / 7.f;
+            ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
+            loop_[c].count = 0;
+            hist_[c].since = now_;
+            pending_[c] = -1;
+            muted_[c] = false;
+            swell_[c] = 1.f;
+            dirty_[c] = true;
+        }
+        sel_ = 0;
+        running_ = true;
+        ens_ = kRatioOne;
+        pending_ens_ = -1;
+        off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
+        width_ = 1.f;
+        turn_ = 0.f;
+        Restart();
+    }
+
+    // Every loop from its start, together, on a new L0 beat.
+    void Restart() {
+        l0_pos_ = 0.f;
+        for (int c = 0; c < kChannels; ++c) {
+            loop_[c].pos = 0.f;
+            for (int i = 0; i < loop_[c].count; ++i) {
+                loop_[c].n[i].armed = true;
+                loop_[c].n[i].jit = 0.f;
+            }
+        }
+    }
+
     // ---- Controls (audio callback, once per block) --------------------------
     void Controls(Hardware& hw, size_t block) {
         auto& sr = hw.button_sr;
         const bool chompi = sr.State(int(Sw::KEY_26));
-        all_ = !hw.GetToggleState();
+        const bool all = !hw.GetToggleState();
+        if (all != all_) Event(kEvSwitch, kIdSwitch, all);
+        all_ = all;
+
+        // A message from the page, waiting since the last block.
+        if (mail_ready_) {
+            Apply(mail_, mail_len_);
+            __sync_synchronize();
+            mail_ready_ = false;
+        }
 
         // Presses: a switch that is down now and was up last block. (The shift
         // register's own RisingEdge only re-arms after FallingEdge is asked.)
@@ -137,7 +179,13 @@ public:
         for (int i = 0; i < kSwitches; ++i)
             if (sr.State(i)) down |= uint64_t(1) << i;
         pressed_ = down & ~held_;
+        const uint64_t released = held_ & ~down;
         held_ = down;
+        for (int id = 0; id < kIdKnob; ++id) {
+            const int i = SwitchOf(id);
+            if ((pressed_ >> i) & 1) Event(kEvPress, id);
+            if ((released >> i) & 1) Event(kEvRelease, id);
+        }
 
         // Keys: CHOMPI + white key selects a channel (tapped twice: its sound on
         // the white keys); play + white key held listens to that channel,
@@ -201,12 +249,13 @@ public:
         // Knobs 1-4.
         for (int n = 0; n < 4; ++n) {
             const int inc = hw.enc[kKnobs[n].enc].Increment();
-            if (inc) Turn(n, inc, chompi);
+            if (inc) { Turn(n, inc, chompi); Event(kEvTurn, kIdKnob + n, inc); }
         }
         // Wheel: the selected channel's octave, a step every few clicks, shown on
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
         // tempo, L0, smoothly (right is faster); every loop follows.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
+            Event(kEvTurn, kIdKnob + kTransport, inc);
             if (chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
             } else {
@@ -219,6 +268,7 @@ public:
         if (meter_wait_ > 0) meter_wait_--;
         // Right knob: volume; CHOMPI + turn: the room.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment()) {
+            Event(kEvTurn, kIdKnob + kVolume, inc);
             float& v = chompi ? room_ : volume_;
             v = Clamp01(v + inc * .02f);
             ShowMeter(kMeterBar, v, -1.f, true);
@@ -284,6 +334,7 @@ public:
                 l0_pos_ -= 1.f;
                 l0_flash_ = 1.f;
                 l0_beats_++;
+                Event(kEvBeat, 0, int(l0_beats_ & 63));
                 ApplyPending();
             }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
@@ -341,11 +392,97 @@ public:
     bool RebootNow() const { return reboot_now_; }
     void SetLoad(float load) { load_ = load; }
 
+    // ---- The link (main loop): a page on a computer follows over USB-MIDI ------
+    // Controls by id: the 25 keys low to high (0-24), CHOMPI 25, play 26, loop
+    // 27, the knobs K1-K4 28-31, the wheel 32, K6 33, the switch 34.
+    static constexpr int kIdChompi = 25, kIdKnob = 28, kIdSwitch = 34;
+    enum EventKind { kEvPress = 1, kEvRelease, kEvTurn, kEvSwitch, kEvBeat };
+
+    // The next input or beat, three 7-bit bytes: kind, id, value (a turn's
+    // clicks + 64; the switch 1 on all; a beat its count).
+    bool PopEvent(uint8_t* e) {
+        if (ev_tail_ == ev_head_) return false;
+        std::copy(ev_[ev_tail_], ev_[ev_tail_] + 3, e);
+        __sync_synchronize();
+        ev_tail_ = (ev_tail_ + 1) % kEvents;
+        return true;
+    }
+
+    // Lights the controls in `mask` (a bit per id) for the page.
+    void SetHint(uint64_t mask) { hint_ = mask; }
+
+    // A message for the instrument (the page's command and what follows),
+    // taken at the next block; false while the last one still waits.
+    bool Post(const uint8_t* d, int n) {
+        if (mail_ready_ || n > kMail) return false;
+        std::copy(d, d + n, mail_);
+        mail_len_ = n;
+        __sync_synchronize();
+        mail_ready_ = true;
+        return true;
+    }
+
+    // The ensemble's state, as 7-bit bytes (see PROTOCOL.md); returns the length.
+    int Describe(uint8_t* o) const {
+        int n = 0;
+        o[n++] = uint8_t(sel_);
+        o[n++] = uint8_t(running_ | all_ << 1 | sound_view_ << 2 | (oct_show_ > 0) << 3
+                         | (meter_wait_ > 0) << 4 | reboot_armed_ << 5);
+        o[n++] = uint8_t(ens_);
+        o[n++] = uint8_t(pending_ens_ + 1);
+        const int ms = std::min(int(l0_ * 1000.f / sr_ + .5f), 16383);
+        o[n++] = ms & 127;
+        o[n++] = ms >> 7;
+        o[n++] = Q7(volume_);
+        o[n++] = Q7(room_);
+        o[n++] = Q7(width_ * .5f);
+        o[n++] = Q7(turn_ + .5f);
+        for (float off : {off_strike_, off_bright_, off_decay_, off_shimmer_, off_variation_, off_buzz_})
+            o[n++] = Q7(off + .5f);
+        uint32_t muted = 0;
+        for (int c = 0; c < kChannels; ++c) muted |= uint32_t(muted_[c]) << c;
+        for (uint32_t m : {muted, listen_}) {
+            o[n++] = m & 127;
+            o[n++] = (m >> 7) & 127;
+            o[n++] = (m >> 14) & 127;
+        }
+        o[n++] = uint8_t(Held(int(Sw::KEY_26)) | Held(int(Sw::KEY_27)) << 1 | Held(int(Sw::KEY_28)) << 2);
+        return n;
+    }
+
+    // One channel: its settings and its loop's notes.
+    int DescribeChannel(int c, uint8_t* o) const {
+        const Channel& ch = ch_[c];
+        int n = 0;
+        o[n++] = uint8_t(c);
+        o[n++] = uint8_t(ch.preset);
+        o[n++] = uint8_t(ch.octave + 2);
+        o[n++] = uint8_t(ch.ratio);
+        o[n++] = uint8_t(pending_[c] + 1);
+        o[n++] = Q7(ch.level);
+        o[n++] = Q7(ch.pan);
+        for (float v : {ch.p.strike, ch.p.brightness, ch.p.decay, ch.p.shimmer, ch.p.variation, ch.p.buzz})
+            o[n++] = Q7(v);
+        const Loop& lp = loop_[c];
+        o[n++] = uint8_t(lp.count);
+        for (int i = 0; i < lp.count; ++i) {
+            const int ph = std::min(int(lp.n[i].phase * 16384.f), 16383);
+            o[n++] = ph & 127;
+            o[n++] = ph >> 7;
+            o[n++] = uint8_t(std::min(std::max(lp.n[i].note, 0), 127));
+        }
+        return n;
+    }
+    static constexpr int kDescribeMax = 14 + 3 * kLoopNotes;
+
     // ---- LEDs (main loop) ------------------------------------------------------
     void DrawLeds(Hardware& hw, float dt) {
         using namespace chompi;
         const bool chompi = hw.button_sr.State(int(Sw::KEY_26));
         const float* sel_col = kPresetColor[ch_[sel_].preset];
+        // The controls the page points at breathe in white over what they show.
+        const float hint_glow = .35f - .35f * std::cos(led_time_ * 2.f * float(M_PI) / 1.2f);
+        hint_glow_ = hint_glow;
 
         for (int k = 0; k < 25; ++k) {
             float rgb[3] = {0.f, 0.f, 0.f};
@@ -397,6 +534,8 @@ public:
             } else {
                 for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * key_flash_[k];
             }
+            if ((hint_ >> k) & 1)
+                for (float& x : rgb) x = std::max(x, hint_glow);
             SetSmtLedFloat(kKeys[k].led, rgb[0], rgb[1], rgb[2]);
             key_flash_[k] *= std::exp(-dt / .25f);
         }
@@ -407,26 +546,26 @@ public:
         for (int n = 0; n < 4; ++n) {
             const float* kc = sel_col;
             if (all_) kc = kPresetColor[ch_[(l0_beats_ + n) % kChannels].preset];
-            SetPthLedFloat(kKnobs[n].led, kc[0], kc[1], kc[2]);
+            Pth(kKnobs[n].led, kc[0], kc[1], kc[2]);
         }
-        SetPthLedFloat(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
+        Pth(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
 
         // The wheel's two lights: a beat on every L0 (the tempo lives here).
         const float wb = running_ ? .05f + .95f * l0_flash_ : 0.f;
-        SetPthLedFloat(kWheelLeds[0], wb, wb, wb);
-        SetPthLedFloat(kWheelLeds[1], wb, wb, wb);
+        Pth(kWheelLeds[0], wb, wb, wb);
+        Pth(kWheelLeds[1], wb, wb, wb);
         // K6: as bright as the volume.
         const float vb = .1f + .5f * volume_;
-        SetPthLedFloat(kKnobs[kVolume].led, vb, vb, vb);
+        Pth(kKnobs[kVolume].led, vb, vb, vb);
 
         // Play: lit while the loops run. Loop: a beat on every loop of the
         // selected channel, brighter when it has a loop.
-        SetPthLedFloat(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
+        Pth(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
         if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks)
-            SetPthLedFloat(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
+            Pth(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
         else
-            SetPthLedFloat(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
+            Pth(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
         fill_led_data();
 
         const float fade = std::exp(-dt / .15f);
@@ -438,6 +577,93 @@ public:
 
 private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
+
+    // A light at the top, with the page's hint over it: CHOMPI 0, K1-K4 1-4,
+    // the wheel 5 and 6, play 7, loop 8, K6 9.
+    uint64_t hint_ = 0;
+    float hint_glow_ = 0.f;
+    void Pth(int led, float r, float g, float b) {
+        static constexpr int kIdOfLed[10] = {kIdChompi, 28, 29, 30, 31, 32, 32, 26, 27, 33};
+        if ((hint_ >> kIdOfLed[led]) & 1) {
+            r = std::max(r, hint_glow_);
+            g = std::max(g, hint_glow_);
+            b = std::max(b, hint_glow_);
+        }
+        chompi::SetPthLedFloat(led, r, g, b);
+    }
+
+    static uint8_t Q7(float x) { return uint8_t(Clamp01(x) * 127.f + .5f); }
+    bool Held(int i) const { return (held_ >> i) & 1; }
+
+    // The shift register switch of a control id below the knobs.
+    static int SwitchOf(int id) {
+        return id < 25 ? int(kKeys[id].sw) : int(Sw::KEY_26) + (id - kIdChompi);
+    }
+
+    // Events for the page, from the audio callback; dropped when it falls behind.
+    static constexpr int kEvents = 64;
+    uint8_t ev_[kEvents][3];
+    volatile int ev_head_ = 0, ev_tail_ = 0;
+    void Event(int kind, int id, int value = 0) {
+        const int next = (ev_head_ + 1) % kEvents;
+        if (next == ev_tail_) return;
+        ev_[ev_head_][0] = uint8_t(kind);
+        ev_[ev_head_][1] = uint8_t(id);
+        ev_[ev_head_][2] = uint8_t(kind == kEvTurn ? std::min(std::max(value + 64, 0), 127) : value & 127);
+        __sync_synchronize();
+        ev_head_ = next;
+    }
+
+    // The page's messages to the instrument (see PROTOCOL.md):
+    //   3 channel: c preset octave+2 ratio level pan muted count (phase.lo phase.hi note)*
+    //     the sound from its preset, the loop from its start;
+    //   4 ensemble: selected tempo.lo tempo.hi (L0 in ms) running; every loop
+    //     from its start, the knobs' offsets and the field back to neutral;
+    //   5 start: as at power-on.
+    static constexpr int kMail = 120;
+    uint8_t mail_[kMail];
+    int mail_len_ = 0;
+    volatile bool mail_ready_ = false;
+    void Apply(const uint8_t* d, int n) {
+        if (n < 1) return;
+        if (d[0] == 3 && n >= 9) {
+            const int c = d[1];
+            if (c >= kChannels) return;
+            Channel& ch = ch_[c];
+            ch.preset = std::min(int(d[2]), kNumMalletPresets - 1);
+            ch.p = kMalletPresets[ch.preset].p;
+            ch.octave = std::min(std::max(int(d[3]) - 2, -2), 2);
+            ch.ratio = std::min(int(d[4]), kNumRatios - 1);
+            ch.level = d[5] / 127.f;
+            ch.pan = d[6] / 127.f;
+            muted_[c] = d[7];
+            pending_[c] = -1;
+            Loop& lp = loop_[c];
+            lp.count = 0;
+            for (int i = 0; i < d[8] && 9 + 3 * i + 2 < n && lp.count < kLoopNotes; ++i) {
+                const uint8_t* e = d + 9 + 3 * i;
+                lp.n[lp.count++] = {(e[0] | e[1] << 7) / 16384.f, e[2]};
+            }
+            lp.pos = 0.f;
+            hist_[c].since = now_;
+            swell_[c] = 1.f;
+            Update(c);
+        } else if (d[0] == 4 && n >= 5) {
+            sel_ = std::min(int(d[1]), kChannels - 1);
+            const float ms = float(d[2] | d[3] << 7);
+            if (ms > 0.f) l0_ = std::min(std::max(ms * .001f, kMinL0), kMaxL0) * sr_;
+            running_ = d[4];
+            ens_ = kRatioOne;
+            pending_ens_ = -1;
+            off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
+            width_ = 1.f;
+            turn_ = 0.f;
+            UpdateAll();
+            Restart();
+        } else if (d[0] == 5) {
+            Start();
+        }
+    }
 
     // One key of the meter, in white, behind the notes: the 25 keys in keyboard
     // order are the range (a faint scale), the part up to the value soft, the
