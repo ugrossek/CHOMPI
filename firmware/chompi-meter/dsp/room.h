@@ -27,7 +27,7 @@ public:
             pos_[i] = 0;
             lp_[i] = 0.f;
         }
-        // Early reflections: one line, taps 7 .. 37 ms, alternating sides.
+        // Early reflections: one line, taps 9 .. 37 ms.
         er_len_ = size_t(.04f * sample_rate);
         er_ = mem + used;
         used += er_len_;
@@ -57,8 +57,10 @@ public:
             if (i >= er_len_) i -= er_len_;
             return er_[i];
         };
-        const float el = .5f * er(7.f) + .35f * er(17.f) + .25f * er(29.f);
-        const float erv = .45f * er(11.f) + .3f * er(23.f) + .2f * er(37.f);
+        // The first reflection reaches both sides at once (an earlier one on one
+        // side would pull the whole ensemble that way); the later ones differ.
+        const float el = .45f * er(9.f) + .35f * er(17.f) + .25f * er(29.f);
+        const float erv = .45f * er(9.f) + .3f * er(23.f) + .3f * er(37.f);
         if (++er_pos_ >= er_len_) er_pos_ = 0;
 
         // The network: read, damp, mix (Householder), feed back with the input.

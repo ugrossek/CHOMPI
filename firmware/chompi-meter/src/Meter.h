@@ -352,7 +352,10 @@ public:
             if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
             } else if (meter_wait_ > 0) {
-                MeterKey(k, sel_col, rgb);
+                // The meter, with the selected channel's notes over it in its colour.
+                static constexpr float kWhite[3] = {1.f, 1.f, 1.f};
+                MeterKey(k, meter_white_ ? kWhite : sel_col, rgb);
+                for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], sel_col[j] * key_flash_[k]);
             } else if (show_load_) {
                 // A bar of active voices from the lowest key; green, yellow, red by load.
                 if (k < ActiveVoices()) {
@@ -436,31 +439,21 @@ public:
 private:
     struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
 
-    // One key of the meter. The 25 keys in keyboard order are the range; the
-    // bar's last key glows partly, so every click shows. A bar grows from the
-    // left, a centre bar from the middle C either way, a dot sits at its place
-    // (the middle marked). The mark: a white key where the value started.
-    void MeterKey(int k, const float* col, float* rgb) const {
-        static constexpr float kWhite[3] = {1.f, 1.f, 1.f};
-        if (meter_white_) col = kWhite;
-        auto cover = [k](float a, float b) {
-            const float lo = std::max(std::min(a, b), k - .5f), hi = std::min(std::max(a, b), k + .5f);
-            return Clamp01(hi - lo);
-        };
-        float b = .03f;
-        switch (meter_kind_) {
-            case kMeterBar: b += .7f * cover(-.5f, -.5f + meter_v_ * 25.f); break;
-            case kMeterCentre: b += .7f * (k == 12 ? 1.f : cover(12.f, 12.f + meter_v_ * 12.5f)); break;
-            case kMeterDot: {
-                const float d = std::fabs(k - meter_v_ * 24.f);
-                b += .7f * Clamp01(1.f - d);
-                if (k == 12) b = std::max(b, .15f);
-                break;
-            }
-        }
-        for (int j = 0; j < 3; ++j) rgb[j] = col[j] * b;
-        if (meter_mark_ >= 0.f && k == int(meter_mark_ * 24.f + .5f))
-            for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], .35f);
+    // One key of the meter, in white, behind the notes: the 25 keys in keyboard
+    // order are the range (a faint scale), the part up to the value soft, the
+    // value itself one bright point (shared by two keys between them, so every
+    // click moves it). A bar starts at the left, a centre bar at the middle C.
+    // The mark, in the channel's colour: where the value started.
+    void MeterKey(int k, const float* mark_col, float* rgb) const {
+        const float pos = meter_kind_ == kMeterCentre ? 12.f + meter_v_ * 12.f : meter_v_ * 24.f;
+        const float from = meter_kind_ == kMeterCentre ? 12.f : 0.f;
+        const bool filled = (k >= std::min(from, pos) - .01f) && (k <= std::max(from, pos) + .01f);
+        const float point = Clamp01(1.f - std::fabs(k - pos));
+        const float a = std::min(1.f, float(meter_wait_) / kMeterFadeBlocks); // fades out at the end
+        const float w = a * (.02f + (filled ? .1f : 0.f) + .6f * point);
+        rgb[0] = rgb[1] = rgb[2] = w;
+        if (meter_mark_ >= 0.f && k == int(meter_mark_ * 24.f + .5f) && point < .5f)
+            for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], a * .3f * mark_col[j]);
     }
 
     static constexpr int kClicksPerOctave = 4;
@@ -685,7 +678,7 @@ private:
             if (knob == 3) {
                 if (chompi) {
                     turn_ = std::min(std::max(turn_ + d, -.5f), .5f);
-                    ShowMeter(kMeterDot, turn_ + .5f, -1.f, true);
+                    ShowMeter(kMeterCentre, turn_ * 2.f, -1.f, true);
                 } else {
                     width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
                     ShowMeter(kMeterBar, width_ * .5f, .5f, true); // the mark: as set
@@ -706,7 +699,7 @@ private:
         if (knob == 3) {
             if (chompi) {
                 c.pan = Clamp01(c.pan + d);
-                ShowMeter(kMeterDot, c.pan);
+                ShowMeter(kMeterCentre, (c.pan - .5f) * 2.f);
             } else {
                 c.level = Clamp01(c.level + d);
                 ShowMeter(kMeterBar, c.level, Channel().level);
@@ -760,11 +753,12 @@ private:
     float width_ = 1.f, turn_ = 0.f; // the ensemble's stereo field
 
     // The meter: while a knob turns (and a moment after), the keys show its value.
-    enum MeterKind { kMeterBar, kMeterDot, kMeterCentre };
-    static constexpr int kMeterBlocks = 500; // half a second after the last click
+    enum MeterKind { kMeterBar, kMeterCentre };
+    static constexpr int kMeterBlocks = 2000;     // 1.5 s after the last click, then
+    static constexpr float kMeterFadeBlocks = 500.f; // half a second to fade out
     int meter_wait_ = 0, meter_kind_ = kMeterBar;
     float meter_v_ = 0.f, meter_mark_ = -1.f; // 0..1 (centre: -1..1); mark < 0: none
-    bool meter_white_ = false; // the ensemble's and the instrument's: white, else the channel's colour
+    bool meter_white_ = false; // the ensemble's and the instrument's: a white mark, else the channel's colour
     void ShowMeter(int kind, float v, float mark = -1.f, bool white = false) {
         meter_kind_ = kind;
         meter_v_ = v;
