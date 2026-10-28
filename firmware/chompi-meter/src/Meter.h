@@ -83,8 +83,9 @@ struct Channel {
 
 // A channel's loop: notes at fixed places (phases, 0..1) in its loop length,
 // so they keep their places when L0 or the ratio changes.
-// jit: this repeat lands a little early or late (the feel); armed: not yet
-// played in this round.
+// note: without the channel's octave, which is added when it plays (the loop
+// follows the octave); jit: this repeat lands a little early or late (the
+// feel); armed: not yet played in this round.
 struct LoopNote { float phase; int note; float jit = 0.f; bool armed = true; };
 constexpr int kLoopNotes = 32;
 struct Loop {
@@ -164,10 +165,15 @@ public:
                     }
                 } else if (chompi && kKeys[k].white) {
                     // A second white key while one is still held: copy that channel's
-                    // pattern here. The selected channel's key again: its sound.
+                    // pattern here. The selected channel's key again, tapped (let go
+                    // with no copy in between): its sound.
                     const int from = HeldWhite(k);
-                    if (from >= 0) Copy(from, WhiteIndex(k));
-                    else if (WhiteIndex(k) == sel_) sound_view_ = true;
+                    if (from >= 0) {
+                        Copy(from, WhiteIndex(k));
+                        tap_key_ = -1;
+                    } else if (WhiteIndex(k) == sel_) {
+                        tap_key_ = k;
+                    }
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
                     // CHOMPI + black key: the selected channel's ratio, from the next
@@ -180,11 +186,15 @@ public:
                 } else {
                     Channel& c = ch_[sel_];
                     c.last_note = kKeys[k].note;
-                    const int note = kKeys[k].note + 12 * c.octave;
-                    NoteOn(sel_, note);
-                    Remember(sel_, note);
+                    NoteOn(sel_, kKeys[k].note + 12 * c.octave);
+                    Remember(sel_, kKeys[k].note + 12 * c.octave);
                 }
             }
+        }
+
+        if (tap_key_ >= 0 && !sr.State(int(kKeys[tap_key_].sw))) {
+            if (chompi) sound_view_ = true;
+            tap_key_ = -1;
         }
 
         // Knobs 1-4.
@@ -491,8 +501,11 @@ private:
             // Its place: as far behind the loop's position now as it was played before now.
             float ph = lp.pos - float(now_ - e.t) / len;
             ph -= std::floor(ph);
-            if (n < kLoopNotes) got[n++] = {ph, e.note};
-            else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = {ph, e.note}; }
+            // Kept without the channel's octave: the loop follows the octave, as it
+            // follows the other settings.
+            const int note = e.note - 12 * ch_[c].octave;
+            if (n < kLoopNotes) got[n++] = {ph, note};
+            else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = {ph, note}; }
         }
         if (n == 0) return; // nothing played: the loop stays as it is
         h.since = t;
@@ -535,8 +548,8 @@ private:
             n.armed = false;
             n.jit = jit_max * (Rand() + Rand() - 1.f);
             if (Rand() < skip) continue;
-            NoteOn(c, n.note, swell_[c] * (1.f - feel * .35f * Rand()));
-            if (c == sel_) FlashNote(n.note - 12 * ch_[c].octave);
+            NoteOn(c, n.note + 12 * ch_[c].octave, swell_[c] * (1.f - feel * .35f * Rand()));
+            if (c == sel_) FlashNote(n.note);
         }
     }
 
@@ -565,13 +578,11 @@ private:
     }
 
     // Channel `to` takes over the pattern of `from`: its loop and ratio, in step
-    // with it, moved into `to`'s octave. Everything else stays: `to` plays the
-    // figure on its own instrument, with its own level, pan and swell.
+    // with it. Everything else stays: `to` plays the figure on its own
+    // instrument, in its own octave, with its own level, pan and swell.
     void Copy(int from, int to) {
         if (from == to) return;
-        const int shift = 12 * (ch_[to].octave - ch_[from].octave);
         loop_[to] = loop_[from];
-        for (int i = 0; i < loop_[to].count; ++i) loop_[to].n[i].note += shift;
         ch_[to].ratio = ch_[from].ratio;
         pending_[to] = pending_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
@@ -715,6 +726,7 @@ private:
     bool muted_[kChannels] = {};
     uint32_t listen_ = 0;     // channels listened to (play + white key held), a bit each
     bool sound_view_ = false; // the selected channel's sound on the white keys
+    int tap_key_ = -1;        // the selected channel's key, pressed again with CHOMPI
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     int ens_ = kRatioOne, pending_ens_ = -1;
     int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
