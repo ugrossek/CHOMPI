@@ -480,8 +480,9 @@ public:
         using namespace chompi;
         const bool chompi = hw.button_sr.State(int(Sw::KEY_26));
         const float* sel_col = kPresetColor[ch_[sel_].preset];
-        // The controls the page points at breathe in white over what they show.
-        const float hint_glow = .35f - .35f * std::cos(led_time_ * 2.f * float(M_PI) / 1.2f);
+        // The control the page points at flickers white over what it shows, four
+        // times a second: quicker than any beat, so it never reads as one.
+        const float hint_glow = std::fmod(led_time_, .25f) < .125f ? .8f : 0.f;
         hint_glow_ = hint_glow;
 
         for (int k = 0; k < 25; ++k) {
@@ -558,10 +559,10 @@ public:
         const float vb = .1f + .5f * volume_;
         Pth(kKnobs[kVolume].led, vb, vb, vb);
 
-        // Play: lit while the loops run. Loop: a beat on every loop of the
-        // selected channel, brighter when it has a loop.
+        // Play: lit while the loops run. Loop: the selected channel has a loop,
+        // and a beat each time it comes round; without one, nearly dark.
         Pth(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
-        const float lb = (loop_[sel_].count ? .25f : .03f) + (running_ ? .6f * ch_flash_[sel_] : 0.f);
+        const float lb = loop_[sel_].count ? .25f + (running_ ? .6f * ch_flash_[sel_] : 0.f) : .03f;
         if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks)
             Pth(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
         else
