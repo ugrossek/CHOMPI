@@ -81,12 +81,16 @@ struct Channel {
     int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
 };
 
-// A channel's loop: notes at fixed places (phases, 0..1) in its loop length,
-// so they keep their places when L0 or the ratio changes.
-// note: without the channel's octave, which is added when it plays (the loop
-// follows the octave); jit: this repeat lands a little early or late (the
-// feel); armed: not yet played in this round.
-struct LoopNote { float phase; int note; float jit = 0.f; bool armed = true; };
+// A channel's loop: each note at its time from the loop's start, in beats (L0
+// times the ensemble's ratio), so a new tempo carries the notes along. The
+// channel's ratio is a window on these times: a longer loop adds rest after the
+// notes, a shorter one silences the notes past its end (kept: they come back
+// when the loop grows again). The notes are never stretched.
+// at: the time in beats; note: without the channel's octave, which is added when
+// it plays (the loop follows the octave); phase: its place in the loop as it is
+// now (at / ratio); silent: past the loop's end; jit: this repeat lands a little
+// early or late (the feel); armed: not yet played in this round.
+struct LoopNote { float at; int note; float phase = 0.f; bool silent = false; float jit = 0.f; bool armed = true; };
 constexpr int kLoopNotes = 32;
 struct Loop {
     LoopNote n[kLoopNotes];
@@ -468,8 +472,11 @@ public:
         for (float v : {ch.p.strike, ch.p.brightness, ch.p.decay, ch.p.shimmer, ch.p.variation, ch.p.buzz})
             o[n++] = Q7(v);
         const Loop& lp = loop_[c];
-        o[n++] = uint8_t(lp.count);
+        int sounding = 0;
+        for (int i = 0; i < lp.count; ++i) sounding += !lp.n[i].silent;
+        o[n++] = uint8_t(sounding);
         for (int i = 0; i < lp.count; ++i) {
+            if (lp.n[i].silent) continue;
             const int ph = std::min(int(lp.n[i].phase * 16384.f), 16383);
             o[n++] = ph & 127;
             o[n++] = ph >> 7;
@@ -659,7 +666,8 @@ private:
             lp.count = 0;
             for (int i = 0; i < d[8] && 9 + 3 * i + 2 < n && lp.count < kLoopNotes; ++i) {
                 const uint8_t* e = d + 9 + 3 * i;
-                lp.n[lp.count++] = {(e[0] | e[1] << 7) / 16384.f, e[2]};
+                const float ph = (e[0] | e[1] << 7) / 16384.f;
+                lp.n[lp.count++] = {ph * kRatios[ch.ratio], e[2], ph};
             }
             lp.pos = 0.f;
             hist_[c].since = now_;
@@ -731,7 +739,8 @@ private:
     }
 
     // On the beat: the ensemble's new ratio (every loop keeps its place, all
-    // lengths scale together), and each channel's new ratio, its loop from the start.
+    // lengths scale together, a tempo), and each channel's new ratio, its loop
+    // from the start: a new window on the same notes.
     void ApplyPending() {
         if (pending_ens_ >= 0) ens_ = pending_ens_;
         pending_ens_ = -1;
@@ -740,10 +749,20 @@ private:
             ch_[c].ratio = pending_[c];
             pending_[c] = -1;
             loop_[c].pos = 0.f;
-            for (int i = 0; i < loop_[c].count; ++i) {
-                loop_[c].n[i].armed = true;
-                loop_[c].n[i].jit = 0.f;
-            }
+            Place(c);
+        }
+    }
+
+    // Each note's place in channel c's loop from its time; past the end: silent.
+    void Place(int c) {
+        Loop& lp = loop_[c];
+        const float len = kRatios[ch_[c].ratio];
+        for (int i = 0; i < lp.count; ++i) {
+            LoopNote& n = lp.n[i];
+            n.phase = n.at / len;
+            n.silent = n.phase >= 1.f;
+            n.armed = true;
+            n.jit = 0.f;
         }
     }
 
@@ -775,8 +794,9 @@ private:
             // Kept without the channel's octave: the loop follows the octave, as it
             // follows the other settings.
             const int note = e.note - 12 * ch_[c].octave;
-            if (n < kLoopNotes) got[n++] = {ph, note};
-            else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = {ph, note}; }
+            const LoopNote ln = {ph * kRatios[ch_[c].ratio], note, ph};
+            if (n < kLoopNotes) got[n++] = ln;
+            else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = ln; }
         }
         if (n == 0) return; // nothing played: the loop stays as it is
         h.since = t;
@@ -784,7 +804,7 @@ private:
         for (int i = 0; i < n; ++i) {
             bool twin = false; // the same note at the same place is already there
             for (int j = 0; j < lp.count; ++j)
-                if (lp.n[j].note == got[i].note && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
+                if (lp.n[j].note == got[i].note && !lp.n[j].silent && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
             if (!twin && lp.count < kLoopNotes) lp.n[lp.count++] = got[i];
         }
     }
@@ -811,6 +831,7 @@ private:
 
         for (int i = 0; i < lp.count; ++i) {
             LoopNote& n = lp.n[i];
+            if (n.silent) continue;
             if (!n.armed) {
                 if (crossed(n.phase + .5f)) n.armed = true; // half a loop later: ready again
                 continue;

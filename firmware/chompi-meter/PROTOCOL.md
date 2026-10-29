@@ -43,6 +43,11 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 | 44  | event   | kind, id, value |
 | 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi; about 10 a second |
 
+**channel** (43) lists the notes that sound, at their places in the loop as it
+is now. A loop's length is a window on its notes: a new ratio never stretches
+them. A longer loop adds rest after them; a shorter one silences the notes past
+its end, and meter keeps those (not listed) until the loop grows again.
+
 **state:** selected, flags, ensemble ratio, pending ensemble ratio+1, L0 ms lo,
 L0 ms hi, volume q7, room q7, width q7 (0..2), the ensemble's level q7 (0..2), the all-mode
 offsets strike, brightness, decay, shimmer, feel, buzz (q7, −.5..+.5), muted
