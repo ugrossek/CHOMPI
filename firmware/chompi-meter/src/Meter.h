@@ -86,6 +86,11 @@ struct Channel {
 // channel's ratio is a window on these times: a longer loop adds rest after the
 // notes, a shorter one silences the notes past its end (kept: they come back
 // when the loop grows again). The notes are never stretched.
+// The loop starts where the figure is quiet, not on the L0 beat: its seam is
+// the first note after the longest silence, so a new length adds or takes time
+// in the silence, and a figure played anywhere in L0 (a pickup into the beat)
+// stays whole. seam: where that note fell after an L0 beat, in beats, so the
+// loop keeps its place against L0 when everything starts again.
 // at: the time in beats; note: without the channel's octave, which is added when
 // it plays (the loop follows the octave); phase: its place in the loop as it is
 // now (at / ratio); silent: past the loop's end; jit: this repeat lands a little
@@ -95,7 +100,8 @@ constexpr int kLoopNotes = 32;
 struct Loop {
     LoopNote n[kLoopNotes];
     int count = 0;
-    float pos = 0.f; // where the channel is in its loop, 0..1
+    float pos = 0.f;  // where the channel is in its loop, 0..1
+    float seam = 0.f; // where the loop starts after an L0 beat, in beats (0..1)
 };
 
 // What was played by hand on a channel, newest last; loop takes from here.
@@ -134,6 +140,7 @@ public:
             ch_[c].pan = .5f + (c & 1 ? -.35f : .35f) * out / 7.f;
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
             loop_[c].count = 0;
+            loop_[c].seam = 0.f;
             hist_[c].since = now_;
             pending_[c] = -1;
             muted_[c] = false;
@@ -150,11 +157,13 @@ public:
         Restart();
     }
 
-    // Every loop from its start, together, on a new L0 beat.
+    // Everything from a new L0 beat; every loop where its seam puts it (a loop
+    // played right before the beat starts a little before it).
     void Restart() {
         l0_pos_ = 0.f;
         for (int c = 0; c < kChannels; ++c) {
-            loop_[c].pos = 0.f;
+            const float p = -loop_[c].seam / kRatios[ch_[c].ratio];
+            loop_[c].pos = p - std::floor(p);
             for (int i = 0; i < loop_[c].count; ++i) {
                 loop_[c].n[i].armed = true;
                 loop_[c].n[i].jit = 0.f;
@@ -232,8 +241,8 @@ public:
                     sel_ = WhiteIndex(k);
                 } else if (chompi) {
                     // CHOMPI + black key: the selected channel's ratio, from the next
-                    // L0 beat, where its loop starts again (its own ratio again: back
-                    // in step). With the switch on all: the ensemble's ratio, a
+                    // L0 beat (its loop goes on from where it is, see ApplyPending).
+                    // With the switch on all: the ensemble's ratio, a
                     // multiplier on every channel's length (1: as recorded).
                     if (all_) pending_ens_ = BlackIndex(k);
                     else pending_[sel_] = BlackIndex(k);
@@ -672,6 +681,7 @@ private:
                 lp.n[lp.count++] = {ph * kRatios[ch.ratio], e[2], ph};
             }
             lp.pos = 0.f;
+            lp.seam = 0.f;
             hist_[c].since = now_;
             swell_[c] = 1.f;
             Update(c);
@@ -733,6 +743,7 @@ private:
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
+    static constexpr float kSeamTie = .95f;            // silences this close count as equally long
 
     static int BlackIndex(int k) {
         int b = 0;
@@ -741,16 +752,20 @@ private:
     }
 
     // On the beat: the ensemble's new ratio (every loop keeps its place, all
-    // lengths scale together, a tempo), and each channel's new ratio, its loop
-    // from the start: a new window on the same notes.
+    // lengths scale together, a tempo), and each channel's new ratio: a new
+    // window on the same notes. The loop goes on from where it is; if that is
+    // in the time just taken away, it starts again from its seam.
     void ApplyPending() {
         if (pending_ens_ >= 0) ens_ = pending_ens_;
         pending_ens_ = -1;
         for (int c = 0; c < kChannels; ++c) {
             if (pending_[c] < 0) continue;
+            Loop& lp = loop_[c];
+            const float beats = lp.pos * kRatios[ch_[c].ratio];
             ch_[c].ratio = pending_[c];
             pending_[c] = -1;
-            loop_[c].pos = 0.f;
+            const float len = kRatios[ch_[c].ratio];
+            lp.pos = beats < len ? beats / len : 0.f;
             Place(c);
         }
     }
@@ -803,12 +818,53 @@ private:
         if (n == 0) return; // nothing played: the loop stays as it is
         h.since = t;
         if (!add) lp.count = 0;
+        if (lp.count == 0) Seam(c, got, n);
         for (int i = 0; i < n; ++i) {
             bool twin = false; // the same note at the same place is already there
             for (int j = 0; j < lp.count; ++j)
                 if (lp.n[j].note == got[i].note && !lp.n[j].silent && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
             if (!twin && lp.count < kLoopNotes) lp.n[lp.count++] = got[i];
         }
+    }
+
+    // A new loop starts at its seam: the first note after the longest silence.
+    // (Silences within a few percent of it count as long; of those, the one
+    // whose note falls closest after an L0 beat.) The notes turn with it, so
+    // nothing moves in time: only where the loop begins.
+    void Seam(int c, LoopNote* got, int n) {
+        Loop& lp = loop_[c];
+        const float len = LoopSamples(c);
+        float gap[kLoopNotes], beat[kLoopNotes], longest = 0.f;
+        for (int i = 0; i < n; ++i) {
+            // The silence before note i: back to the note before it, round the loop.
+            float g = 1.f;
+            for (int j = 0; j < n; ++j) {
+                if (j == i) continue;
+                float d = got[i].phase - got[j].phase;
+                d -= std::floor(d);
+                if (d > 0.f && d < g) g = d;
+            }
+            gap[i] = g;
+            longest = std::max(longest, g);
+            // Where it fell after an L0 beat (it was played this long ago).
+            float ago = lp.pos - got[i].phase;
+            ago -= std::floor(ago);
+            float b = l0_pos_ - ago * len / Beat();
+            beat[i] = b - std::floor(b);
+        }
+        int pick = 0;
+        for (int i = 0; i < n; ++i)
+            if (gap[i] >= longest * kSeamTie && (gap[pick] < longest * kSeamTie || beat[i] < beat[pick])) pick = i;
+        const float s = got[pick].phase;
+        for (int i = 0; i < n; ++i) {
+            float ph = got[i].phase - s;
+            ph -= std::floor(ph);
+            got[i].phase = ph;
+            got[i].at = ph * kRatios[ch_[c].ratio];
+        }
+        float p = lp.pos - s;
+        lp.pos = p - std::floor(p);
+        lp.seam = beat[pick];
     }
 
     void Advance(int c, size_t block) {
