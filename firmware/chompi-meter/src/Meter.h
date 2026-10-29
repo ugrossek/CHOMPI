@@ -142,7 +142,7 @@ public:
         pending_ens_ = -1;
         off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
         width_ = 1.f;
-        turn_ = 0.f;
+        gain_ = 1.f;
         Restart();
     }
 
@@ -360,9 +360,9 @@ public:
             if (!s.v.Active()) continue;
             const Channel& c = ch_[s.ch];
             // The ensemble's field: width spreads or gathers the channels around
-            // the middle, turn moves all of them to one side.
-            const float pan = Clamp01(.5f + (c.pan - .5f) * width_ + turn_);
-            const float level = c.level * preset_gain_[c.preset] * gate_[s.ch];
+            // the middle; the ensemble's level scales every channel's own.
+            const float pan = Clamp01(.5f + (c.pan - .5f) * width_);
+            const float level = c.level * gain_ * preset_gain_[c.preset] * gate_[s.ch];
             const float gl = level * std::cos(pan * float(M_PI) / 2.f);
             const float gr = level * std::sin(pan * float(M_PI) / 2.f);
             for (size_t i = 0; i < n; ++i) {
@@ -436,7 +436,7 @@ public:
         o[n++] = Q7(volume_);
         o[n++] = Q7(room_);
         o[n++] = Q7(width_ * .5f);
-        o[n++] = Q7(turn_ + .5f);
+        o[n++] = Q7(gain_ * .5f);
         for (float off : {off_strike_, off_bright_, off_decay_, off_shimmer_, off_variation_, off_buzz_})
             o[n++] = Q7(off + .5f);
         uint32_t muted = 0;
@@ -538,10 +538,11 @@ public:
             } else if (play_down_) {
             } else if (chompi) {
                 // The ratios on the black keys: the selected channel's (switch on
-                // all: the ensemble's) bright; one waiting for the next beat blinks.
+                // all: the ensemble's) bright; one waiting for the next beat swells,
+                // slower than the page's flicker, so the two never look alike.
                 const int b = BlackIndex(k);
                 float v = b == (all_ ? ens_ : ch_[sel_].ratio) ? 1.f : .08f;
-                if (b == (all_ ? pending_ens_ : pending_[sel_])) v = std::fmod(led_time_, .25f) < .125f ? 1.f : .08f;
+                if (b == (all_ ? pending_ens_ : pending_[sel_])) v = .1f + .9f * (.5f + .5f * std::cos(led_time_ * 2.f * float(M_PI) * 1.5f));
                 rgb[0] = rgb[1] = rgb[2] = v;
             } else if (oct_show_ > 0 && OctaveKey(k) >= -2) {
                 // The octave on the five lowest black keys, -2 .. +2: the current one bright.
@@ -673,7 +674,7 @@ private:
             pending_ens_ = -1;
             off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
             width_ = 1.f;
-            turn_ = 0.f;
+            gain_ = 1.f;
             UpdateAll();
             Restart();
         } else if (d[0] == 5) {
@@ -918,14 +919,12 @@ private:
     void Turn(int knob, int inc, bool chompi) {
         const float d = inc * .02f;
         if (all_) {
+            // K4 as on one channel: the level, and with CHOMPI the place in the
+            // field (for all: how wide the field is). The mark: as set.
             if (knob == 3) {
-                if (chompi) {
-                    turn_ = std::min(std::max(turn_ + d, -.5f), .5f);
-                    ShowMeter(kMeterCentre, turn_ * 2.f, -1.f, true);
-                } else {
-                    width_ = std::min(std::max(width_ + 2.f * d, 0.f), 2.f);
-                    ShowMeter(kMeterBar, width_ * .5f, .5f, true); // the mark: as set
-                }
+                float& v = chompi ? width_ : gain_;
+                v = std::min(std::max(v + 2.f * d, 0.f), 2.f);
+                ShowMeter(kMeterBar, v * .5f, .5f, true);
                 return;
             }
             float& off = knob == 0 ? (chompi ? off_shimmer_ : off_strike_)
@@ -994,7 +993,8 @@ private:
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float room_ = .5f, volume_ = .8f, load_ = 0.f;
     uint32_t shed_ = 0; // voices the load guard has cut
-    float width_ = 1.f, turn_ = 0.f; // the ensemble's stereo field
+    float width_ = 1.f; // the ensemble's stereo field: 0 all in the middle, 1 as panned, 2 wider
+    float gain_ = 1.f;  // the ensemble's level, on every channel's own (0..2)
 
     // The meter: while a knob turns (and a moment after), the keys show its value.
     enum MeterKind { kMeterBar, kMeterCentre };

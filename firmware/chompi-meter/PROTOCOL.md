@@ -26,8 +26,8 @@ least every 0.5 s and every channel at least every 2 s, changed or not.
   its loop's notes (phase 0..16383 over the loop, note without the octave),
   the loop from its start. Up to 32 notes.
 - **ensemble** selects a channel, sets the tempo and play, and restarts every
-  loop together. The all-mode offsets, ensemble ratio and stereo field go back
-  to neutral.
+  loop together. The all-mode offsets, ensemble ratio, level and stereo field go
+  back to neutral.
 - **start** is power-on: every channel on its own sound, no loops. The volume
   and the room stay as they are.
 
@@ -44,7 +44,7 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 | 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi; about 10 a second |
 
 **state:** selected, flags, ensemble ratio, pending ensemble ratio+1, L0 ms lo,
-L0 ms hi, volume q7, room q7, width q7 (0..2), turn q7 (−.5..+.5), the all-mode
+L0 ms hi, volume q7, room q7, width q7 (0..2), the ensemble's level q7 (0..2), the all-mode
 offsets strike, brightness, decay, shimmer, feel, buzz (q7, −.5..+.5), muted
 (3 bytes, a bit per channel), listened to (3 bytes), held (CHOMPI 1, play 2,
 loop 4), load q7 (share of the audio callback's time), voices sounding, voices
