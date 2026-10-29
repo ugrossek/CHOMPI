@@ -72,6 +72,99 @@ static float   room_set   = -1.f;
 static constexpr float kLimitLevel = .6f, kLimitAttack = .2f, kLimitRelease = .99996f;
 static float limit_env = 0.f;
 
+/* USB. The CHOMPI's data lines run through a switch shared with the MP2722
+ * charger, which needs them for a moment to work out what kind of port it is
+ * plugged into; until the Daisy takes them back, the host sees no MIDI device.
+ * This is the launcher's version of TAPE's handshake (chompi-launcher,
+ * ServiceUsbSwitch), which fixed three ways TAPE's left USB dark: a charger
+ * read that never lands (TAPE waits forever), a port that is never identified
+ * (a Mac's USB-C reads "unknown" every time, and TAPE lends the lines out
+ * again every ~230 ms), and a second interrupt that never comes. */
+static bool     prev_int_state = true, usb_handoff = false, usb_lent = false;
+static uint32_t usb_handoff_t = 0, usb_lent_t = 0, usb_quiet_t = 0;
+
+/* Every charger register, waiting for the I2C transfer to land; false if it
+ * did not within half a second. */
+static bool ChargerRead()
+{
+    hw.MpReadAll();
+    const uint32_t started = System::GetNow();
+    while(!hw.read_ready && System::GetNow() - started < 500)
+        System::Delay(1);
+    return hw.read_ready;
+}
+
+/* At power-on: clear the charger's pending status, give it a moment, let it
+ * detect the port, then take the lines. */
+static void UsbTakeOver()
+{
+    ChargerRead();
+    System::Delay(100);
+    hw.usb_sw.Write(false);        // give USB to the charger
+    System::Delay(1);
+    hw.MpWrite(0x0a, 0B00100100);  // auto DPDM
+    System::Delay(1);
+    hw.usb_sw.Write(true);         // take it back
+    hw.USBMidiActive(true);
+}
+
+/* The charger raised its interrupt: a cable came or went. If it does not know
+ * the port yet, lend it the lines and force a fresh detection; once it does,
+ * or once a forced detection comes back empty, or 1.5 s later at the latest,
+ * take them back (the host enumerates either way). */
+static void ServiceUsbSwitch(uint32_t now)
+{
+    const bool int_state = hw.mpc_int.Read();
+    const bool interrupt = !int_state && prev_int_state;
+    prev_int_state       = int_state;
+
+    if(interrupt)
+    {
+        if(!ChargerRead())
+            prev_int_state = true; // stale registers: look again next pass
+        else if((hw.mp_buff_[0] & 0B11110000) == 0 && usb_lent)
+        {
+            hw.usb_sw.Write(true); // our forced detection found nothing
+            hw.USBMidiActive(true);
+            usb_lent    = false;
+            usb_quiet_t = now + 5000;
+        }
+        else if((hw.mp_buff_[0] & 0B11110000) == 0 && int32_t(now - usb_quiet_t) < 0)
+        {
+            // still settling from the last round: the lines stay with us
+        }
+        else if((hw.mp_buff_[0] & 0B11110000) == 0) // DPDM_STAT unknown
+        {
+            hw.USBMidiActive(false);
+            hw.usb_sw.Write(false);
+            usb_handoff   = true;
+            usb_handoff_t = now;
+            usb_lent      = true;
+            usb_lent_t    = now;
+        }
+        else
+        {
+            hw.usb_sw.Write(true);
+            hw.USBMidiActive(true);
+            usb_lent = false;
+        }
+    }
+
+    if(usb_handoff && now - usb_handoff_t > 1)
+    {
+        usb_handoff = false;
+        hw.MpWrite(0x0a, 0B00110100); // force DPDM
+    }
+
+    if(usb_lent && now - usb_lent_t > 1500)
+    {
+        hw.usb_sw.Write(true);
+        hw.USBMidiActive(true);
+        usb_lent    = false;
+        usb_quiet_t = now + 5000;
+    }
+}
+
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     const uint32_t start = DWT->CYCCNT;
@@ -170,15 +263,9 @@ int main(void)
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     hw.StartAudio(AudioCallback);
 
-    /* USB: let the charger detection run, then take the port. */
-    hw.usb_sw.Write(false);
-    System::Delay(1);
-    hw.MpWrite(0x0a, 0B00100100); // auto DPDM
-    System::Delay(1);
-    hw.usb_sw.Write(true);
+    UsbTakeOver();
 
-    uint32_t now = System::GetNow(), ledt = now, batt = now, usbt = now;
-    bool prev_int_state = true, usb_handoff = false;
+    uint32_t now = System::GetNow(), ledt = now, batt = now;
 
     while(1)
     {
@@ -199,40 +286,12 @@ int main(void)
 
         page_link.Poll(hw, instrument, now);
 
-        /* Battery and USB, as in the CHOMPI's firmware. */
-        const bool int_state = hw.mpc_int.Read();
-        const bool interrupt = !int_state && prev_int_state;
-        prev_int_state       = int_state;
-
         if(now - batt > 20)
         {
             hw.LowBatteryLockoutCheck();
             batt = now;
         }
-
-        if(interrupt)
-        {
-            hw.MpReadAll();
-            while(!hw.read_ready)
-                System::Delay(1);
-            if((hw.mp_buff_[0] & 0B11110000) == 0) // DPDM_STAT unknown
-            {
-                hw.USBMidiActive(false);
-                hw.usb_sw.Write(false); // give USB control
-                usb_handoff = true;
-                usbt        = now;
-            }
-            else
-            {
-                hw.usb_sw.Write(true); // take USB control
-                hw.USBMidiActive(true);
-            }
-        }
-        if(usb_handoff && now - usbt > 1)
-        {
-            usb_handoff = false;
-            hw.MpWrite(0x0a, 0B00110100); // FORCEDPDM
-        }
+        ServiceUsbSwitch(now);
 
         System::DelayUs(10);
     }
