@@ -1,5 +1,6 @@
 #pragma once
 #include "daisy_seed.h"
+#include "sr_4021.h" // meter's own, with the CD4021's timing (see there)
 #include "encoder.h"
 #include "temp_led_stuff.h"
 
