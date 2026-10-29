@@ -196,6 +196,8 @@ public:
         // CHOMPI + play + white key mutes it; otherwise the key plays.
         const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
         if (!chompi) { sound_view_ = false; tap_key_ = -1; }
+        // CHOMPI pressed: the keys show the players at once, not the last knob's value.
+        if (Pressed(int(Sw::KEY_26))) meter_wait_ = 0;
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
