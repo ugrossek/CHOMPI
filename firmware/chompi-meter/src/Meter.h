@@ -188,7 +188,7 @@ public:
     void Restart() {
         l0_pos_ = 0.f;
         for (int c = 0; c < kChannels; ++c) {
-            const float p = -loop_[c].seam / kRatios[ch_[c].ratio];
+            const float p = -loop_[c].seam / Len(c);
             loop_[c].pos = p - std::floor(p);
             for (int i = 0; i < loop_[c].count; ++i) {
                 loop_[c].n[i].armed = true;
@@ -625,7 +625,7 @@ public:
                 const int b = BlackIndex(k);
                 if (b == ch_[sel_].ratio) {
                     rgb[0] = rgb[1] = rgb[2] = 1.f;
-                } else if (loop_span_ > 0.f && (kRatios[b] <= kRatios[loop_ratio_] || kRatios[b] * Beat() >= loop_span_)) {
+                } else if (loop_span_ > 0.f && (kRatios[b] <= kRatios[loop_ratio_] || kRatios[b] * kRatios[ens_] * Beat() >= loop_span_)) {
                     for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * .45f;
                 } else {
                     rgb[0] = rgb[1] = rgb[2] = .04f;
@@ -804,7 +804,7 @@ private:
             for (int i = 0; i < d[8] && 9 + 3 * i + 2 < n && lp.count < kLoopNotes; ++i) {
                 const uint8_t* e = d + 9 + 3 * i;
                 const float ph = (e[0] | e[1] << 7) / 16384.f;
-                lp.n[lp.count++] = {ph * kRatios[ch.ratio], e[2], ph};
+                lp.n[lp.count++] = {ph * Len(c), e[2], ph};
             }
             lp.pos = 0.f;
             lp.seam = 0.f;
@@ -878,22 +878,25 @@ private:
         return b;
     }
 
-    // On the beat: the ensemble's new ratio (every loop keeps its place, all
-    // lengths scale together, a tempo), and each channel's new ratio: a new
-    // window on the same notes. The loop goes on from where it is; if that is
-    // in the time just taken away, it goes on there wrapped round, as its notes.
+    // On the beat: the ensemble's new length (a factor on every loop's length,
+    // not on the notes: the tempo stays) and each channel's new ratio. Either
+    // way a new window on the same notes: notes past the new end wrap round,
+    // and unfold again when the loop grows. The loop goes on from where it is
+    // in time; past the new end, wrapped round, as its notes.
     void ApplyPending() {
+        float was[kChannels];
+        for (int c = 0; c < kChannels; ++c) was[c] = Len(c);
         if (pending_ens_ >= 0) ens_ = pending_ens_;
         pending_ens_ = -1;
         for (int c = 0; c < kChannels; ++c) {
-            if (pending_[c] < 0) continue;
-            if (pending_[c] != ch_[c].ratio) Save(c);
+            if (pending_[c] >= 0) {
+                if (pending_[c] != ch_[c].ratio) Save(c);
+                ch_[c].ratio = pending_[c];
+                pending_[c] = -1;
+            }
+            if (Len(c) == was[c]) continue;
             Loop& lp = loop_[c];
-            const float beats = lp.pos * kRatios[ch_[c].ratio];
-            ch_[c].ratio = pending_[c];
-            pending_[c] = -1;
-            const float len = kRatios[ch_[c].ratio];
-            const float p = beats / len;
+            const float p = lp.pos * was[c] / Len(c);
             lp.pos = p - std::floor(p);
             Place(c);
         }
@@ -903,7 +906,7 @@ private:
     // round to the beginning.
     void Place(int c) {
         Loop& lp = loop_[c];
-        const float len = kRatios[ch_[c].ratio];
+        const float len = Len(c);
         for (int i = 0; i < lp.count; ++i) {
             LoopNote& n = lp.n[i];
             const float p = n.at / len;
@@ -915,8 +918,11 @@ private:
     }
 
     // The beat: L0 times the ensemble's ratio. A channel's loop: the beat times its ratio.
-    float Beat() const { return l0_ * kRatios[ens_]; }
-    float LoopSamples(int c) const { return Beat() * kRatios[ch_[c].ratio]; }
+    // The beat: L0, the tempo. A channel's loop: L0 times the ensemble's length
+    // times its own ratio (Len, in beats).
+    float Beat() const { return l0_; }
+    float Len(int c) const { return kRatios[ens_] * kRatios[ch_[c].ratio]; }
+    float LoopSamples(int c) const { return Beat() * Len(c); }
 
     void Remember(int c, int note) {
         History& h = hist_[c];
@@ -952,7 +958,7 @@ private:
             // beats, wrapped round where the window is longer than the loop.
             float ph = pos - float(now_ - e.t) / len;
             ph -= std::floor(ph);
-            const float at = fresh ? (window - float(t - e.t)) / Beat() : ph * kRatios[ch_[c].ratio];
+            const float at = fresh ? (window - float(t - e.t)) / Beat() : ph * Len(c);
             // Kept without the channel's octave: the loop follows the octave, as it
             // follows the other settings.
             const int note = e.note - 12 * ch_[c].octave;
@@ -993,7 +999,7 @@ private:
         hist_[c].since = loop_since_;
         ch_[c].ratio = ratio;
         pending_[c] = -1;
-        const float window = Beat() * std::max(kRatios[ratio], kRatios[loop_ratio_]);
+        const float window = Beat() * kRatios[ens_] * std::max(kRatios[ratio], kRatios[loop_ratio_]);
         if (Capture(c, loop_t_, false, !loop_kept_, window) > 0) {
             loop_kept_ = true;
             Place(c);
@@ -1007,7 +1013,7 @@ private:
     // keep, at most the longest length): a length fits when it is this long.
     float Span(int c, uint32_t t) const {
         const History& h = hist_[c];
-        const float longest = Beat() * kRatios[kNumRatios - 1];
+        const float longest = Beat() * kRatios[ens_] * kRatios[kNumRatios - 1];
         float span = 0.f;
         for (int i = 0; i < h.count; ++i) {
             const Played& e = h.e[(h.head - h.count + i + kHistory) % kHistory];
