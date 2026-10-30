@@ -22,6 +22,9 @@ meter::Instrument instrument;
 meter::Link page_link;
 meter::Room room_rv;
 static float DSY_SDRAM_BSS room_mem[meter::Room::kMemory];
+// The figures' versions, as raw memory: nothing may be constructed in SDRAM
+// before it is set up; Instrument::Init sets the rings up.
+alignas(8) static uint8_t DSY_SDRAM_BSS versions_mem[sizeof(meter::Versions)];
 
 /* Wet level of the room at room .5, about 10 dB under the dry sound (measured
  * on an impulse). */
@@ -256,7 +259,7 @@ int main(void)
         hw.MpWrite(0x08, 0B10111111); // shipping mode
 
     const float sr = hw.seed.AudioSampleRate();
-    instrument.Init(sr);
+    instrument.Init(sr, reinterpret_cast<meter::Versions*>(versions_mem));
     room_rv.Init(sr, room_mem);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // cycle counter for the load guard

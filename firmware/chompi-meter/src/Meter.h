@@ -115,10 +115,33 @@ struct History {
     uint32_t since = 0; // only notes after the last loop press (or clear) count
 };
 
+// The versions of the figures, so nothing is lost: before a channel's figure
+// changes (kept, added to, cleared, copied over, a new length, set by the page)
+// it is saved, the last kVersions of each channel; before everyone's change at
+// once (clear all, a setup from the page), the whole ensemble, the last
+// kEnsembleVersions. Loop held + the wheel steps through them (with CHOMPI: the
+// ensemble's). A version is the notes and the length, not where the loop is: it
+// comes back in step, at the place the loop is now.
+// Plain data in SDRAM, set up in Init (no constructors run there).
+struct Figure { LoopNote n[kLoopNotes]; int count; float seam; int ratio; };
+constexpr int kVersions = 8, kEnsembleVersions = 4;
+// A ring of saved versions: head the oldest, count how many; cur the one
+// playing while stepping (-1: the figure as it is, not stepped to).
+struct Ring { int head, count, cur; };
+struct Versions {
+    Figure f[kChannels][kVersions];
+    Ring ring[kChannels];
+    Figure e[kEnsembleVersions][kChannels];
+    Ring ering;
+};
+
 class Instrument {
 public:
-    void Init(float sample_rate) {
+    void Init(float sample_rate, Versions* versions) {
         sr_ = sample_rate;
+        ver_ = versions;
+        for (Ring& r : ver_->ring) r = {0, 0, -1};
+        ver_->ering = {0, 0, -1};
         Start();
         for (int i = 0; i < kNumMalletPresets; ++i)
             preset_gain_[i] = std::pow(10.f, kMalletPresets[i].gain_db / 20.f);
@@ -273,10 +296,20 @@ public:
         }
         // Wheel: the selected channel's octave, a step every few clicks, shown on
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
-        // tempo, L0, smoothly (right is faster); every loop follows.
+        // tempo, L0, smoothly (right is faster); every loop follows. Loop held +
+        // turn: the versions of the selected channel's figure, left older, right
+        // newer (with CHOMPI: the ensemble's), shown on the black keys.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (chompi) {
+            if (loop_down_) {
+                if (const int step = Steps(inc, kStepVersions, kClicksPerVersion)) {
+                    if (chompi) BrowseAll(step);
+                    else Browse(sel_, step);
+                }
+                vshow_ = true;
+                vshow_all_ = chompi;
+                loop_used_ = true; // turning is not holding to clear
+            } else if (chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
             } else {
                 if (const int step = Steps(inc, sel_)) ch_[sel_].octave = std::min(std::max(ch_[sel_].octave + step, -2), 2);
@@ -327,9 +360,12 @@ public:
         if (loop_down_) {
             if (!loop_held) {
                 loop_down_ = false;
+                vshow_ = false;
             } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
+                if (loop_chompi_) SaveAll();
                 for (int c = 0; c < kChannels; ++c) {
                     if (!loop_chompi_ && c != loop_ch_) continue;
+                    Save(c);
                     loop_[c].count = 0;
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
@@ -530,6 +566,12 @@ public:
             float rgb[3] = {0.f, 0.f, 0.f};
             if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
+            } else if (vshow_ && !kKeys[k].white) {
+                // Stepping through the versions: one black key each, the oldest
+                // lowest, the one playing bright.
+                const Ring& r = vshow_all_ ? ver_->ering : ver_->ring[sel_];
+                const int b = BlackIndex(k);
+                rgb[0] = rgb[1] = rgb[2] = b < r.count ? (b == r.cur ? 1.f : .12f) : 0.f;
             } else if (show_load_) {
                 // A bar of active voices from the lowest key; green, yellow, red by
                 // load. (Before the meter: turning K6 while holding it shows the meter
@@ -674,6 +716,7 @@ private:
         if (d[0] == 3 && n >= 9) {
             const int c = d[1];
             if (c >= kChannels) return;
+            Save(c);
             Channel& ch = ch_[c];
             ch.preset = std::min(int(d[2]), kNumMalletPresets - 1);
             ch.p = kMalletPresets[ch.preset].p;
@@ -710,6 +753,7 @@ private:
             UpdateAll();
             Restart();
         } else if (d[0] == 5) {
+            SaveAll();
             Start();
         }
     }
@@ -772,6 +816,7 @@ private:
         pending_ens_ = -1;
         for (int c = 0; c < kChannels; ++c) {
             if (pending_[c] < 0) continue;
+            if (pending_[c] != ch_[c].ratio) Save(c);
             Loop& lp = loop_[c];
             const float beats = lp.pos * kRatios[ch_[c].ratio];
             ch_[c].ratio = pending_[c];
@@ -828,6 +873,7 @@ private:
             else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = ln; }
         }
         if (n == 0) return; // nothing played: the loop stays as it is
+        Save(c);
         h.since = t;
         if (!add) lp.count = 0;
         if (lp.count == 0) Seam(c, got, n);
@@ -915,6 +961,86 @@ private:
         }
     }
 
+    // ---- Versions ----------------------------------------------------------------
+    // The figure of channel c as it is now, into f.
+    void Keep(int c, Figure& f) const {
+        const Loop& lp = loop_[c];
+        std::copy(lp.n, lp.n + lp.count, f.n);
+        f.count = lp.count;
+        f.seam = lp.seam;
+        f.ratio = ch_[c].ratio;
+    }
+    // A saved figure back on channel c, in step: the loop goes on from the place
+    // it is at, in beats (as for a new length).
+    void Bring(int c, const Figure& f) {
+        Loop& lp = loop_[c];
+        const float beats = lp.pos * kRatios[ch_[c].ratio];
+        std::copy(f.n, f.n + f.count, lp.n);
+        lp.count = f.count;
+        lp.seam = f.seam;
+        ch_[c].ratio = f.ratio;
+        pending_[c] = -1;
+        const float b = beats / kRatios[f.ratio];
+        lp.pos = b - std::floor(b);
+        Place(c);
+    }
+    // A new slot at the newest end of a ring (the oldest goes when it is full).
+    static int Push(Ring& r, int cap) {
+        if (r.count < cap) return (r.head + r.count++) % cap;
+        const int i = r.head;
+        r.head = (r.head + 1) % cap;
+        return i;
+    }
+    static int Nth(const Ring& r, int cap, int k) { return (r.head + k) % cap; } // k: from the oldest
+    // Before channel c's figure changes: save it, unless it is a version already
+    // (stepped to) or empty. Either way it is the figure as it is from now on.
+    void Save(int c) {
+        Ring& r = ver_->ring[c];
+        if (r.cur < 0 && loop_[c].count > 0) Keep(c, ver_->f[c][Push(r, kVersions)]);
+        r.cur = -1;
+        ver_->ering.cur = -1;
+    }
+    void SaveAll() {
+        Ring& r = ver_->ering;
+        bool any = false;
+        for (int c = 0; c < kChannels; ++c) any |= loop_[c].count > 0;
+        if (r.cur < 0 && any) {
+            const int i = Push(r, kEnsembleVersions);
+            for (int c = 0; c < kChannels; ++c) Keep(c, ver_->e[i][c]);
+        }
+        r.cur = -1;
+    }
+    // One version older (dir -1) or newer (+1). The first step saves the figure
+    // as it is, so stepping back to the newest finds it again.
+    void Browse(int c, int dir) {
+        Ring& r = ver_->ring[c];
+        if (r.cur < 0) {
+            Keep(c, ver_->f[c][Push(r, kVersions)]);
+            r.cur = r.count - 1;
+        }
+        const int to = std::min(std::max(r.cur + dir, 0), r.count - 1);
+        if (to == r.cur) return;
+        r.cur = to;
+        Bring(c, ver_->f[c][Nth(r, kVersions, to)]);
+        ver_->ering.cur = -1;
+    }
+    void BrowseAll(int dir) {
+        Ring& r = ver_->ering;
+        if (r.cur < 0) {
+            const int i = Push(r, kEnsembleVersions);
+            for (int c = 0; c < kChannels; ++c) Keep(c, ver_->e[i][c]);
+            r.cur = r.count - 1;
+        }
+        const int to = std::min(std::max(r.cur + dir, 0), r.count - 1);
+        if (to == r.cur) return;
+        r.cur = to;
+        const int i = Nth(r, kEnsembleVersions, to);
+        for (int c = 0; c < kChannels; ++c) {
+            Bring(c, ver_->e[i][c]);
+            ver_->ring[c].cur = -1;
+        }
+    }
+
     float Rand() {
         rng_ = rng_ * 1664525u + 1013904223u;
         return float(rng_ >> 8) * (1.f / 16777216.f);
@@ -944,6 +1070,7 @@ private:
     // instrument, in its own octave, with its own level, place and swell.
     void Copy(int from, int to) {
         if (from == to) return;
+        Save(to);
         loop_[to] = loop_[from];
         ch_[to].ratio = ch_[from].ratio;
         pending_[to] = pending_[from];
@@ -1137,6 +1264,10 @@ private:
     int ens_ = kRatioOne, pending_ens_ = -1;
     int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     int loop_hold_ = 0, loop_ch_ = 0;
+    Versions* ver_ = nullptr;
+    bool vshow_ = false, vshow_all_ = false; // stepping through versions: shown on the black keys
+    static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
+    static constexpr int kClicksPerVersion = 2;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 
