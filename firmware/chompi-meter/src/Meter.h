@@ -227,8 +227,9 @@ public:
         }
 
         // Keys: CHOMPI + white key selects a channel (tapped twice: its sound on
-        // the white keys); play + white key held listens to that channel,
-        // CHOMPI + play + white key mutes it; otherwise the key plays.
+        // the white keys); play + a tap on a white key mutes that channel (or
+        // unmutes it), play + the white key held listens to it; otherwise the
+        // key plays.
         const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
         if (!chompi) { sound_view_ = false; tap_key_ = -1; }
         // CHOMPI pressed: the keys show the players at once, not the last knob's value.
@@ -244,10 +245,7 @@ public:
             if (Pressed(i)) {
                 key_flash_[k] = 1.f;
                 if (play_held) {
-                    if (kKeys[k].white) {
-                        if (chompi) muted_[WhiteIndex(k)] ^= 1;
-                        else listen_ |= 1u << WhiteIndex(k);
-                    }
+                    if (kKeys[k].white) white_down_[WhiteIndex(k)] = 0; // tap or hold: see below
                     play_used_ = true;
                 } else if (sound_view_ && kKeys[k].white) {
                     // The sounds on the first white keys: pick one, heard at once.
@@ -356,10 +354,21 @@ public:
             play_down_ = false;
             if (!play_used_) running_ = !running_;
         }
-        // Listening lasts as long as play and the white key are held.
+        // A white key pressed with play: let go within kListenBlocks, a tap, it
+        // mutes the channel or unmutes it; held longer, it listens to it, for as
+        // long as play and the key are held.
         if (!play_held) listen_ = 0;
-        for (int k = 0; k < 25; ++k)
-            if (kKeys[k].white && !sr.State(int(kKeys[k].sw))) listen_ &= ~(1u << WhiteIndex(k));
+        for (int k = 0; k < 25; ++k) {
+            if (!kKeys[k].white) continue;
+            const int c = WhiteIndex(k);
+            if (sr.State(int(kKeys[k].sw))) {
+                if (white_down_[c] >= 0 && ++white_down_[c] == kListenBlocks && play_held) listen_ |= 1u << c;
+            } else {
+                if (white_down_[c] >= 0 && white_down_[c] < kListenBlocks) muted_[c] = !muted_[c];
+                white_down_[c] = -1;
+                listen_ &= ~(1u << c);
+            }
+        }
 
         // Loop: a press turns what was just played on the selected channel into
         // its loop, at once (CHOMPI + loop: adds to the loop). Held 2 s (the
@@ -1396,6 +1405,8 @@ private:
     bool play_down_ = false, play_used_ = false;
     bool muted_[kChannels] = {};
     uint32_t listen_ = 0;     // channels listened to (play + white key held), a bit each
+    int white_down_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}; // blocks since pressed with play, -1: not
+    static constexpr int kListenBlocks = 250; // play + white held this long: listen; shorter: a tap, mute
     bool sound_view_ = false; // the selected channel's sound on the white keys
     int tap_key_ = -1;        // the white key last tapped with CHOMPI held
     bool tap_again_ = false;  // ... and it was tapped before: the sounds on letting go
