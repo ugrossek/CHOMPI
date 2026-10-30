@@ -1,7 +1,7 @@
 # meter firmware for the CHOMPI.
-#   make            build build/METER.bin (GCC Arm 10.3-2021.10 on the PATH)
+#   make            build build/CIRCLES.bin (GCC Arm 10.3-2021.10 on the PATH)
 
-TARGET = METER
+TARGET = CIRCLES
 
 # The prebuilt libDaisy and DaisySP that come with TAPE. Rebuilding them with
 # a different compiler is what breaks the SD card, so use these.
