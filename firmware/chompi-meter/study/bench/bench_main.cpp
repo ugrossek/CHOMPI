@@ -112,8 +112,8 @@ static void Bench(const char* name, sd::Knobs k) {
         strike = std::max(strike, t.strike);
         delete v;
     }
-    // name, cycles per sample (average of three notes), worst block, strike
-    Line("v,%s,%.1f,%lu,%lu", name, double(sum / 3.f), (unsigned long)worst, (unsigned long)strike);
+    // name, tenths of a cycle per sample (average of three notes; the libc has no %f), worst block, strike
+    Line("v,%s,%lu,%lu,%lu", name, (unsigned long)(sum / 3.f * 10.f), (unsigned long)worst, (unsigned long)strike);
 }
 
 static void BenchMallet(const char* name, int preset) {
@@ -131,7 +131,7 @@ static void BenchMallet(const char* name, int preset) {
         strike = std::max(strike, t.strike);
         delete v;
     }
-    Line("m,%s,%.1f,%lu,%lu", name, double(sum / 3.f), (unsigned long)worst, (unsigned long)strike);
+    Line("m,%s,%lu,%lu,%lu", name, (unsigned long)(sum / 3.f * 10.f), (unsigned long)worst, (unsigned long)strike);
 }
 
 static void BenchFixed() {
@@ -150,7 +150,7 @@ static void BenchFixed() {
         __enable_irq();
         sink = sink + acc;
     }
-    Line("f,room,%.1f", double(float(total) / (blocks * kBlock)));
+    Line("f,room,%lu", (unsigned long)(float(total) * 10.f / (blocks * kBlock)));
     // A player's place on the circle: per sample, while the player sounds.
     meter::Seat seat;
     seat.Init(sr);
@@ -167,11 +167,11 @@ static void BenchFixed() {
         __enable_irq();
         sink = sink + l[3];
     }
-    Line("f,seat,%.1f", double(float(total) / (blocks * kBlock)));
+    Line("f,seat,%lu", (unsigned long)(float(total) * 10.f / (blocks * kBlock)));
 }
 
 static void RunAll() {
-    Line("h,%lu,%.0f,%d", (unsigned long)SystemCoreClock, double(sr), kBlock);
+    Line("h,%lu,%lu,%d", (unsigned long)SystemCoreClock, (unsigned long)sr, kBlock);
     BenchMallet("Marimba", 1);
     BenchMallet("Bronze", 3);
     BenchMallet("Gong", 6);

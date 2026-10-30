@@ -120,10 +120,11 @@ struct History {
 // it is saved, the last kVersions of each channel; before everyone's change at
 // once (clear all, a setup from the page), the whole ensemble, the last
 // kEnsembleVersions. Loop held + the wheel steps through them (with CHOMPI: the
-// ensemble's). A version is the notes and the length, not where the loop is: it
-// comes back in step, at the place the loop is now.
+// ensemble's). A version is the notes and the length, and where its loop was
+// when it was saved: it comes back where it would be had it gone on playing, so
+// its place against the other players is the one it had.
 // Plain data in SDRAM, set up in Init (no constructors run there).
-struct Figure { LoopNote n[kLoopNotes]; int count; float seam; int ratio; };
+struct Figure { LoopNote n[kLoopNotes]; int count; float seam; int ratio; float pos; uint32_t t; };
 constexpr int kVersions = 8, kEnsembleVersions = 4;
 // A ring of saved versions: head the oldest, count how many; cur the one
 // playing while stepping (-1: the figure as it is, not stepped to).
@@ -1053,19 +1054,36 @@ private:
         f.count = lp.count;
         f.seam = lp.seam;
         f.ratio = ch_[c].ratio;
+        f.pos = lp.pos;
+        f.t = now_;
     }
-    // A saved figure back on channel c, in step: the loop goes on from the place
-    // it is at, in beats (as for a new length).
+    // The same notes, length and seam (where the loop is does not matter).
+    static bool Same(const Figure& a, const Figure& b) {
+        if (a.count != b.count || a.ratio != b.ratio || a.seam != b.seam) return false;
+        for (int i = 0; i < a.count; ++i)
+            if (a.n[i].note != b.n[i].note || a.n[i].at != b.n[i].at || a.n[i].silent != b.n[i].silent) return false;
+        return true;
+    }
+    // Which of channel c's versions the figure is now, or -1.
+    int Find(int c) const {
+        const Ring& r = ver_->ring[c];
+        Figure now;
+        Keep(c, now);
+        for (int k = r.count - 1; k >= 0; --k)
+            if (Same(now, ver_->f[c][Nth(r, kVersions, k)])) return k;
+        return -1;
+    }
+    // A saved figure back on channel c, where its loop would be had it gone on
+    // playing since it was saved (at the length it had).
     void Bring(int c, const Figure& f) {
         Loop& lp = loop_[c];
-        const float beats = lp.pos * kRatios[ch_[c].ratio];
         std::copy(f.n, f.n + f.count, lp.n);
         lp.count = f.count;
         lp.seam = f.seam;
         ch_[c].ratio = f.ratio;
         pending_[c] = -1;
-        const float b = beats / kRatios[f.ratio];
-        lp.pos = b - std::floor(b);
+        const float p = f.pos + float(now_ - f.t) / LoopSamples(c);
+        lp.pos = p - std::floor(p);
         Place(c);
     }
     // A new slot at the newest end of a ring (the oldest goes when it is full).
@@ -1080,15 +1098,29 @@ private:
     // (stepped to) or empty. Either way it is the figure as it is from now on.
     void Save(int c) {
         Ring& r = ver_->ring[c];
-        if (r.cur < 0 && loop_[c].count > 0) Keep(c, ver_->f[c][Push(r, kVersions)]);
+        if (r.cur < 0 && loop_[c].count > 0 && Find(c) < 0) Keep(c, ver_->f[c][Push(r, kVersions)]);
         r.cur = -1;
         ver_->ering.cur = -1;
+    }
+    // Which of the ensemble's versions everything is now, or -1.
+    int FindAll() const {
+        const Ring& r = ver_->ering;
+        Figure now;
+        for (int k = r.count - 1; k >= 0; --k) {
+            bool same = true;
+            for (int c = 0; c < kChannels && same; ++c) {
+                Keep(c, now);
+                same = Same(now, ver_->e[Nth(r, kEnsembleVersions, k)][c]);
+            }
+            if (same) return k;
+        }
+        return -1;
     }
     void SaveAll() {
         Ring& r = ver_->ering;
         bool any = false;
         for (int c = 0; c < kChannels; ++c) any |= loop_[c].count > 0;
-        if (r.cur < 0 && any) {
+        if (r.cur < 0 && any && FindAll() < 0) {
             const int i = Push(r, kEnsembleVersions);
             for (int c = 0; c < kChannels; ++c) Keep(c, ver_->e[i][c]);
         }
@@ -1099,8 +1131,11 @@ private:
     void Browse(int c, int dir) {
         Ring& r = ver_->ring[c];
         if (r.cur < 0) {
-            Keep(c, ver_->f[c][Push(r, kVersions)]);
-            r.cur = r.count - 1;
+            r.cur = Find(c); // already a version: no new one
+            if (r.cur < 0) {
+                Keep(c, ver_->f[c][Push(r, kVersions)]);
+                r.cur = r.count - 1;
+            }
         }
         const int to = std::min(std::max(r.cur + dir, 0), r.count - 1);
         if (to == r.cur) return;
@@ -1111,9 +1146,12 @@ private:
     void BrowseAll(int dir) {
         Ring& r = ver_->ering;
         if (r.cur < 0) {
-            const int i = Push(r, kEnsembleVersions);
-            for (int c = 0; c < kChannels; ++c) Keep(c, ver_->e[i][c]);
-            r.cur = r.count - 1;
+            r.cur = FindAll();
+            if (r.cur < 0) {
+                const int i = Push(r, kEnsembleVersions);
+                for (int c = 0; c < kChannels; ++c) Keep(c, ver_->e[i][c]);
+                r.cur = r.count - 1;
+            }
         }
         const int to = std::min(std::max(r.cur + dir, 0), r.count - 1);
         if (to == r.cur) return;

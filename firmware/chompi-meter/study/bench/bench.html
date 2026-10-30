@@ -65,8 +65,8 @@ function show() {
   document.getElementById("raw").value = lines.join("\n");
   const h = lines.find(l => l.startsWith("h,")).split(",");
   const clock = +h[1], sr = +h[2], budget = clock / sr;
-  const fixed = Object.fromEntries(lines.filter(l => l.startsWith("f,")).map(l => { const p = l.split(","); return [p[1], +p[2]]; }));
-  const rows = lines.filter(l => l.startsWith("m,") || l.startsWith("v,")).map(l => { const p = l.split(","); return { today: p[0] === "m", name: p[1], avg: +p[2], worst: +p[3], strike: +p[4] }; });
+  const fixed = Object.fromEntries(lines.filter(l => l.startsWith("f,")).map(l => { const p = l.split(","); return [p[1], +p[2] / 10]; }));
+  const rows = lines.filter(l => l.startsWith("m,") || l.startsWith("v,")).map(l => { const p = l.split(","); return { today: p[0] === "m", name: p[1], avg: +p[2] / 10, worst: +p[3], strike: +p[4] }; });
   const mallet = rows.find(r => r.name === "Marimba").avg;
   // What is left for voices: 85 % of a sample's cycles (the load guard sits at 90 %),
   // minus the room, minus eight sounding players' places on the circle.
