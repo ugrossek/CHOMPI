@@ -175,7 +175,8 @@ public:
         l0_ = 2.f * sr_;
         for (int c = 0; c < kChannels; ++c) {
             ch_[c] = Channel();
-            ch_[c].preset = c % kNumClassicPresets;
+            // Players 1-14 on the instruments of set 1 in key order, 15 on the first again.
+            ch_[c].preset = kSetPresets[0][c % 14];
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
             ch_[c].place = StartPlace(c); // round the circle, 15 places
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
