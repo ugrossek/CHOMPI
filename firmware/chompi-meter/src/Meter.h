@@ -161,10 +161,7 @@ public:
             ch_[c] = Channel();
             ch_[c].preset = c % kNumMalletPresets;
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            // Round the circle: 1 in front, then outwards, neighbours on
-            // opposite sides (2 left, 3 right, 4 further left ...), 15 places.
-            const int out = (c + 1) / 2;
-            ch_[c].place = Wrap(float(c & 1 ? -out : out) / kChannels);
+            ch_[c].place = StartPlace(c); // round the circle, 15 places
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
             loop_[c].count = 0;
             loop_[c].seam = 0.f;
@@ -235,6 +232,12 @@ public:
         if (!chompi) { sound_view_ = false; tap_key_ = -1; }
         // CHOMPI pressed: the keys show the players at once, not the last knob's value.
         if (Pressed(int(Sw::KEY_26))) meter_wait_ = 0;
+        // Let go after choosing a player: its key glows on a moment, so players
+        // with the same colour (1 and 11 ...) can be told apart.
+        if ((released >> int(Sw::KEY_26)) & 1) {
+            if (chose_) sel_glow_ = kSelGlowSeconds;
+            chose_ = false;
+        }
         for (int k = 0; k < 25; ++k) {
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
@@ -267,6 +270,7 @@ public:
                         tap_key_ = k;
                     }
                     sel_ = WhiteIndex(k);
+                    chose_ = true;
                 } else if (chompi) {
                     // CHOMPI + black key: the selected channel's ratio, from the next
                     // L0 beat (its loop goes on from where it is, see ApplyPending).
@@ -275,6 +279,10 @@ public:
                     if (all_) pending_ens_ = BlackIndex(k);
                     else pending_[sel_] = BlackIndex(k);
                     if (!running_) ApplyPending(); // stopped: no beat to wait for
+                } else if (loop_down_ && !loop_chompi_ && !kKeys[k].white) {
+                    // Loop held + a black key: what was played before loop went
+                    // down, kept again with this length. Another one: again.
+                    Rekeep(loop_ch_, BlackIndex(k));
                 } else {
                     Channel& c = ch_[sel_];
                     c.last_note = kKeys[k].note;
@@ -289,10 +297,12 @@ public:
             tap_again_ = false;
         }
 
-        // Knobs 1-4.
+        // Knobs 1-4. CHOMPI + push: back to where the sound started, both of
+        // the knob's layers (as on TAPE, where it resets all of a knob's pages).
         for (int n = 0; n < 4; ++n) {
             const int inc = hw.enc[kKnobs[n].enc].Increment();
             if (inc) { Turn(n, inc, chompi); Event(kEvTurn, kIdKnob + n, inc); }
+            if (chompi && Pressed(kKnobs[n].push)) Reset(n);
         }
         // Wheel: the selected channel's octave, a step every few clicks, shown on
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
@@ -330,11 +340,16 @@ public:
         // Right knob held: show voices and load.
         show_load_ = sr.State(kKnobs[kVolume].push);
 
-        // Play, on release, unless it listened or muted (or CHOMPI was held):
-        // starts and stops all loops.
+        // Play starts all loops on the press (so a start lands where it was
+        // meant), and stops them when let go, unless it listened or muted (or
+        // CHOMPI was held). Listening only means something while they run.
         if (Pressed(int(Sw::KEY_27))) {
             play_down_ = true;
             play_used_ = chompi;
+            if (!running_ && !chompi) {
+                running_ = true;
+                play_used_ = true;
+            }
         }
         if (play_down_ && !play_held) {
             play_down_ = false;
@@ -355,12 +370,20 @@ public:
             loop_hold_ = 0;
             loop_ch_ = sel_;
             loop_chompi_ = chompi;
-            Capture(sel_, now_, chompi);
+            loop_t_ = now_;
+            loop_since_ = hist_[sel_].since;
+            loop_span_ = Span(sel_, now_);
+            loop_kept_ = Capture(sel_, now_, chompi) > 0;
         }
+        // While loop is held (a moment, so a tap does not flash them): the lengths
+        // on the black keys, for loop + a black key.
+        len_show_ = loop_down_ && !loop_chompi_ && !chompi && !vshow_ && loop_hold_ >= kLenShowBlocks;
         if (loop_down_) {
             if (!loop_held) {
                 loop_down_ = false;
                 vshow_ = false;
+                // A tap that kept nothing: say so (two dim blinks of its light).
+                if (!loop_kept_ && !loop_used_ && loop_hold_ < kTapBlocks) nokeep_ = kNoKeepSeconds;
             } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
                 if (loop_chompi_) SaveAll();
                 for (int c = 0; c < kChannels; ++c) {
@@ -572,6 +595,17 @@ public:
                 const Ring& r = vshow_all_ ? ver_->ering : ver_->ring[sel_];
                 const int b = BlackIndex(k);
                 rgb[0] = rgb[1] = rgb[2] = b < r.count ? (b == r.cur ? 1.f : .12f) : 0.f;
+            } else if (len_show_ && !kKeys[k].white) {
+                // Loop held: the lengths. The figure's own white; in the channel's
+                // colour every length long enough for what was played; the rest dim.
+                const int b = BlackIndex(k);
+                if (b == ch_[sel_].ratio) {
+                    rgb[0] = rgb[1] = rgb[2] = 1.f;
+                } else if (loop_span_ > 0.f && kRatios[b] * Beat() >= loop_span_) {
+                    for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * .45f;
+                } else {
+                    rgb[0] = rgb[1] = rgb[2] = .04f;
+                }
             } else if (show_load_) {
                 // A bar of active voices from the lowest key; green, yellow, red by
                 // load. (Before the meter: turning K6 while holding it shows the meter
@@ -620,6 +654,10 @@ public:
                 rgb[0] = rgb[1] = rgb[2] = b;
             } else {
                 for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * key_flash_[k];
+                if (sel_glow_ > 0.f && kKeys[k].white && WhiteIndex(k) == sel_) {
+                    const float g = .7f * std::min(1.f, sel_glow_ / .15f);
+                    for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], sel_col[j] * g);
+                }
             }
             if ((hint_ >> k) & 1)
                 for (float& x : rgb) x = std::max(x, hint_glow);
@@ -649,10 +687,19 @@ public:
         // and a beat each time it comes round; without one, nearly dark.
         Pth(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = loop_[sel_].count ? .25f + (running_ ? .6f * ch_flash_[sel_] : 0.f) : .03f;
-        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks)
+        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks) {
             Pth(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
-        else
-            Pth(kLoopLed, sel_col[0] * lb, sel_col[1] * lb, sel_col[2] * lb);
+        } else if (nokeep_ > 0.f) {
+            // Nothing to keep: two dim white blinks.
+            const float w = std::fmod(kNoKeepSeconds - nokeep_, .3f) < .15f ? .35f : 0.f;
+            Pth(kLoopLed, w, w, w);
+        } else {
+            const float b = std::max(lb, kept_flash_);
+            Pth(kLoopLed, sel_col[0] * b, sel_col[1] * b, sel_col[2] * b);
+        }
+        kept_flash_ *= std::exp(-dt / .2f);
+        nokeep_ = std::max(nokeep_ - dt, 0.f);
+        sel_glow_ = std::max(sel_glow_ - dt, 0.f);
         fill_led_data();
 
         const float fade = std::exp(-dt / .15f);
@@ -853,7 +900,7 @@ private:
 
     // Loop pressed at time t: the notes played on channel c in the loop length
     // before t, and since the last loop press, become its loop (or join it).
-    void Capture(int c, uint32_t t, bool add) {
+    int Capture(int c, uint32_t t, bool add, bool save = true) {
         History& h = hist_[c];
         Loop& lp = loop_[c];
         const float len = LoopSamples(c);
@@ -872,9 +919,12 @@ private:
             if (n < kLoopNotes) got[n++] = ln;
             else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = ln; }
         }
-        if (n == 0) return; // nothing played: the loop stays as it is
-        Save(c);
+        if (n == 0) return 0; // nothing played: the loop stays as it is
+        if (save) Save(c);
         h.since = t;
+        // Kept: the loop light flashes in the channel's colour, the notes once across the keys.
+        kept_flash_ = 1.f;
+        for (int i = 0; i < n; ++i) FlashNote(got[i].note);
         if (!add) lp.count = 0;
         if (lp.count == 0) Seam(c, got, n);
         for (int i = 0; i < n; ++i) {
@@ -883,6 +933,40 @@ private:
                 if (lp.n[j].note == got[i].note && !lp.n[j].silent && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
             if (!twin && lp.count < kLoopNotes) lp.n[lp.count++] = got[i];
         }
+        return n;
+    }
+
+    // Loop held + a black key: the playing before loop went down, kept again
+    // with that length (it replaces what this hold kept; the version saved by
+    // the hold's first keep stays the one before).
+    void Rekeep(int c, int ratio) {
+        loop_used_ = true; // not holding to clear
+        const int was = ch_[c].ratio;
+        hist_[c].since = loop_since_;
+        ch_[c].ratio = ratio;
+        pending_[c] = -1;
+        if (Capture(c, loop_t_, false, !loop_kept_) > 0) {
+            loop_kept_ = true;
+            Place(c);
+        } else {
+            ch_[c].ratio = was;
+            nokeep_ = kNoKeepSeconds;
+        }
+    }
+
+    // How far back the playing on channel c reaches at time t (since its last
+    // keep, at most the longest length): a length fits when it is this long.
+    float Span(int c, uint32_t t) const {
+        const History& h = hist_[c];
+        const float longest = Beat() * kRatios[kNumRatios - 1];
+        float span = 0.f;
+        for (int i = 0; i < h.count; ++i) {
+            const Played& e = h.e[(h.head - h.count + i + kHistory) % kHistory];
+            if (int32_t(e.t - h.since) <= 0 || int32_t(t - e.t) < 0) continue;
+            const float ago = float(t - e.t);
+            if (ago < longest) span = std::max(span, ago);
+        }
+        return span;
     }
 
     // A new loop starts at its seam: the first note after the longest silence.
@@ -1181,6 +1265,48 @@ private:
         Update(sel_);
     }
 
+    // CHOMPI + push: the knob's two layers as the instrument has them (K4: the
+    // level and the place at power-on). On all: everyone's shifts to none, K4 the
+    // ensemble's level and the circle's size to the middle.
+    void Reset(int knob) {
+        if (all_) {
+            if (knob == 3) {
+                gain_ = 1.f;
+                size_ = 1.f;
+                PlaceAll(false);
+                ShowMeter(kMeterBar, .5f, .5f, true);
+                return;
+            }
+            (knob == 0 ? off_strike_ : knob == 1 ? off_bright_ : off_decay_) = 0.f;
+            (knob == 0 ? off_shimmer_ : knob == 1 ? off_variation_ : off_buzz_) = 0.f;
+            ShowMeter(kMeterCentre, 0.f, -1.f, true);
+            UpdateAll();
+            return;
+        }
+        Channel& c = ch_[sel_];
+        const MalletParams& o = kMalletPresets[c.preset].p;
+        if (knob == 3) {
+            c.level = Channel().level;
+            c.place = StartPlace(sel_);
+            Place(sel_, false);
+            ShowMeter(kMeterBar, c.level, c.level);
+            return;
+        }
+        MalletParams& p = c.p;
+        if (knob == 0) { p.strike = o.strike; p.shimmer = o.shimmer; }
+        if (knob == 1) { p.brightness = o.brightness; p.variation = o.variation; }
+        if (knob == 2) { p.decay = o.decay; p.buzz = o.buzz; }
+        const float v = knob == 0 ? p.strike : knob == 1 ? p.brightness : p.decay;
+        ShowMeter(kMeterBar, v, v);
+        Update(sel_);
+    }
+    // Where channel c stands at power-on: 1 in front, then outwards round the
+    // circle, neighbours on opposite sides (2 left, 3 right, 4 further left ...).
+    static float StartPlace(int c) {
+        const int out = (c + 1) / 2;
+        return Wrap(float(c & 1 ? -out : out) / kChannels);
+    }
+
     static void Offset(float& off, float d) { off = std::min(std::max(off + d, -.5f), .5f); }
 
     // Clicks that only count every few: a step (+1 or -1) once enough have
@@ -1265,6 +1391,15 @@ private:
     int pending_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     int loop_hold_ = 0, loop_ch_ = 0;
     Versions* ver_ = nullptr;
+    uint32_t loop_t_ = 0, loop_since_ = 0; // when loop went down; the channel's since before it
+    float loop_span_ = 0.f;                // how far back the playing reached then, in samples
+    bool loop_kept_ = false;               // this hold has kept a figure
+    bool len_show_ = false;                // the lengths on the black keys (loop held)
+    bool chose_ = false;                   // a player was chosen in this CHOMPI hold
+    float kept_flash_ = 0.f, nokeep_ = 0.f, sel_glow_ = 0.f; // LED feedback, seconds / brightness
+    static constexpr int kLenShowBlocks = 150; // loop held this long before the lengths show
+    static constexpr int kTapBlocks = 400;     // a loop press shorter than this is a tap
+    static constexpr float kNoKeepSeconds = .6f, kSelGlowSeconds = .5f;
     bool vshow_ = false, vshow_all_ = false; // stepping through versions: shown on the black keys
     static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
     static constexpr int kClicksPerVersion = 2;
