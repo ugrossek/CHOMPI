@@ -51,13 +51,15 @@ static const MalletPreset kMalletPresets[] = {
 static constexpr int kNumMalletPresets = sizeof(kMalletPresets) / sizeof(kMalletPresets[0]);
 static constexpr int kNumClassicPresets = 10; // today's ten, all on the mallet voice
 
-// The instruments on the white keys, a set at a time (chosen on the black keys
-// in the instrument view): the ensemble from the sound study, and today's ten.
+// The instruments on the white keys, a set at a time (with more than one, chosen
+// on the black keys in the instrument view). For now one: the ensemble from the
+// sound study. Today's ten stay in the firmware (a page's lesson can still set
+// them up), the second set to come back once the new ones are chosen:
+//     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1}
 // -1: nothing on that key.
-static constexpr int kSets = 2;
+static constexpr int kSets = 1;
 static const int8_t kSetPresets[kSets][15] = {
     {1, 10, 11, 12, 13, 14, 2, 15, 16, 17, 18, 19, 20, 21, -1},
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1},
 };
 
 } // namespace meter

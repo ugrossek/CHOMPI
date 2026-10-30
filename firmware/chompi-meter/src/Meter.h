@@ -274,8 +274,8 @@ public:
                         NoteOn(sel_, c.last_note + 12 * c.octave);
                     }
                 } else if (sound_view_) {
-                    // The sets on the black keys, from the lowest.
-                    if (BlackIndex(k) < kSets) view_set_ = BlackIndex(k);
+                    // The sets on the black keys, from the lowest (with more than one).
+                    if (kSets > 1 && BlackIndex(k) < kSets) view_set_ = BlackIndex(k);
                 } else if (chompi && kKeys[k].white) {
                     // A second white key while one is still held: copy that channel's
                     // pattern here. The same key tapped twice while CHOMPI stays
@@ -674,7 +674,7 @@ public:
             } else if (sound_view_) {
                 // The sets on the black keys: the one shown bright.
                 const int b = BlackIndex(k);
-                if (b < kSets) rgb[0] = rgb[1] = rgb[2] = b == view_set_ ? 1.f : .1f;
+                if (kSets > 1 && b < kSets) rgb[0] = rgb[1] = rgb[2] = b == view_set_ ? 1.f : .1f;
             } else if ((play_down_ || chompi) && kKeys[k].white) {
                 // The channels: each white key in its channel's colour, flashing on
                 // its notes. CHOMPI: the selected one bright; play: the ones
