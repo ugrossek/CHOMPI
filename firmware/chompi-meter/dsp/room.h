@@ -27,9 +27,11 @@ public:
             pos_[i] = 0;
             lp_[i] = 0.f;
         }
-        // Early reflections: one line, taps 9 .. 37 ms.
+        // Early reflections: a line per side, taps 9 .. 37 ms.
         er_len_ = size_t(.04f * sample_rate);
-        er_ = mem + used;
+        er_l_ = mem + used;
+        used += er_len_;
+        er_r_ = mem + used;
         used += er_len_;
         er_pos_ = 0;
         for (size_t i = 0; i < used; ++i) mem[i] = 0.f;
@@ -46,21 +48,22 @@ public:
     // 0 bright .. 1 dark: highs die faster than lows, like wood and curtains.
     void SetDamping(float d) { damp_ = .2f + .6f * d; }
 
-    // In: the dry signal. Out: the wet signal only.
+    // In: what each side sends. Out: the wet signal only.
+    // Each side keeps its own reflections and feeds its own half of the network,
+    // so a player on the left is heard in the room on the left too.
     void Process(float in_l, float in_r, float* out_l, float* out_r) {
-        const float x = (in_l + in_r) * .5f;
-
-        er_[er_pos_] = x;
-        auto er = [&](float ms) {
+        er_l_[er_pos_] = in_l;
+        er_r_[er_pos_] = in_r;
+        auto er = [&](const float* line, float ms) {
             size_t ago = size_t(ms * .001f * sr_);
             size_t i = er_pos_ + er_len_ - ago;
             if (i >= er_len_) i -= er_len_;
-            return er_[i];
+            return line[i];
         };
-        // The first reflection reaches both sides at once (an earlier one on one
-        // side would pull the whole ensemble that way); the later ones differ.
-        const float el = .45f * er(9.f) + .35f * er(17.f) + .25f * er(29.f);
-        const float erv = .45f * er(9.f) + .3f * er(23.f) + .3f * er(37.f);
+        // The first reflection comes at the same time on both sides (an earlier
+        // one on one side would pull the whole ensemble that way); the later ones differ.
+        const float el = .45f * er(er_l_, 9.f) + .35f * er(er_l_, 17.f) + .25f * er(er_l_, 29.f);
+        const float erv = .45f * er(er_r_, 9.f) + .3f * er(er_r_, 23.f) + .3f * er(er_r_, 37.f);
         if (++er_pos_ >= er_len_) er_pos_ = 0;
 
         // The network: read, damp, mix (Householder), feed back with the input.
@@ -74,7 +77,8 @@ public:
         const float h = sum * (2.f / kLines);
         float wl = 0.f, wr = 0.f;
         for (int i = 0; i < kLines; ++i) {
-            const float in = (i & 1 ? -1.f : 1.f) * (x * .35f + (i & 2 ? el : erv) * .3f);
+            // Even lines come out on the left, odd ones on the right: each side feeds its own.
+            const float in = (i & 2 ? -1.f : 1.f) * ((i & 1 ? in_r : in_l) * .35f + (i & 1 ? erv : el) * .3f);
             buf_[i][pos_[i]] = y[i] - h + in;
             if (++pos_[i] >= len_[i]) pos_[i] = 0;
             if (i & 1) wr += y[i] * (i & 2 ? 1.f : -1.f);
@@ -88,7 +92,7 @@ private:
     float* buf_[kLines] = {};
     size_t len_[kLines] = {}, pos_[kLines] = {};
     float g_[kLines] = {}, lp_[kLines] = {};
-    float* er_ = nullptr;
+    float *er_l_ = nullptr, *er_r_ = nullptr;
     size_t er_len_ = 1, er_pos_ = 0;
     float sr_ = 48000.f, damp_ = .5f;
 };

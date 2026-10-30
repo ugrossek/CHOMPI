@@ -181,16 +181,18 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     /* The room knob also sets how much: none at 0, twice the matched level at 1. */
     const float wet = 2.f * room * kRoomWet;
 
-    float l[64], r[64];
+    float l[64], r[64], sl[64], sr[64];
     std::fill(l, l + size, 0.f);
     std::fill(r, r + size, 0.f);
-    instrument.Process(l, r, size);
+    std::fill(sl, sl + size, 0.f);
+    std::fill(sr, sr + size, 0.f);
+    instrument.Process(l, r, sl, sr, size);
 
     const float vol = instrument.Volume();
     for(size_t i = 0; i < size; i++)
     {
         float wl, wr;
-        room_rv.Process(l[i], r[i], &wl, &wr);
+        room_rv.Process(sl[i], sr[i], &wl, &wr);
         l[i] += wet * wl;
         r[i] += wet * wr;
 
