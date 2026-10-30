@@ -26,10 +26,13 @@ public:
         m_.Init(sample_rate, seed);
     }
 
-    // The instruments that sound on (breath, voice, bow, tape): struck again,
-    // they would start over from silence, a click; so a repeat goes to another
-    // voice and this one fades out under it (Fade).
-    static bool Sustained(int engine) { return engine == kEngSiku || engine == kEngVoices || engine == kEngBowed || engine == kEngTape; }
+    // The instruments that sound on (breath, voice, bow, tape) and the piano:
+    // struck again, they would start over from silence, a click, or (the
+    // piano's strings) pile up; so a repeat goes to another voice and this one
+    // fades out under it (Fade).
+    static bool Sustained(int engine) {
+        return engine == kEngSiku || engine == kEngVoices || engine == kEngBowed || engine == kEngTape || engine == kEngPiano;
+    }
     int Engine() const { return engine_; }
 
     void Strike(float freq, const MalletPreset& preset, const MalletParams& p, float velocity) {
@@ -49,20 +52,17 @@ public:
     // The knobs reach a ringing mallet at once; a study voice takes them with its next note.
     void SetParams(const MalletParams& p) { if (engine_ == kEngMallet) m_.SetParams(p); }
     float Process() {
-        if (engine_ == kEngMallet) return m_.Process();
-        float y = s_->Process();
+        float y = engine_ == kEngMallet ? m_.Process() : s_->Process();
         if (fade_step_ > 0.f) {
             fade_ -= fade_step_;
-            if (fade_ <= 0.f) { fade_ = 0.f; fade_step_ = 0.f; s_->active = false; }
+            if (fade_ <= 0.f) { fade_ = 0.f; fade_step_ = 0.f; Stop(); }
             y *= fade_;
         }
         return y;
     }
     // Out within `seconds`, smoothly.
-    void Fade(float seconds) {
-        if (engine_ == kEngMallet) { m_.Stop(); return; }
-        fade_step_ = 1.f / std::max(seconds * sr_, 1.f);
-    }
+    void Fade(float seconds) { if (Active()) fade_step_ = 1.f / std::max(seconds * sr_, 1.f); }
+    bool Fading() const { return fade_step_ > 0.f; }
     bool Active() const { return engine_ == kEngMallet ? m_.Active() : s_->active; }
     void Stop() { if (engine_ == kEngMallet) m_.Stop(); else s_->active = false; }
 

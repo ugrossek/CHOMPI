@@ -178,7 +178,7 @@ public:
             // Players 1-14 on the instruments of set 1 in key order, 15 on the first again.
             ch_[c].preset = kSetPresets[0][c % 14];
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            ch_[c].place = StartPlace(c); // round the circle, 15 places
+            ch_[c].place = StartPlace(c); // in an arc in front, 15 places
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
             loop_[c].count = 0;
             loop_[c].seam = 0.f;
@@ -482,7 +482,14 @@ public:
             const float level = c.level * gain_ * preset_gain_[c.preset] * gate_[s.ch];
             float* bus = bus_[s.ch];
             if (!busy_[s.ch]) { std::fill(bus, bus + n, 0.f); busy_[s.ch] = true; }
-            for (size_t i = 0; i < n; ++i) bus[i] += s.v.Process() * level;
+            float peak = 0.f;
+            for (size_t i = 0; i < n; ++i) {
+                const float y = s.v.Process();
+                peak = std::max(peak, std::fabs(y));
+                bus[i] += y * level;
+            }
+            // How loud it sounds, for the keys (the instrument's own loudness, not the channel's level).
+            s.energy = s.v.Active() ? peak * preset_gain_[c.preset] : 0.f;
         }
         // Each channel from its place on the circle; a block after its last
         // voice it still runs, so the ear delay and the filters ring out.
@@ -627,6 +634,15 @@ public:
         // times a second: quicker than any beat, so it never reads as one.
         const float hint_glow = std::fmod(led_time_, .25f) < .125f ? .8f : 0.f;
         hint_glow_ = hint_glow;
+        // How loud each key of the selected channel sounds now, 0..1 (a square
+        // root, so a fading tail stays visible).
+        float key_energy[25] = {};
+        for (const Slot& sl : slot_) {
+            if (sl.ch != sel_ || sl.energy <= 0.f) continue;
+            const int note = sl.note - 12 * ch_[sel_].octave;
+            for (int k = 0; k < 25; ++k)
+                if (kKeys[k].note == note) key_energy[k] = std::max(key_energy[k], std::sqrt(std::min(1.f, sl.energy / kKeyFull)));
+        }
 
         for (int k = 0; k < 25; ++k) {
             float rgb[3] = {0.f, 0.f, 0.f};
@@ -702,7 +718,9 @@ public:
                 const float b = OctaveKey(k) == ch_[sel_].octave ? 1.f : .1f;
                 rgb[0] = rgb[1] = rgb[2] = b;
             } else {
-                for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * key_flash_[k];
+                // The selected channel's notes glow as long as they sound, as bright as they are loud.
+                const float e = std::max(key_flash_[k], key_energy[k]);
+                for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * e;
                 if (sel_glow_ > 0.f && kKeys[k].white && WhiteIndex(k) == sel_) {
                     const float g = .7f * std::min(1.f, sel_glow_ / .15f);
                     for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], sel_col[j] * g);
@@ -759,7 +777,7 @@ public:
     }
 
 private:
-    struct Slot { AnyVoice v; int ch, note; uint32_t age = 0; };
+    struct Slot { AnyVoice v; int ch, note; uint32_t age = 0; float energy = 0.f; };
     // The set a preset is in: the one shown, if it is there, else the first.
     static int SetOf(int preset, int shown) {
         for (int i = 0; i < 15; ++i) if (kSetPresets[shown][i] == preset) return shown;
@@ -883,6 +901,8 @@ private:
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
     static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
     static constexpr float kHandOverSeconds = .05f; // a sustained note struck again: the old one fades this fast
+    static constexpr int kNotesPerChannel = 6;      // sounding at once on one channel, at most
+    static constexpr float kKeyFull = .3f;          // a voice this loud lights its key fully
     static constexpr float kListenOthers = .25f;   // the others while listening: -12 dB
 
     // C# D# F# G# A#, the five lowest black keys, show octaves -2 .. +2.
@@ -1089,7 +1109,7 @@ private:
             n.jit = jit_max * (Rand() + Rand() - 1.f);
             if (Rand() < skip) continue;
             NoteOn(c, n.note + 12 * ch_[c].octave, swell_[c] * (1.f - feel * .35f * Rand()));
-            if (c == sel_) FlashNote(n.note);
+            // (Its key glows with the sound: see DrawLeds.)
         }
     }
 
@@ -1270,6 +1290,16 @@ private:
         // one fading out under it.
         int pick = -1, fading = -1;
         const bool sustained = AnyVoice::Sustained(kMalletPresets[ch_[c].preset].engine);
+        // At most kNotesPerChannel sounding on a channel: the oldest fades out
+        // under the new one (old tails would cost the CPU, not the figure).
+        int count = 0, oldest = -1;
+        for (int v = 0; v < kVoices; ++v) {
+            const Slot& s = slot_[v];
+            if (!s.v.Active() || s.v.Fading() || s.ch != c || s.note == note) continue;
+            count++;
+            if (oldest < 0 || s.age < slot_[oldest].age) oldest = v;
+        }
+        if (count >= kNotesPerChannel) slot_[oldest].v.Fade(kHandOverSeconds);
         for (int v = 0; v < kVoices && pick < 0 && fading < 0; ++v)
             if (slot_[v].v.Active() && slot_[v].ch == c && slot_[v].note == note) {
                 if (sustained && AnyVoice::Sustained(slot_[v].v.Engine())) { slot_[v].v.Fade(kHandOverSeconds); fading = v; }
@@ -1391,12 +1421,14 @@ private:
         ShowMeter(kMeterBar, v, v);
         Update(sel_);
     }
-    // Where channel c stands at power-on: 1 in front, then outwards round the
-    // circle, neighbours on opposite sides (2 left, 3 right, 4 further left ...).
+    // Where channel c stands at power-on: 1 in front, then outwards in an arc
+    // in front, neighbours on opposite sides (2 left, 3 right, 4 further left
+    // ...), the outermost a fifth of a turn to either side.
     static float StartPlace(int c) {
         const int out = (c + 1) / 2;
-        return Wrap(float(c & 1 ? -out : out) / kChannels);
+        return Wrap(float(c & 1 ? -out : out) * kStartArc / float(kChannels / 2));
     }
+    static constexpr float kStartArc = .2f;
 
     static void Offset(float& off, float d) { off = std::min(std::max(off + d, -.5f), .5f); }
 
@@ -1440,7 +1472,7 @@ private:
     bool all_ = false, show_load_ = false;
     float off_bright_ = 0.f, off_decay_ = 0.f;
     float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
-    float room_ = .5f, volume_ = .8f, load_ = 0.f;
+    float room_ = .5f, volume_ = .4f, load_ = 0.f; // the volume at power-on: 6 dB under the old .8
     uint32_t shed_ = 0; // voices the load guard has cut
     float size_ = 1.f;  // the circle's size: 0 all in the middle, close; 1 as placed; 2 wider and further away
     float gain_ = 1.f;  // the ensemble's level, on every channel's own (0..2)

@@ -44,7 +44,7 @@ static const MalletPreset kMalletPresets[] = {
     {"Bowed glass",  {0.f, 0.45f, 0.50f, 0.25f, 0.30f, 0.30f, 0.00f, 0}, -33.3f, kEngBowed},
     {"Voices",       {0.f, 0.50f, 0.25f, 0.50f, 0.35f, 0.30f, 0.40f, 0}, -17.3f, kEngVoices},
     {"Siku",         {0.f, 0.45f, 0.30f, 0.60f, 0.35f, 0.30f, 0.15f, 0}, -9.8f, kEngSiku},
-    {"Pulse piano",  {0.f, 0.50f, 0.50f, 0.50f, 0.25f, 0.10f, 0.00f, 0}, +27.9f, kEngPiano},
+    {"Pulse piano",  {0.f, 0.50f, 0.50f, 0.50f, 0.25f, 0.10f, 0.00f, 0}, +21.9f, kEngPiano},
     {"Hands",        {0.f, 0.50f, 0.30f, 0.50f, 0.40f, 0.30f, 0.20f, 0}, +5.4f, kEngHands},
     {"Tape",         {0.f, 0.40f, 0.50f, 0.30f, 0.40f, 0.30f, 0.30f, 0}, -7.0f, kEngTape},
 };
@@ -59,7 +59,7 @@ static constexpr int kNumClassicPresets = 10; // today's ten, all on the mallet 
 // -1: nothing on that key.
 static constexpr int kSets = 1;
 static const int8_t kSetPresets[kSets][15] = {
-    {1, 10, 11, 12, 13, 14, 2, 15, 16, 17, 18, 19, 20, 21, -1},
+    {1, 10, 11, 12, 13, 14, 2, 15, 16, 6, 18, 19, 7, 21, -1}, // voices and hands out: gong, felt
 };
 
 } // namespace meter
