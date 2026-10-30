@@ -17,7 +17,7 @@ LDSCRIPT = chompi_sram.lds
 CPP_SOURCES = meter_main.cpp \
 	board/encoder.cpp
 
-C_INCLUDES += -Iboard
+C_INCLUDES += -Iboard -I$(CHOMPI_LIBS)/libDaisy/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
 
 LIBDAISY_DIR = $(CHOMPI_LIBS)/libDaisy
 DAISYSP_DIR = $(CHOMPI_LIBS)/DaisySP

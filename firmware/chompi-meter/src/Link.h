@@ -15,6 +15,9 @@
 
 #include <cstring>
 
+#include "usbd_cdc.h"
+extern USBD_HandleTypeDef hUsbDeviceHS; // libDaisy's USB device (the CHOMPI's USB-MIDI)
+
 namespace meter {
 
 class Link {
@@ -22,6 +25,26 @@ public:
     static constexpr uint8_t kVersion = 1;
 
     void Poll(chompi::Hardware& hw, Instrument& in, uint32_t now) {
+        // USB that has got stuck comes back by itself. A receive the USB stack
+        // switched off (an overflow) starts again; a send that never finishes
+        // (the cable was pulled while one was on its way, and the USB core never
+        // heard of it) restarts the USB device, as TAPE does when a send fails:
+        // the computer then finds the CHOMPI anew.
+        hw.usb_midi.Listen();
+        const auto* cdc = static_cast<const USBD_CDC_HandleTypeDef*>(hUsbDeviceHS.pClassData);
+        if (hw.usb_midi_active && cdc && cdc->TxState != 0) {
+            if (!stuck_t_) stuck_t_ = now | 1;
+            else if (now - stuck_t_ > kStuckMs && now - reset_t_ > kResetMs) {
+                hw.ResetUSBMidi();
+                hw.usb_midi.Listen();
+                reset_t_ = now;
+                stuck_t_ = 0;
+                active_ = false;
+            }
+        } else {
+            stuck_t_ = 0;
+        }
+
         while (hw.usb_midi.HasEvents()) {
             daisy::MidiEvent e = hw.usb_midi.PopEvent();
             if (e.type == daisy::SystemCommon && e.sc_type == daisy::SystemExclusive)
@@ -74,6 +97,8 @@ public:
 
 private:
     static constexpr uint32_t kQuietMs = 3000; // no hello for so long: the page is gone
+    static constexpr uint32_t kStuckMs = 300;  // a send still on its way after so long: stuck
+    static constexpr uint32_t kResetMs = 2000; // at most one USB restart so often
     static constexpr uint32_t kSendMs = 10;    // a message bundle at most so often
     static constexpr uint32_t kAgainMs = 500;  // the state at least so often
     static constexpr int kChannelsPerSend = 3;
@@ -113,6 +138,7 @@ private:
     }
 
     bool active_ = false;
+    uint32_t stuck_t_ = 0, reset_t_ = 0;
     uint32_t hello_ = 0, sent_ = 0, state_t_ = 0, clock_t_ = 0;
     uint8_t out_[kOut];
     int n_ = 0;
