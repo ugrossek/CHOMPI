@@ -382,6 +382,7 @@ public:
             loop_chompi_ = chompi;
             loop_t_ = now_;
             loop_since_ = hist_[sel_].since;
+            loop_ratio_ = ch_[sel_].ratio;
             loop_span_ = Span(sel_, now_);
             loop_kept_ = Capture(sel_, now_, chompi) > 0;
         }
@@ -607,11 +608,13 @@ public:
                 rgb[0] = rgb[1] = rgb[2] = b < r.count ? (b == r.cur ? 1.f : .12f) : 0.f;
             } else if (len_show_ && !kKeys[k].white) {
                 // Loop held: the lengths. The figure's own white; in the channel's
-                // colour every length long enough for what was played; the rest dim.
+                // colour every shorter one (what was kept wraps into it) and every
+                // longer one that reaches back far enough for what was played;
+                // the rest dim.
                 const int b = BlackIndex(k);
                 if (b == ch_[sel_].ratio) {
                     rgb[0] = rgb[1] = rgb[2] = 1.f;
-                } else if (loop_span_ > 0.f && kRatios[b] * Beat() >= loop_span_) {
+                } else if (loop_span_ > 0.f && (kRatios[b] <= kRatios[loop_ratio_] || kRatios[b] * Beat() >= loop_span_)) {
                     for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * .45f;
                 } else {
                     rgb[0] = rgb[1] = rgb[2] = .04f;
@@ -912,30 +915,36 @@ private:
 
     // Loop pressed at time t: the notes played on channel c in the loop length
     // before t, and since the last loop press, become its loop (or join it).
-    int Capture(int c, uint32_t t, bool add, bool save = true) {
+    // window: how far back (0: the loop's length); longer than the loop, the
+    // older notes wrap round into it.
+    int Capture(int c, uint32_t t, bool add, bool save = true, float window = 0.f) {
         History& h = hist_[c];
         Loop& lp = loop_[c];
         const float len = LoopSamples(c);
-        // A new loop begins where its window began, len before t: at t it is back
-        // at its beginning. Added to, it goes on from where it is.
+        // A new loop begins where its window began, window before t. Added to,
+        // it goes on from where it is.
         const bool fresh = !add || lp.count == 0;
+        if (!fresh || window <= 0.f) window = len;
         float pos = lp.pos;
         if (fresh) {
-            pos = float(now_ - t) / len;
+            pos = (float(now_ - t) + window) / len;
             pos -= std::floor(pos);
         }
         LoopNote got[kLoopNotes];
         int n = 0;
         for (int i = 0; i < h.count; ++i) {
             const Played& e = h.e[(h.head - h.count + i + kHistory) % kHistory];
-            if (int32_t(e.t - h.since) <= 0 || int32_t(t - e.t) < 0 || float(t - e.t) >= len) continue;
-            // Its place: as far behind the loop's position now as it was played before now.
+            if (int32_t(e.t - h.since) <= 0 || int32_t(t - e.t) < 0 || float(t - e.t) >= window) continue;
+            // Its place: as far behind the loop's position now as it was played
+            // before now. A new loop: its time from the window's beginning, in
+            // beats, wrapped round where the window is longer than the loop.
             float ph = pos - float(now_ - e.t) / len;
             ph -= std::floor(ph);
+            const float at = fresh ? (window - float(t - e.t)) / Beat() : ph * kRatios[ch_[c].ratio];
             // Kept without the channel's octave: the loop follows the octave, as it
             // follows the other settings.
             const int note = e.note - 12 * ch_[c].octave;
-            const LoopNote ln = {ph * kRatios[ch_[c].ratio], note, ph};
+            const LoopNote ln = {at, note, ph};
             if (n < kLoopNotes) got[n++] = ln;
             else { std::copy(got + 1, got + kLoopNotes, got); got[kLoopNotes - 1] = ln; }
         }
@@ -949,7 +958,7 @@ private:
             lp.count = 0;
             lp.pos = pos;
             // Where the window began after an L0 beat.
-            float b = l0_pos_ - (float(now_ - t) + len) / Beat();
+            float b = l0_pos_ - (float(now_ - t) + window) / Beat();
             lp.seam = b - std::floor(b);
         }
         for (int i = 0; i < n; ++i) {
@@ -963,14 +972,17 @@ private:
 
     // Loop held + a black key: the playing before loop went down, kept again
     // with that length (it replaces what this hold kept; the version saved by
-    // the hold's first keep stays the one before).
+    // the hold's first keep stays the one before). Shorter than the figure's
+    // own length: what loop kept (its own length back from the press) wraps
+    // into it, as a new length would; longer: it reaches back that far.
     void Rekeep(int c, int ratio) {
         loop_used_ = true; // not holding to clear
         const int was = ch_[c].ratio;
         hist_[c].since = loop_since_;
         ch_[c].ratio = ratio;
         pending_[c] = -1;
-        if (Capture(c, loop_t_, false, !loop_kept_) > 0) {
+        const float window = Beat() * std::max(kRatios[ratio], kRatios[loop_ratio_]);
+        if (Capture(c, loop_t_, false, !loop_kept_, window) > 0) {
             loop_kept_ = true;
             Place(c);
         } else {
@@ -1416,6 +1428,7 @@ private:
     int loop_hold_ = 0, loop_ch_ = 0;
     Versions* ver_ = nullptr;
     uint32_t loop_t_ = 0, loop_since_ = 0; // when loop went down; the channel's since before it
+    int loop_ratio_ = kRatioOne;           // the selected channel's length then
     float loop_span_ = 0.f;                // how far back the playing reached then, in samples
     bool loop_kept_ = false;               // this hold has kept a figure
     bool len_show_ = false;                // the lengths on the black keys (loop held)
