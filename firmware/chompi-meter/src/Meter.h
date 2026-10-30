@@ -881,6 +881,7 @@ private:
     static constexpr int kClicksPerOctave = 4;
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
     static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
+    static constexpr float kHandOverSeconds = .05f; // a sustained note struck again: the old one fades this fast
     static constexpr float kListenOthers = .25f;   // the others while listening: -12 dB
 
     // C# D# F# G# A#, the five lowest black keys, show octaves -2 .. +2.
@@ -1263,16 +1264,22 @@ private:
     }
 
     void NoteOn(int c, int note, float velocity = 1.f) {
-        // The same key on the same channel strikes its ringing voice again.
-        int pick = -1;
-        for (int v = 0; v < kVoices && pick < 0; ++v)
-            if (slot_[v].v.Active() && slot_[v].ch == c && slot_[v].note == note) pick = v;
+        // The same key on the same channel strikes its ringing voice again; an
+        // instrument that sounds on hands over to a new voice instead, the old
+        // one fading out under it.
+        int pick = -1, fading = -1;
+        const bool sustained = AnyVoice::Sustained(kMalletPresets[ch_[c].preset].engine);
+        for (int v = 0; v < kVoices && pick < 0 && fading < 0; ++v)
+            if (slot_[v].v.Active() && slot_[v].ch == c && slot_[v].note == note) {
+                if (sustained && AnyVoice::Sustained(slot_[v].v.Engine())) { slot_[v].v.Fade(kHandOverSeconds); fading = v; }
+                else pick = v;
+            }
         for (int v = 0; v < kVoices && pick < 0; ++v)
             if (!slot_[v].v.Active()) pick = v;
-        if (pick < 0) { // steal the oldest
-            pick = 0;
-            for (int v = 1; v < kVoices; ++v)
-                if (slot_[v].age < slot_[pick].age) pick = v;
+        if (pick < 0) { // steal the oldest (not the one fading out)
+            pick = fading == 0 ? 1 : 0;
+            for (int v = 0; v < kVoices; ++v)
+                if (v != fading && slot_[v].age < slot_[pick].age) pick = v;
         }
         Slot& s = slot_[pick];
         note_flash_[c] = 1.f;
