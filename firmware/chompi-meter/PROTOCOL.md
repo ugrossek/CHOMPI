@@ -63,7 +63,9 @@ meter on the keys 16, reboot armed 32.
 
 **event** kinds: 1 press, 2 release, 3 turn (value: clicks + 64), 4 switch
 (value 1: all), 5 L0 beat (value: count mod 64), 6 note (id: channel, value:
-the note sounding, octave included; played by hand or by the loop).
+the note sounding, octave included; played by hand or by the loop), 7 leave
+(CHOMPI + play while hinted: the player wants to leave the lesson; the hint
+lights stay out until the page sends a hint of none, then follow it again).
 
 ## Control ids
 

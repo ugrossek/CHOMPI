@@ -345,6 +345,13 @@ public:
         if (Pressed(int(Sw::KEY_27))) {
             play_down_ = true;
             play_used_ = chompi;
+            // CHOMPI + play while a page guides: leave the lesson. Its lights go
+            // out until the page has stopped guiding (and starts again).
+            if (chompi && hint_) {
+                hint_ = 0;
+                hint_off_ = true;
+                Event(kEvLeave, 0, 0);
+            }
             if (!running_ && !chompi) {
                 running_ = true;
                 play_used_ = true;
@@ -491,7 +498,7 @@ public:
     // Controls by id: the 25 keys low to high (0-24), CHOMPI 25, play 26, loop
     // 27, the knobs K1-K4 28-31, the wheel 32, K6 33, the switch 34.
     static constexpr int kIdChompi = 25, kIdKnob = 28, kIdSwitch = 34;
-    enum EventKind { kEvPress = 1, kEvRelease, kEvTurn, kEvSwitch, kEvBeat, kEvNote };
+    enum EventKind { kEvPress = 1, kEvRelease, kEvTurn, kEvSwitch, kEvBeat, kEvNote, kEvLeave };
 
     // The next input or beat, three 7-bit bytes: kind, id, value (a turn's
     // clicks + 64; the switch 1 on all; a beat its count).
@@ -503,8 +510,12 @@ public:
         return true;
     }
 
-    // Lights the controls in `mask` (a bit per id) for the page.
-    void SetHint(uint64_t mask) { hint_ = mask; }
+    // Lights the controls in `mask` (a bit per id) for the page; after the
+    // lesson was left on the CHOMPI, only once the page has sent none.
+    void SetHint(uint64_t mask) {
+        if (!mask) hint_off_ = false;
+        hint_ = hint_off_ ? 0 : mask;
+    }
 
     // A message for the instrument (the page's command and what follows),
     // taken at the next block; false while the last one still waits.
@@ -728,6 +739,7 @@ private:
     // A light at the top, with the page's hint over it: CHOMPI 0, K1-K4 1-4,
     // the wheel 5 and 6, play 7, loop 8, K6 9.
     uint64_t hint_ = 0;
+    bool hint_off_ = false; // the lesson was left (CHOMPI + play)
     float hint_glow_ = 0.f;
     void Pth(int led, float r, float g, float b) {
         static constexpr int kIdOfLed[10] = {kIdChompi, 28, 29, 30, 31, 32, 32, 26, 27, 33};
