@@ -151,20 +151,38 @@ struct OnePole {
     float Hp(float x) { y += k * (x - y); return x - y; }
 };
 
+// Memory for a voice's buffers. On the CHOMPI each voice gets its own piece of
+// SDRAM, set here while the voice is set up, so nothing is allocated while it
+// plays; without one (on a computer) a buffer is a vector of its own.
+struct Arena { float* p = nullptr; size_t left = 0; };
+inline Arena* g_arena = nullptr;
+inline float* Floats(std::vector<float>& own, size_t n) {
+    if (g_arena && g_arena->left >= n) {
+        float* r = g_arena->p;
+        g_arena->p += n;
+        g_arena->left -= n;
+        std::fill(r, r + n, 0.f);
+        return r;
+    }
+    own.assign(n, 0.f);
+    return own.data();
+}
+
 // A delay line, power-of-two long, read with linear or allpass interpolation.
 struct Delay {
-    std::vector<float> b;
+    std::vector<float> own;
+    float* b = nullptr;
     int mask = 0, w = 0;
     float ap = 0.f; // allpass interpolator state
     void Init(int min_len) {
         int n = 1;
         while (n < min_len + 4) n <<= 1;
-        b.assign(n, 0.f);
+        b = Floats(own, n);
         mask = n - 1;
         w = 0;
         ap = 0.f;
     }
-    void Clear() { std::fill(b.begin(), b.end(), 0.f); ap = 0.f; }
+    void Clear() { std::fill(b, b + mask + 1, 0.f); ap = 0.f; }
     void Push(float x) { b[w] = x; w = (w + 1) & mask; }
     float Tap(int d) const { return b[(w - 1 - d) & mask]; }  // d = 0: the newest
     float Lin(float d) const {

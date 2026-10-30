@@ -9,6 +9,7 @@ CHOMPI_LIBS ?= ../../chompi-tape/code/libs
 
 DEBUG = 0
 OPT = -O3
+CPP_STANDARD = -std=gnu++17
 
 APP_TYPE = BOOT_SRAM
 LDSCRIPT = chompi_sram.lds

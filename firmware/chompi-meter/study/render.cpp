@@ -602,12 +602,12 @@ int main(int argc, char** argv) {
     const std::string dir = argc > 1 ? argv[1] : "out";
     // Loudness calibration: each at its own setting.
     for (int i = 0; i < kInsts - 1; ++i) g_calib[i] = .12f / Loudness(Inst(i), 0, Default(Inst(i)));
-    for (int p = 0; p < meter::kNumMalletPresets; ++p) g_calib[kInsts + p] = .12f / Loudness(TODAY, p, Knobs{});
+    for (int p = 0; p < meter::kNumClassicPresets; ++p) g_calib[kInsts + p] = .12f / Loudness(TODAY, p, Knobs{});
     // Today's presets are already level-matched among themselves: one gain for all.
     float tg = 0.f;
-    for (int p = 0; p < meter::kNumMalletPresets; ++p) tg += g_calib[kInsts + p];
-    tg /= meter::kNumMalletPresets;
-    for (int p = 0; p < meter::kNumMalletPresets; ++p) g_calib[kInsts + p] = tg;
+    for (int p = 0; p < meter::kNumClassicPresets; ++p) tg += g_calib[kInsts + p];
+    tg /= meter::kNumClassicPresets;
+    for (int p = 0; p < meter::kNumClassicPresets; ++p) g_calib[kInsts + p] = tg;
     // CPU, against today's mallet voice (marimba preset).
     FILE* cpu = std::fopen((dir + "/cpu.json").c_str(), "w");
     const double base = TimeVoice(TODAY, 1, 0.f);

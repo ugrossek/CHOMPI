@@ -9,6 +9,7 @@
 #include "../dsp/Circle.h"
 #include "../dsp/Mallet.h"
 #include "../dsp/Presets.h"
+#include "Voice.h"
 #include "board/hardware.h"
 #include "board/temp_led_stuff.h"
 
@@ -51,7 +52,8 @@ constexpr int kPlayLed = 7, kLoopLed = 8;
 constexpr int kWheelLeds[2] = {5, 6};
 
 // A colour per preset, so a channel's sound shows on its key: ten hues as far
-// apart as the LEDs allow.
+// apart as the LEDs allow; an instrument that takes the place of one of today's
+// takes its colour too, the six new ones the hues left between.
 static const float kPresetColor[kNumMalletPresets][3] = {
     {1.0f, .35f, .00f}, // wood: orange
     {1.0f, .00f, .00f}, // marimba: red
@@ -63,6 +65,18 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {1.0f, .00f, .60f}, // felt: pink
     {.00f, 1.0f, .00f}, // snare bar: green
     {.55f, 1.0f, .00f}, // muffled: lime
+    {1.0f, .35f, .00f}, // amadinda: orange, as wood
+    {1.0f, .85f, .00f}, // gangsa: yellow, as bronze
+    {.45f, .00f, 1.0f}, // mbira: purple
+    {.55f, 1.0f, .00f}, // kora: lime
+    {.00f, 1.0f, 1.0f}, // hang: cyan, as glass
+    {1.0f, 1.0f, 1.0f}, // singing bowl: white, as bell
+    {1.0f, .00f, .60f}, // bowed glass: pink, as felt
+    {.00f, 1.0f, .00f}, // voices: green, as the snare bar
+    {.00f, 1.0f, .45f}, // siku: sea green
+    {.00f, .45f, 1.0f}, // pulse piano: sky
+    {1.0f, .00f, 1.0f}, // hands: magenta
+    {1.0f, .60f, .25f}, // tape: warm white
 };
 
 // Loop lengths as ratios of L0, one per black key from the lowest.
@@ -138,7 +152,8 @@ struct Versions {
 
 class Instrument {
 public:
-    void Init(float sample_rate, Versions* versions) {
+    // voice_mem: AnyVoice::kArenaFloats for each voice, the study voices' buffers.
+    void Init(float sample_rate, Versions* versions, float* voice_mem) {
         sr_ = sample_rate;
         ver_ = versions;
         for (Ring& r : ver_->ring) r = {0, 0, -1};
@@ -147,7 +162,7 @@ public:
         for (int i = 0; i < kNumMalletPresets; ++i)
             preset_gain_[i] = std::pow(10.f, kMalletPresets[i].gain_db / 20.f);
         for (int v = 0; v < kVoices; ++v) {
-            slot_[v].v.Init(sample_rate, v + 1);
+            slot_[v].v.Init(sample_rate, v + 1, voice_mem + v * AnyVoice::kArenaFloats);
             slot_[v].ch = slot_[v].note = -1;
         }
         for (auto& seat : seat_) seat.Init(sample_rate);
@@ -160,7 +175,7 @@ public:
         l0_ = 2.f * sr_;
         for (int c = 0; c < kChannels; ++c) {
             ch_[c] = Channel();
-            ch_[c].preset = c % kNumMalletPresets;
+            ch_[c].preset = c % kNumClassicPresets;
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
             ch_[c].place = StartPlace(c); // round the circle, 15 places
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
@@ -248,14 +263,18 @@ public:
                     if (kKeys[k].white) white_down_[WhiteIndex(k)] = 0; // tap or hold: see below
                     play_used_ = true;
                 } else if (sound_view_ && kKeys[k].white) {
-                    // The sounds on the first white keys: pick one, heard at once.
-                    if (WhiteIndex(k) < kNumMalletPresets) {
+                    // The instruments of a set on the white keys: pick one, heard at once.
+                    const int preset = kSetPresets[view_set_][WhiteIndex(k)];
+                    if (preset >= 0) {
                         Channel& c = ch_[sel_];
-                        c.preset = WhiteIndex(k);
+                        c.preset = preset;
                         c.p = kMalletPresets[c.preset].p;
                         Update(sel_);
                         NoteOn(sel_, c.last_note + 12 * c.octave);
                     }
+                } else if (sound_view_) {
+                    // The sets on the black keys, from the lowest.
+                    if (BlackIndex(k) < kSets) view_set_ = BlackIndex(k);
                 } else if (chompi && kKeys[k].white) {
                     // A second white key while one is still held: copy that channel's
                     // pattern here. The same key tapped twice while CHOMPI stays
@@ -293,6 +312,7 @@ public:
 
         if (tap_again_ && tap_key_ >= 0 && !sr.State(int(kKeys[tap_key_].sw))) {
             sound_view_ = true;
+            view_set_ = SetOf(ch_[sel_].preset, view_set_);
             tap_again_ = false;
         }
 
@@ -644,12 +664,16 @@ public:
                 MeterKey(k, meter_white_ ? kWhite : sel_col, rgb);
                 for (int j = 0; j < 3; ++j) rgb[j] = std::max(rgb[j], sel_col[j] * key_flash_[k]);
             } else if (sound_view_ && kKeys[k].white) {
-                // The sounds on the first white keys, in their colours; the channel's bright.
-                const int s = WhiteIndex(k);
-                if (s < kNumMalletPresets) {
+                // The set's instruments on the white keys, in their colours; the channel's bright.
+                const int s = kSetPresets[view_set_][WhiteIndex(k)];
+                if (s >= 0) {
                     const float b = s == ch_[sel_].preset ? 1.f : .1f;
                     for (int j = 0; j < 3; ++j) rgb[j] = kPresetColor[s][j] * b;
                 }
+            } else if (sound_view_) {
+                // The sets on the black keys: the one shown bright.
+                const int b = BlackIndex(k);
+                if (b < kSets) rgb[0] = rgb[1] = rgb[2] = b == view_set_ ? 1.f : .1f;
             } else if ((play_down_ || chompi) && kKeys[k].white) {
                 // The channels: each white key in its channel's colour, flashing on
                 // its notes. CHOMPI: the selected one bright; play: the ones
@@ -734,7 +758,14 @@ public:
     }
 
 private:
-    struct Slot { MalletVoice v; int ch, note; uint32_t age = 0; };
+    struct Slot { AnyVoice v; int ch, note; uint32_t age = 0; };
+    // The set a preset is in: the one shown, if it is there, else the first.
+    static int SetOf(int preset, int shown) {
+        for (int i = 0; i < 15; ++i) if (kSetPresets[shown][i] == preset) return shown;
+        for (int s = 0; s < kSets; ++s)
+            for (int i = 0; i < 15; ++i) if (kSetPresets[s][i] == preset) return s;
+        return 0;
+    }
 
     // A light at the top, with the page's hint over it: CHOMPI 0, K1-K4 1-4,
     // the wheel 5 and 6, play 7, loop 8, K6 9.
@@ -1249,7 +1280,7 @@ private:
         s.ch = c;
         s.note = note;
         s.age = ++clock_;
-        s.v.Strike(MidiToHz(float(note)), Effective(c), velocity);
+        s.v.Strike(MidiToHz(float(note)), kMalletPresets[ch_[c].preset], Effective(c), velocity);
     }
 
     void Update(int c) { dirty_[c] = true; }
@@ -1265,7 +1296,7 @@ private:
     // channel's key tapped twice; the octave: the wheel.)
     //   K1 strike     | shimmer
     //   K2 brightness | feel (variation)
-    //   K3 decay      | buzz
+    //   K3 decay      | prep (the instrument's preparation; on the mallets the buzz)
     //   K4 level      | place on the circle
     // With the switch on all: K1-K3 as offsets on every channel, so each keeps
     // its character; K4 the ensemble's level | the circle's size.
@@ -1438,6 +1469,7 @@ private:
     int white_down_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}; // blocks since pressed with play, -1: not
     static constexpr int kListenBlocks = 250; // play + white held this long: listen; shorter: a tap, mute
     bool sound_view_ = false; // the selected channel's sound on the white keys
+    int view_set_ = 0;        // the set of instruments shown there
     int tap_key_ = -1;        // the white key last tapped with CHOMPI held
     bool tap_again_ = false;  // ... and it was tapped before: the sounds on letting go
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};

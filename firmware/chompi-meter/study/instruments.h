@@ -321,14 +321,17 @@ struct Kora : Voice {
     OnePole loss, sloss, exlp;
     Res body[3];
     Contact plate[2];
-    std::vector<float> ex;
+    std::vector<float> ex_own;
+    float* ex = nullptr;
+    int exmax = 0;
     float D = 100.f, g = .99f, sD = 50.f, sg = .99f, bend = 0.f, bend_mul = 1.f, symp = 0.f, jingle = 0.f;
     int exn = 0, exi = 0;
     void Init(float s, uint32_t seed) override {
         Voice::Init(s, seed);
         str.Init(int(s / 40.f));
         sym.Init(int(s / 80.f));
-        ex.assign(int(s / 40.f), 0.f);
+        exmax = int(s / 40.f);
+        ex = Floats(ex_own, exmax);
         body[0].Set(118.f, .28f, .5f, s);
         body[1].Set(262.f, .14f, .35f, s);
         body[2].Set(730.f, .05f, .22f, s);
@@ -352,14 +355,15 @@ struct Kora : Voice {
         const float hard = Clamp(k.strike + v * .2f * rng.B(), 0.f, 1.f);
         exlp.Set(500.f + 7000.f * hard * hard, sr);
         exlp.y = 0.f;
-        exn = std::min(int(D), int(ex.size()) - 1);
+        exn = std::min(int(D), exmax - 1);
         const float pos = .13f + .04f * v * rng.B();
         const int pd = std::max(1, int(pos * exn));
-        std::vector<float> tmp(exn);
+        // (In place: from the end, so ex[i - pd] is still the noise itself.)
         float mean = 0.f;
-        for (int i = 0; i < exn; ++i) { tmp[i] = exlp.Lp(rng.B()); mean += tmp[i]; }
+        for (int i = 0; i < exn; ++i) { ex[i] = exlp.Lp(rng.B()); mean += ex[i]; }
         mean /= exn;
-        for (int i = 0; i < exn; ++i) ex[i] = vel * 1.6f * ((tmp[i] - mean) - (i >= pd ? tmp[i - pd] - mean : 0.f));
+        for (int i = 0; i < exn; ++i) ex[i] -= mean;
+        for (int i = exn - 1; i >= 0; --i) ex[i] = vel * 1.6f * (ex[i] - (i >= pd ? ex[i - pd] : 0.f));
         exi = 0;
         bend = .007f * vel * (.5f + hard); // nylon goes sharp, then settles
         bend_mul = std::exp(-1.f / (.07f * sr));

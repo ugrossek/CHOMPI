@@ -1,0 +1,85 @@
+#pragma once
+// A voice of the pool: the mallet, or one of the sound study's instruments
+// (study/instruments.h), whichever the note's preset asks for. A study voice
+// is built in the slot's own memory when the slot changes instrument, its
+// buffers in the slot's piece of SDRAM, so nothing is allocated while playing.
+
+#include <new>
+
+#include "../dsp/Mallet.h"
+#include "../dsp/Presets.h"
+#include "../study/instruments.h"
+
+namespace meter {
+
+template <class... T> constexpr size_t MaxSize() { size_t m = 0; ((m = sizeof(T) > m ? sizeof(T) : m), ...); return m; }
+
+class AnyVoice {
+public:
+    // The most any study voice keeps in delay lines (the pulse piano, 24 KB).
+    static constexpr int kArenaFloats = 8192;
+
+    void Init(float sample_rate, uint32_t seed, float* arena) {
+        sr_ = sample_rate;
+        seed_ = seed;
+        arena_ = arena;
+        m_.Init(sample_rate, seed);
+    }
+
+    void Strike(float freq, const MalletPreset& preset, const MalletParams& p, float velocity) {
+        if (preset.engine != engine_) Build(preset.engine);
+        if (engine_ == kEngMallet) { m_.Strike(freq, p, velocity); return; }
+        sd::Knobs k;
+        k.strike = p.strike;
+        k.bright = p.brightness;
+        k.decay = p.decay;
+        k.shimmer = p.shimmer;
+        k.feel = p.variation;
+        k.prep = p.buzz;
+        s_->Strike(freq, velocity, k);
+    }
+    // The knobs reach a ringing mallet at once; a study voice takes them with its next note.
+    void SetParams(const MalletParams& p) { if (engine_ == kEngMallet) m_.SetParams(p); }
+    float Process() { return engine_ == kEngMallet ? m_.Process() : s_->Process(); }
+    bool Active() const { return engine_ == kEngMallet ? m_.Active() : s_->active; }
+    void Stop() { if (engine_ == kEngMallet) m_.Stop(); else s_->active = false; }
+
+private:
+    void Build(int engine) {
+        if (s_) { s_->~Voice(); s_ = nullptr; }
+        m_.Stop();
+        engine_ = engine;
+        if (engine == kEngMallet) return;
+        void* at = mem_;
+        switch (engine) {
+            case kEngGangsa: s_ = new (at) sd::Gangsa(); break;
+            case kEngMbira: s_ = new (at) sd::Mbira(); break;
+            case kEngAmadinda: s_ = new (at) sd::Amadinda(); break;
+            case kEngSiku: s_ = new (at) sd::Siku(); break;
+            case kEngKora: s_ = new (at) sd::Kora(); break;
+            case kEngVoices: s_ = new (at) sd::Voices(); break;
+            case kEngHands: s_ = new (at) sd::Hands(); break;
+            case kEngBowed: s_ = new (at) sd::Bowed(); break;
+            case kEngBowl: s_ = new (at) sd::Bowl(); break;
+            case kEngPiano: s_ = new (at) sd::Piano(); break;
+            case kEngHang: s_ = new (at) sd::Hang(); break;
+            default: s_ = new (at) sd::Tape(); break;
+        }
+        sd::Arena a{arena_, size_t(kArenaFloats)};
+        sd::g_arena = &a;
+        s_->Init(sr_, seed_);
+        sd::g_arena = nullptr;
+    }
+
+    static constexpr size_t kMem = MaxSize<sd::Gangsa, sd::Mbira, sd::Amadinda, sd::Siku, sd::Kora, sd::Voices, sd::Hands,
+                                           sd::Bowed, sd::Bowl, sd::Piano, sd::Hang, sd::Tape>();
+    MalletVoice m_;
+    sd::Voice* s_ = nullptr;
+    int engine_ = kEngMallet;
+    float sr_ = 48000.f;
+    uint32_t seed_ = 1;
+    float* arena_ = nullptr;
+    alignas(8) unsigned char mem_[kMem];
+};
+
+} // namespace meter
