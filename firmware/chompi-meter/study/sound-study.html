@@ -1,0 +1,368 @@
+<title>CIRCLES Sound Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a listening programme. The pieces first, wide; then the instruments as
+   specimen cards (spectrogram, knobs, cost); then the before/after; then notes. */
+:root {
+  --bg: #e9ebe6;        /* cool bone */
+  --surface: #f6f7f3;
+  --ink: #17181d;
+  --soft: #5d6168;
+  --rule: #c9ccc4;
+  --accent: #9a5a17;    /* bronze */
+  --night: #121118;     /* the spectrogram's ground */
+  --display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #101114; --surface: #17191d; --ink: #ebe8e0; --soft: #a3a39c; --rule: #2c2f33; --accent: #dc9a52; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #101114; --surface: #17191d; --ink: #ebe8e0; --soft: #a3a39c; --rule: #2c2f33; --accent: #dc9a52; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.55 var(--body); margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); padding-block: 40px 80px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 400; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ---- Masthead ---- */
+.mast { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px 56px; align-items: end; padding-block: 8px 36px; border-bottom: 1px solid var(--rule); }
+.mast h1 { font: 400 clamp(56px, 9vw, 112px)/.9 var(--display); letter-spacing: -.01em; }
+.mast h1 em { font-style: italic; color: var(--accent); }
+.mast .lead { font-size: 18px; max-width: 54ch; }
+.mast .lead + p { color: var(--soft); max-width: 58ch; margin-top: 12px; font-size: 15px; }
+.rules { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid var(--rule); }
+.rules div { padding: 18px 20px 20px 0; }
+.rules div + div { padding-left: 20px; border-left: 1px solid var(--rule); }
+.rules b { display: block; font: 400 22px/1.15 var(--display); margin-bottom: 6px; }
+.rules span { color: var(--soft); font-size: 14.5px; }
+@media (max-width: 860px) { .mast { grid-template-columns: minmax(0, 1fr); } .rules { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rules div:nth-child(3) { padding-left: 0; border-left: 0; } }
+@media (max-width: 480px) { .rules { grid-template-columns: minmax(0, 1fr); } .rules div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); } }
+
+section.part { padding-top: 56px; }
+.parthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 22px; }
+.parthead h2 { font: 400 clamp(36px, 5vw, 52px)/1 var(--display); }
+.parthead p { color: var(--soft); max-width: 60ch; font-size: 15px; }
+
+/* ---- A clip: play button, spectrogram, playhead ---- */
+.clip { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--ink); background: transparent; cursor: pointer; display: grid; place-items: center; }
+.play svg { width: 16px; height: 16px; fill: var(--ink); }
+.play[aria-pressed="true"] { background: var(--ink); }
+.play[aria-pressed="true"] svg { fill: var(--bg); }
+.spec { position: relative; background: var(--night); border-radius: 3px; overflow: hidden; cursor: pointer; aspect-ratio: 960 / 200; max-width: 100%; }
+.spec img { display: block; width: 100%; height: 100%; }
+.spec .head { position: absolute; top: 0; bottom: 0; width: 2px; left: 0; background: #fff6e8; opacity: 0; box-shadow: 0 0 8px #ffd29a; }
+.spec.on .head { opacity: .9; }
+.spec .marks { position: absolute; inset: 0; pointer-events: none; }
+.spec .marks span { position: absolute; top: 6px; font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #f1e7d6; background: #12111899; padding: 3px 5px; border-radius: 2px; }
+.spec .marks i { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed #f1e7d680; }
+.meta { display: flex; justify-content: space-between; gap: 12px; font: 400 12px/1 var(--mono); color: var(--soft); margin-top: 6px; padding-left: 56px; font-variant-numeric: tabular-nums; }
+
+/* ---- Pieces ---- */
+.pieces { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 48px; }
+.piece { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 18px 20px; align-content: start; }
+.piece .ring { width: 124px; height: 124px; }
+.piece h3 { font: 400 34px/1 var(--display); }
+.piece .where { font: 500 11.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.piece .text p { font-size: 15px; }
+.piece .who { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 12.5px/1.5 var(--mono); color: var(--soft); }
+.piece .who li { display: flex; align-items: center; gap: 6px; }
+.piece .who i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.piece .clip { grid-column: 1 / -1; }
+.piece .meta { grid-column: 1 / -1; margin-top: -12px; }
+@media (max-width: 940px) { .pieces { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 460px) { .piece { grid-template-columns: minmax(0, 1fr); } .piece .ring { width: 104px; height: 104px; } }
+
+/* ---- Instruments ---- */
+.insts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.inst { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 22px 22px 20px; display: grid; gap: 14px; align-content: start; }
+.inst header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: baseline; }
+.inst h3 { font: 400 38px/1 var(--display); display: flex; align-items: center; gap: 12px; }
+.inst h3 i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
+.inst .cost { font: 500 12px/1 var(--mono); color: var(--soft); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.inst .cost b { color: var(--ink); font-weight: 500; }
+.inst .from { grid-column: 1 / -1; font: 500 11.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.inst .how { font-size: 15px; }
+.inst .how em { font-family: var(--display); font-size: 19px; }
+.knobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule); }
+.knobs div { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--rule); min-width: 0; }
+.knobs div:not(:nth-child(3n + 1)) { padding-left: 10px; border-left: 1px solid var(--rule); }
+.knobs dt { font: 500 10.5px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 3px; }
+.knobs dd { margin: 0; font-size: 13.5px; line-height: 1.35; }
+.knobs .prep dt { color: var(--accent); }
+.knobs .prep dd { font-weight: 600; }
+.inst .listen { font-size: 13.5px; color: var(--soft); }
+@media (max-width: 940px) { .insts { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .knobs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .knobs div:not(:nth-child(3n + 1)) { padding-left: 0; border-left: 0; } .knobs div:nth-child(2n) { padding-left: 10px; border-left: 1px solid var(--rule); } }
+
+/* ---- A/B ---- */
+.abs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 48px; }
+.ab h3 { font: 400 28px/1.1 var(--display); margin-bottom: 4px; }
+.ab p { color: var(--soft); font-size: 14.5px; margin-bottom: 12px; max-width: 56ch; }
+@media (max-width: 860px) { .abs { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Notes ---- */
+.notes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px 56px; }
+.notes h3 { font: 400 28px/1.1 var(--display); margin-bottom: 10px; }
+.notes p, .notes li { font-size: 15px; max-width: 62ch; }
+.notes ul, .notes ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.notes .pick { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.notes .pick li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.notes .pick b { font: 500 12px var(--mono); color: var(--soft); width: 1.6em; flex: none; font-variant-numeric: tabular-nums; }
+.notes .pick span { color: var(--soft); font-size: 13px; }
+@media (max-width: 860px) { .notes { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .notes .pick { grid-template-columns: minmax(0, 1fr); } }
+footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--soft); font: 400 12.5px/1.6 var(--mono); }
+@media (prefers-reduced-motion: reduce) { .spec .head { transition: none; box-shadow: none; } }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">CIRCLES · a study in sound · October 2026</p>
+      <h1>Music made<br>in <em>circles</em></h1>
+    </div>
+    <div>
+      <p class="lead">Twelve instruments for CIRCLES, each from a music people play in a ring, passing parts between them: Balinese gamelan, Shona mbira, Andean panpipes, the Ugandan amadinda, the kora, circle singing, the long loops of Eno and the pulse of In C.</p>
+      <p>Everything you hear could be played on a CHOMPI: the keys from C3 to C5 with the octave shift, up to fifteen players, loops at CIRCLES' lengths. All of it is rendered through CIRCLES' own room, with each player at a place on its circle. Headphones show the circle best. The firmware is unchanged; this is a sketchbook.</p>
+    </div>
+  </header>
+  <div class="rules">
+    <div><b>Six knobs, one language</b><span>Every instrument answers to strike, brightness and decay, and with CHOMPI to shimmer, feel and prep. You learn the panel once.</span></div>
+    <div><b>Each has its own preparation</b><span>The sixth knob is what that tradition adds to the bare instrument: the damping hand, bottle caps, loose keys, a bolt between the strings.</span></div>
+    <div><b>Built for the platform</b><span>Modal banks, waveguides and formant filters, no samples. Each voice costs about 2 to 6 of today's mallet voices.</span></div>
+    <div><b>Heard in the circle</b><span>Each piece places its players round the listener, so interlocking parts come from different sides, as they do in the real ensembles.</span></div>
+  </div>
+
+  <section class="part" id="pieces">
+    <div class="parthead"><h2>Eight pieces</h2><p>Each one is a CIRCLES setup: players with figures, looping at ratios of L0. The ring shows where each player stands around you, in front at the top.</p></div>
+    <div class="pieces" id="pieceList"></div>
+  </section>
+
+  <section class="part" id="instruments">
+    <div class="parthead"><h2>Twelve instruments</h2><p>Each demo plays the same figure twice: first the bare instrument, then with its preparation (or a second setting, where named). The cost is the CPU per voice against today's mallet voice, measured on a PC.</p></div>
+    <div class="insts" id="instList"></div>
+  </section>
+
+  <section class="part" id="ab">
+    <div class="parthead"><h2>Today, then new</h2><p>The same notes on today's CIRCLES preset, then on the instrument that would take its place. Both at the same loudness.</p></div>
+    <div class="abs" id="abList"></div>
+  </section>
+
+  <section class="part" id="notes">
+    <div class="parthead"><h2>Notes for the next step</h2></div>
+    <div class="notes">
+      <div>
+        <h3>If I picked the ten keys</h3>
+        <ol class="pick">
+          <li><b>1</b>Marimba <span>today's, it works</span></li>
+          <li><b>2</b>Amadinda <span>for Wood</span></li>
+          <li><b>3</b>Gangsa <span>for Bronze</span></li>
+          <li><b>4</b>Mbira <span>new</span></li>
+          <li><b>5</b>Kora <span>new</span></li>
+          <li><b>6</b>Hang <span>for Glass</span></li>
+          <li><b>7</b>Vibes <span>today's</span></li>
+          <li><b>8</b>Singing bowl <span>for Bell and Gong</span></li>
+          <li><b>9</b>Bowed glass <span>for Felt</span></li>
+          <li><b>10</b>Voices <span>for the snare bars</span></li>
+        </ol>
+        <p style="margin-top:14px">Siku, Pulse piano, Hands and Tape are strong too, but each needs its own way of playing (breath length, a second bank, unpitched keys). They would be a second set rather than a swap.</p>
+      </div>
+      <div>
+        <h3>What is not done yet</h3>
+        <ul>
+          <li>I tuned these by measuring: spectra, levels, decays, no clicks, no DC, peaks under −1 dBFS. I can't listen, so every instrument needs your ears, and some will need a few changes.</li>
+          <li>The CPU figures come from a PC. On the CHOMPI, the load guard would allow fewer notes at once with the heavier voices (siku, bowed glass, tape at 5 to 6 mallets each). Siku, voices and tape have obvious savings left: tables instead of noise generators, shared formant filters.</li>
+          <li>The knob meanings are proposals. Prep in particular changes what K3 with CHOMPI does per instrument; on the CHOMPI it would show on the keys like any other value.</li>
+          <li>The gamelan and amadinda pieces use twelve-tone notes, because the CHOMPI's keys are twelve-tone. The real tunings (pelog, slendro, the Ugandan near-equal pentatonic) would be the first thing to try with the octave or a tuning option.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>Rendered at 48 kHz from C++ voices (kit.h, instruments.h, render.cpp) through dsp/room.h and dsp/Circle.h of the CIRCLES firmware, unchanged. Loudness matched per instrument and per clip. MP3 160 kbit/s.</footer>
+</div>
+
+<audio id="player" preload="none"></audio>
+
+<script>
+const INST = {
+  gangsa:   { name: "Gangsa", c: "#c08a2e", from: "Bali · gamelan gong kebyar", cost: 2.7,
+    how: "A thick <em>bronze bar</em> over a bamboo tube, hit with a wooden hammer. Six modes of the bar, a second bar tuned a few hertz higher, the tube as a short resonance, a hammer click.",
+    k: ["hammer, rubber to horn", "the upper modes", "ring, 0.6 to 15 s; low bars longer", "ombak: the pair beats 0.5 to 8.5 Hz", "where and how hard each note lands", "tetekep: the left hand damps the last note as the next sounds"],
+    listen: "A kotekan run and three long notes, first with the hand off (a wash of bronze), then damping (a clean line)." },
+  mbira:    { name: "Mbira", c: "#8e9b3c", from: "Zimbabwe · mbira dzavadzimu", cost: 3.6,
+    how: "Steel <em>tines</em> on a soundboard inside a gourd. Three modes of a clamped tine (1 : 6.1 : 17), the board's three resonances, and two bottle caps that land once per swing while the note is loud enough.",
+    k: ["thumb: flesh or nail", "the tine's upper partials", "ring, 1 to 8 s", "a twin tine slightly out of tune", "where and how hard each note lands", "machira: bottle caps buzz with the board"],
+    listen: "A kushaura figure, first clean, then with the bottle caps." },
+  amadinda: { name: "Amadinda", c: "#a5532e", from: "Uganda · Buganda court xylophone", cost: 2.3,
+    how: "Loose <em>logs</em> on banana stems, hit with hard sticks. Four inharmonic modes whose highs die almost at once, a knock, the stems' thump.",
+    k: ["stick hardness", "the knock and upper modes", "ring, 0.2 to 2.4 s", "a slight doubling", "where and how hard each note lands", "loose keys: one to three bounces on the pegs"],
+    listen: "Both interlocking parts on one player, first tight, then with loose keys." },
+  siku:     { name: "Siku", c: "#5e9e6c", from: "Andes · siku in tropa", cost: 5.8,
+    how: "Bamboo <em>pipes</em>, stopped at the bottom, blown across the top. An edge tone with the odd harmonics of a stopped pipe, and breath noise run through a half-wave delay with inverted feedback, so the air itself takes the pitch. Each note scoops in.",
+    k: ["the tongue: soft breath to a sharp tu", "air and edge", "how long the breath lasts", "malta: the pipe an octave below", "breath and pitch wander", "tara: a rough, fluttering breath"],
+    listen: "A huayno phrase, first a single pipe, then with the octave pipe and a rough breath." },
+  kora:     { name: "Kora", c: "#c56f57", from: "Mali, Gambia, Senegal · the griots' harp", cost: 4.0,
+    how: "Nylon <em>strings</em> over a calabash with a cow-skin top. A plucked waveguide string with a loss filter tuned to its ring time, the pluck position, nylon going sharp when plucked hard, the body's resonances.",
+    k: ["thumb or fingernail", "string brightness", "ring, 0.7 to 8 s", "the octave string rings in sympathy", "where and how hard each note lands", "nyenyemo: the tin plate with rings jingles"],
+    listen: "Kumbengo, first plain, then with the sympathetic string and the nyenyemo." },
+  voices:   { name: "Voices", c: "#c98aa7", from: "Circle singing", cost: 4.4,
+    how: "A <em>voice</em> from the glottis up: a glottal pulse with jitter and a vibrato that grows in, five formants, a consonant before every vowel.",
+    k: ["the consonant: hummed m, then b, d, t", "the vowel: u, o, a, e, i", "how long each note is sung", "one, two or three singers", "vibrato, jitter, timing", "close the mouth: da becomes dum"],
+    listen: "A da-ba figure, then with the mouth closing and three singers, then two long oohs." },
+  hands:    { name: "Hands", c: "#d6a84e", from: "Circle songs · body percussion", cost: 2.6,
+    how: "No instrument but the body. The low keys pat the chest and thighs, the middle keys clap (cupped low, flat higher up), the top keys snap. A clap is three or four tiny slaps in 20 ms and a short ring.",
+    k: ["force and tail", "hand shape", "the ring after", "one to four people", "timing and hand shape vary", "a step under every hit"],
+    listen: "Pats, a clap and snaps, first one person, then four with a step." },
+  bowed:    { name: "Bowed glass", c: "#5fa2c4", from: "Eno · long loops", cost: 5.8,
+    how: "<em>Glass</em> rubbed or bowed. Four very narrow modes driven by rosin noise, each pre-filtered around its mode so the tone stays clean. A slow bow swells, a fast one catches with a scratch.",
+    k: ["bow speed: swell to catch", "the upper modes", "how long it is bowed", "the glass is not round: modes beat", "bow pressure wavers", "glass becomes a bowed vibraphone bar, motor on"],
+    listen: "Two bowed glass notes, then the same as a bowed vibraphone with its motor." },
+  bowl:     { name: "Singing bowl", c: "#9479c2", from: "Himalaya · singing bowls", cost: 2.3,
+    how: "A hammered <em>bronze bowl</em>. Five inharmonic modes, each a close pair, so every partial beats at its own rate. Rubbing the rim drives the lowest pair.",
+    k: ["mallet: leather to wood", "the upper modes", "ring, 3 to 24 s", "how fast the partials wobble", "where and how hard each note lands", "rub the rim after the strike"],
+    listen: "Two strikes, then a strike and the rim rubbed until it sings." },
+  piano:    { name: "Pulse piano", c: "#4a6db0", from: "Riley's pulse · Cage's preparations", cost: 3.4,
+    how: "Two <em>strings</em> per note (waveguides with allpass tuning and a little stiffness), a felt hammer at an eighth of the length, a soundboard. Prep slips a bolt and rubber between the strings.",
+    k: ["hammer hardness", "string brightness", "ring", "the two strings apart: honky-tonk", "where and how hard each note lands", "a bolt between the strings: short, metallic, rattling"],
+    listen: "In C's pulse in two octaves, then a prepared figure." },
+  hang:     { name: "Hang", c: "#7e8a92", from: "Bern, 2000 · handpan", cost: 2.2,
+    how: "A <em>steel shell</em>, touched with the fingers. Each field rings fundamental, octave and twelfth (1 : 2 : 3), a few cents sharp at first; the cavity hums underneath.",
+    k: ["fingertip or thumb", "the octave and twelfth", "ring, 0.8 to 8 s", "the shell sings along: other fields ring", "where and how hard each note lands", "harmonic touch: the fundamental drops out"],
+    listen: "A D minor arpeggio, then the same with the harmonic touch." },
+  tape:     { name: "Tape", c: "#a8645e", from: "Eno · Discreet Music", cost: 5.1,
+    how: "A soft <em>synth tone</em>, already on tape. Two detuned saws and a sub through a gentle lowpass, then wow and flutter as a moving read head, saturation, hiss, the highs lost to each copy.",
+    k: ["fade-in", "the lowpass", "hold and release", "the two saws apart", "wow: the reel's slow waver", "the tape's age: hiss, dropouts, duller"],
+    listen: "A chord on fresh tape, then on an old copy." },
+  today:    { name: "Today", c: "#9a9a92" },
+};
+const KN = ["strike", "brightness", "decay", "shimmer", "feel", "prep"];
+const PIECES = [
+  { id: "piece-kotekan", title: "Kotekan", where: "Bali", ratios: { polos: "×2", sangsih: "×2", jegogan: "×2", gong: "×4", kempli: "×1" },
+    text: "Two gangsas interlock: polos on the even pulses, sangsih on the odd ones, one fast line that neither plays alone. The jegogan carries the slow core melody, the gong closes every four L0, the kempli keeps the beat. Each pair breathes at its own ombak." },
+  { id: "piece-kushaura", title: "Kushaura", where: "Zimbabwe", ratios: { kushaura: "×2", kutsinhira: "×2", hosho: "×1", huro: "×2" },
+    text: "Two mbiras: the kushaura leads, the kutsinhira answers between its notes. The hosho shake, and a low hum, the huro, comes and goes." },
+  { id: "piece-hocket", title: "Hocket", where: "Andes", ratios: { ira: "×2", arca: "×2", "chuli (ira)": "×2", "chuli (arca)": "×2", bombo: "×1" },
+    text: "One melody, two players: the ira plays one note, the arca the next, from left and right. A second pair joins an octave up; the bombo plays underneath." },
+  { id: "piece-okunaga", title: "Okunaga", where: "Uganda", ratios: { okunaga: "×1", okwawula: "×1", okukoonera: "×1" },
+    text: "Two players on every other pulse, interlocking into one line. The third doubles the two lowest notes an octave down and brings out the inherent pattern, a melody that nobody plays." },
+  { id: "piece-circle-song", title: "Circle song", where: "Voices", ratios: { "bass: dum": "×1", "middle: ba-da": "×1", "high: ooh": "×2", claps: "×1", leader: "free" },
+    text: "A circle of singers. The bass sets the ground, claps come in, then the middle and the high voices. A leader improvises over the top." },
+  { id: "piece-pulse", title: "Pulse", where: "After In C", ratios: {},
+    text: "In C's idea with none of its notes: the piano's pulse in two octaves, figures that loop at 1, 3/4, 3/2 and 3 × L0, so they meet in a new place every time round." },
+  { id: "piece-airport", title: "Long loops", where: "After Eno", ratios: {},
+    text: "Five loops of 3, 2, 5/4, 3 and 4/3 × L0, with L0 at 4 s. They come back together only every 60 L0, four minutes; this is the first 50 seconds." },
+  { id: "piece-kumbengo", title: "Kumbengo", where: "Mali, Gambia", ratios: { "kora: thumbs": "×2", "kora: fingers": "×2", hum: "×2", snaps: "×1" },
+    text: "The kora's two hands: the thumbs keep the bass, the fingers interlock above, the nyenyemo jingles. A hum underneath, snaps on the off-beats." },
+];
+const AB = [
+  { id: "ab-bronze-gangsa", title: "Bronze → Gangsa", text: "Same kotekan figure. The gangsa adds the tube's bloom, the hammer's tok and a pair that breathes; its damping hand keeps the fast line clear." },
+  { id: "ab-marimba-amadinda", title: "Marimba → Amadinda", text: "Same interlocking line. The marimba is tuned and round; the amadinda is a log: drier, knockier, a little out of tune, the stems thumping." },
+  { id: "ab-bell-bowl", title: "Bell → Singing bowl", text: "Three strikes. The bowl's partials each beat at their own rate, and it rings much longer." },
+  { id: "ab-vibes-bowed", title: "Vibes → Bowed glass", text: "Three notes. Struck vibes against bowed glass: no attack, a swell, a tone that wavers." },
+];
+
+let clips = {}, manifest = [];
+const audio = document.getElementById("player");
+let current = null;
+
+const playIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v13l11-6.5z"/></svg>';
+const pauseIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5h3.5v13H3zM9.5 1.5H13v13H9.5z"/></svg>';
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+function clipHtml(id, label, marks = "") {
+  const d = clips[id] ? clips[id].dur : 0;
+  return `<div class="clip" data-clip="${id}"><button class="play" aria-pressed="false" aria-label="Play ${label}">${playIcon}</button>
+    <div class="spec" role="img" aria-label="Spectrogram of ${label}"><img src="s/${id}.png" alt="" loading="lazy" width="960" height="200"><div class="marks">${marks}</div><div class="head"></div></div></div>
+    <div class="meta"><span class="t" data-t="${id}">0:00</span><span>${fmt(d)}</span></div>`;
+}
+
+function ring(players) {
+  // In front at the top, clockwise; the listener in the middle.
+  const dots = players.map(p => {
+    const a = p.place * 2 * Math.PI, x = 62 + 46 * Math.sin(a), y = 62 - 46 * Math.cos(a);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="${INST[p.inst].c}"><title>${p.who || INST[p.inst].name}</title></circle>`;
+  }).join("");
+  return `<svg class="ring" viewBox="0 0 124 124" aria-hidden="true"><circle cx="62" cy="62" r="46" fill="none" stroke="var(--rule)" stroke-width="1.5"/>
+    <path d="M62 8 l-4 -6 h8z" fill="var(--soft)"/><circle cx="62" cy="62" r="4" fill="var(--ink)"/>${dots}</svg>`;
+}
+
+function build() {
+  const byId = Object.fromEntries(manifest.map(m => [m.id, m]));
+  document.getElementById("pieceList").innerHTML = PIECES.map(p => {
+    const m = byId[p.id] || { players: [] };
+    const who = m.players.map(x => `<li><i style="--c:${INST[x.inst].c}"></i>${x.who || INST[x.inst].name}${p.ratios[x.who] ? " " + p.ratios[x.who] : ""}</li>`).join("");
+    return `<article class="piece">${ring(m.players)}<div class="text"><p class="where">${p.where} · L0 ${m.l0 ? m.l0.toFixed(1) : ""} s</p><h3>${p.title}</h3><p style="margin-top:8px">${p.text}</p><ul class="who">${who}</ul></div>${clipHtml(p.id, p.title)}</article>`;
+  }).join("");
+  document.getElementById("instList").innerHTML = Object.entries(INST).filter(([k]) => k !== "today").map(([k, v]) => `
+    <article class="inst" style="--c:${v.c}">
+      <header><h3><i></i>${v.name}</h3><span class="cost"><b>${v.cost.toFixed(1)}×</b> mallet</span><p class="from">${v.from}</p></header>
+      <p class="how">${v.how}</p>
+      <dl class="knobs">${v.k.map((t, i) => `<div class="${i === 5 ? "prep" : ""}"><dt>${i > 2 ? "CHOMPI + " : ""}${KN[i]}</dt><dd>${t}</dd></div>`).join("")}</dl>
+      ${clipHtml("solo-" + k, v.name)}
+      <p class="listen">${v.listen}</p>
+    </article>`).join("");
+  document.getElementById("abList").innerHTML = AB.map(a => {
+    const [t, n] = a.title.split(" → ");
+    const at = abSplit(a.id);
+    const marks = `<span style="left:6px">today: ${t}</span><i style="left:${at}%"></i><span style="left:calc(${at}% + 6px)">new: ${n}</span>`;
+    return `<article class="ab"><h3>${a.title}</h3><p>${a.text}</p>${clipHtml(a.id, a.title, marks)}</article>`;
+  }).join("");
+  wire();
+}
+// Where the new instrument starts: after 2 of the 4 L0.
+function abSplit(id) {
+  const l0 = { "ab-bronze-gangsa": 2.4, "ab-marimba-amadinda": 2.4, "ab-bell-bowl": 3, "ab-vibes-bowed": 3 }[id];
+  const d = clips[id] ? clips[id].dur : 4 * l0 + 2;
+  return (100 * 2 * l0 / d).toFixed(1);
+}
+
+function setState(el, on) {
+  const b = el.querySelector(".play");
+  b.setAttribute("aria-pressed", on); b.innerHTML = on ? pauseIcon : playIcon;
+  el.querySelector(".spec").classList.toggle("on", on || el === current);
+}
+function wire() {
+  document.querySelectorAll(".clip").forEach(el => {
+    const id = el.dataset.clip;
+    el.querySelector(".play").addEventListener("click", () => toggle(el, id));
+    el.querySelector(".spec").addEventListener("click", ev => {
+      const r = ev.currentTarget.getBoundingClientRect(), f = (ev.clientX - r.left) / r.width;
+      if (current !== el) toggle(el, id, f); else if (audio.duration) audio.currentTime = f * audio.duration;
+    });
+  });
+}
+function toggle(el, id, at = 0) {
+  if (current === el) { if (audio.paused) audio.play().catch(() => {}); else audio.pause(); return; }
+  if (current) setState(current, false);
+  current = el;
+  audio.src = `a/${id}.mp3`;
+  audio.addEventListener("loadedmetadata", () => { if (at) audio.currentTime = at * audio.duration; }, { once: true });
+  audio.play().catch(() => {});
+}
+audio.addEventListener("play", () => current && setState(current, true));
+audio.addEventListener("pause", () => current && setState(current, false));
+audio.addEventListener("ended", () => { if (current) { setState(current, false); current.querySelector(".head").style.left = "0"; } });
+(function tick() {
+  if (current && audio.duration) {
+    const f = audio.currentTime / audio.duration;
+    current.querySelector(".head").style.left = `calc(${(f * 100).toFixed(2)}% - 1px)`;
+    const t = current.parentElement.querySelector(`[data-t="${current.dataset.clip}"]`);
+    if (t) t.textContent = fmt(audio.currentTime);
+  }
+  requestAnimationFrame(tick);
+})();
+
+Promise.all([fetch("clips.json").then(r => r.json()), fetch("manifest.json").then(r => r.json())])
+  .then(([c, m]) => { clips = c; manifest = m; build(); })
+  .catch(() => { clips = {}; manifest = []; build(); });
+</script>

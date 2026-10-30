@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CIRCLES Voice Bench</title>
+<style>
+  :root { --bg: #eceee9; --ink: #17181d; --soft: #5d6168; --rule: #c9ccc4; --ok: #2f7d4f; --warn: #a8661b; --bad: #b0352b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111215; --ink: #ebe8e0; --soft: #a3a39c; --rule: #2c2f33; --ok: #6cc08a; --warn: #e0a457; --bad: #e57565; color-scheme: dark; } }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 28px 16px 60px; }
+  main { max-width: 900px; margin: 0 auto; display: grid; gap: 18px; }
+  h1 { font-size: 26px; margin: 0; }
+  p { margin: 0; max-width: 70ch; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: inherit; border: 1.5px solid var(--ink); background: none; color: var(--ink); border-radius: 99px; padding: 6px 16px; cursor: pointer; }
+  #status { color: var(--soft); }
+  .wrapt { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; font-size: 13px; color: var(--soft); }
+  tr.today td { color: var(--soft); }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  textarea { width: 100%; min-height: 120px; font: 12px/1.4 ui-monospace, monospace; background: transparent; color: var(--ink); border: 1px solid var(--rule); padding: 8px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CIRCLES voice bench</h1>
+  <p>Put <b>BENCH</b> on a key, start it, wait about ten seconds (it measures before USB comes up), then connect. Chrome or Edge.</p>
+  <div class="bar"><button id="go">Connect</button><span id="status">not connected</span></div>
+  <p id="summary"></p>
+  <div class="wrapt"><table id="t"></table></div>
+  <p>The results as text, to paste into the chat:</p>
+  <textarea id="raw" readonly></textarea>
+  <div class="bar"><button id="copy">Copy results</button></div>
+</main>
+<script>
+const st = document.getElementById("status");
+let lines = [], expect = 0, timer = null;
+document.getElementById("go").onclick = async () => {
+  let access;
+  try { access = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { st.textContent = "No MIDI access: allow it for this page (Chrome or Edge)."; return; }
+  const outs = [...access.outputs.values()], ins = [...access.inputs.values()];
+  if (!outs.length) { st.textContent = "No MIDI device. Is BENCH running and the cable in?"; return; }
+  ins.forEach(i => i.onmidimessage = ev => receive([...ev.data]));
+  lines = []; expect = 0;
+  st.textContent = "asking " + outs.map(o => o.name).join(", ") + " …";
+  clearInterval(timer);
+  const hello = () => outs.forEach(o => { try { o.send([0xF0, 0x7D, 0x42, 0x4E, 0x01, 0xF7]); } catch (e) {} });
+  hello();
+  timer = setInterval(() => { if (!expect || lines.length < expect) { lines = []; hello(); } else clearInterval(timer); }, 2500);
+};
+function receive(d) {
+  if (d[0] !== 0xF0 || d[1] !== 0x7D || d[2] !== 0x42 || d[3] !== 0x4E || d[4] !== 0x02) return;
+  const s = String.fromCharCode(...d.slice(5, d.indexOf(0xF7)));
+  if (!lines.includes(s)) lines.push(s);
+  if (s.startsWith("e,")) expect = +s.split(",")[1];
+  if (expect && lines.length >= expect) { clearInterval(timer); show(); }
+  else st.textContent = `receiving … ${lines.length}`;
+}
+function show() {
+  st.textContent = "done";
+  document.getElementById("raw").value = lines.join("\n");
+  const h = lines.find(l => l.startsWith("h,")).split(",");
+  const clock = +h[1], sr = +h[2], budget = clock / sr;
+  const fixed = Object.fromEntries(lines.filter(l => l.startsWith("f,")).map(l => { const p = l.split(","); return [p[1], +p[2]]; }));
+  const rows = lines.filter(l => l.startsWith("m,") || l.startsWith("v,")).map(l => { const p = l.split(","); return { today: p[0] === "m", name: p[1], avg: +p[2], worst: +p[3], strike: +p[4] }; });
+  const mallet = rows.find(r => r.name === "Marimba").avg;
+  // What is left for voices: 85 % of a sample's cycles (the load guard sits at 90 %),
+  // minus the room, minus eight sounding players' places on the circle.
+  const left = .85 * budget - fixed.room - 8 * fixed.seat;
+  const cls = n => n >= 24 ? "ok" : n >= 12 ? "warn" : "bad";
+  document.getElementById("summary").innerHTML =
+    `${(clock / 1e6).toFixed(0)} MHz, ${sr} Hz: <b>${budget.toFixed(0)}</b> cycles per sample. The room takes ${fixed.room.toFixed(0)}, each sounding player's place on the circle ${fixed.seat.toFixed(0)}. Left for voices with eight players sounding: <b>${left.toFixed(0)}</b> (85 % of the budget, the load guard steps in at 90 %).`;
+  document.getElementById("t").innerHTML = `<tr><th>voice</th><th>cycles / sample</th><th>× mallet</th><th>notes at once</th><th>worst block</th><th>strike</th></tr>` +
+    rows.map(r => { const n = Math.floor(left / r.avg); return `<tr class="${r.today ? "today" : ""}"><td>${r.today ? "today: " : ""}${r.name}</td><td>${r.avg.toFixed(0)}</td><td>${(r.avg / mallet).toFixed(1)}</td><td class="${cls(n)}">${n}</td><td>${r.worst}</td><td>${r.strike}</td></tr>`; }).join("");
+}
+document.getElementById("copy").onclick = async () => {
+  const t = document.getElementById("raw");
+  try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); }
+};
+</script>
+</body>
+</html>
