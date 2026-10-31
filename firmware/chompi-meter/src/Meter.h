@@ -192,7 +192,6 @@ public:
         running_ = true;
         ens_ = kRatioOne;
         pending_ens_ = -1;
-        off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
         size_ = 1.f;
         gain_ = 1.f;
         PlaceAll(true);
@@ -571,8 +570,7 @@ public:
         o[n++] = Q7(room_);
         o[n++] = Q7(size_ * .5f);
         o[n++] = Q7(gain_ * .5f);
-        for (float off : {off_strike_, off_bright_, off_decay_, off_shimmer_, off_variation_, off_buzz_})
-            o[n++] = Q7(off + .5f);
+        for (int i = 0; i < 6; ++i) o[n++] = 64; // was the ensemble's shifts, now in every channel
         uint32_t muted = 0;
         for (int c = 0; c < kChannels; ++c) muted |= uint32_t(muted_[c]) << c;
         for (uint32_t m : {muted, listen_}) {
@@ -827,7 +825,7 @@ private:
     //   3 channel: c preset octave+2 ratio level place muted count (phase.lo phase.hi note)*
     //     the sound from its preset, the loop from its start;
     //   4 ensemble: selected tempo.lo tempo.hi (L0 in ms) running; every loop
-    //     from its start, the knobs' offsets and the circle's size back to neutral;
+    //     from its start, the ensemble's level and the circle's size back to neutral;
     //   5 start: as at power-on.
     static constexpr int kMail = 120;
     uint8_t mail_[kMail];
@@ -868,8 +866,7 @@ private:
             running_ = d[4];
             ens_ = kRatioOne;
             pending_ens_ = -1;
-            off_bright_ = off_decay_ = off_strike_ = off_shimmer_ = off_buzz_ = off_variation_ = 0.f;
-            size_ = 1.f;
+                size_ = 1.f;
             gain_ = 1.f;
             PlaceAll(true);
             UpdateAll();
@@ -901,7 +898,6 @@ private:
     static constexpr int kOctaveIdleBlocks = 1000; // clicks count towards a step for 1 s
     static constexpr int kOctaveShowBlocks = 1000; // the octave stays on the keys 1 s
     static constexpr float kHandOverSeconds = .05f; // a sustained note struck again: the old one fades this fast
-    static constexpr int kNotesPerChannel = 6;      // sounding at once on one channel, at most
     static constexpr float kKeyFull = .3f;          // a voice this loud lights its key fully
     static constexpr float kListenOthers = .25f;   // the others while listening: -12 dB
 
@@ -1273,15 +1269,28 @@ private:
                || hw.button_sr.State(int(Sw::KEY_28));
     }
 
-    MalletParams Effective(int c) const {
-        MalletParams p = ch_[c].p;
-        p.brightness = Clamp01(p.brightness + off_bright_);
-        p.decay = Clamp01(p.decay + off_decay_);
-        p.strike = Clamp01(p.strike + off_strike_);
-        p.shimmer = Clamp01(p.shimmer + off_shimmer_);
-        p.buzz = Clamp01(p.buzz + off_buzz_);
-        p.variation = Clamp01(p.variation + off_variation_);
-        return p;
+    MalletParams Effective(int c) const { return ch_[c].p; }
+
+    // A knob's layer of the sound: K1 strike | shimmer, K2 brightness | feel,
+    // K3 decay | buzz (the second with CHOMPI).
+    static float& Param(MalletParams& p, int knob, bool chompi) {
+        return knob == 0 ? (chompi ? p.shimmer : p.strike)
+             : knob == 1 ? (chompi ? p.variation : p.brightness)
+                         : (chompi ? p.buzz : p.decay);
+    }
+    static float Param(const MalletParams& p, int knob, bool chompi) {
+        return Param(const_cast<MalletParams&>(p), knob, chompi);
+    }
+
+    // On all: everyone's value of a knob's layer, on average, the mark where
+    // their instruments have it.
+    void ShowAll(int knob, bool chompi) {
+        float v = 0.f, o = 0.f;
+        for (int c = 0; c < kChannels; ++c) {
+            v += Param(ch_[c].p, knob, chompi);
+            o += Param(kMalletPresets[ch_[c].preset].p, knob, chompi);
+        }
+        ShowMeter(kMeterBar, v / kChannels, o / kChannels, true);
     }
 
     void NoteOn(int c, int note, float velocity = 1.f) {
@@ -1290,16 +1299,6 @@ private:
         // one fading out under it.
         int pick = -1, fading = -1;
         const bool sustained = AnyVoice::Sustained(kMalletPresets[ch_[c].preset].engine);
-        // At most kNotesPerChannel sounding on a channel: the oldest fades out
-        // under the new one (old tails would cost the CPU, not the figure).
-        int count = 0, oldest = -1;
-        for (int v = 0; v < kVoices; ++v) {
-            const Slot& s = slot_[v];
-            if (!s.v.Active() || s.v.Fading() || s.ch != c || s.note == note) continue;
-            count++;
-            if (oldest < 0 || s.age < slot_[oldest].age) oldest = v;
-        }
-        if (count >= kNotesPerChannel) slot_[oldest].v.Fade(kHandOverSeconds);
         for (int v = 0; v < kVoices && pick < 0 && fading < 0; ++v)
             if (slot_[v].v.Active() && slot_[v].ch == c && slot_[v].note == note) {
                 if (sustained && AnyVoice::Sustained(slot_[v].v.Engine())) { slot_[v].v.Fade(kHandOverSeconds); fading = v; }
@@ -1336,8 +1335,8 @@ private:
     //   K2 brightness | feel (variation)
     //   K3 decay      | prep (the instrument's preparation; on the mallets the buzz)
     //   K4 level      | place on the circle
-    // With the switch on all: K1-K3 as offsets on every channel, so each keeps
-    // its character; K4 the ensemble's level | the circle's size.
+    // With the switch on all: K1-K3 turn every channel's own values, each from
+    // where it is; K4 the ensemble's level | the circle's size.
     // Every turn shows its value on the keys (the meter).
     void Turn(int knob, int inc, bool chompi) {
         const float d = inc * .02f;
@@ -1351,11 +1350,13 @@ private:
                 ShowMeter(kMeterBar, v * .5f, .5f, true);
                 return;
             }
-            float& off = knob == 0 ? (chompi ? off_shimmer_ : off_strike_)
-                       : knob == 1 ? (chompi ? off_variation_ : off_bright_)
-                                   : (chompi ? off_buzz_ : off_decay_);
-            Offset(off, d);
-            ShowMeter(kMeterCentre, off * 2.f, -1.f, true);
+            // K1-K3 turn every channel's own value, each from where it is: what a
+            // channel shows is what it plays, and CHOMPI + push takes it back.
+            for (int c = 0; c < kChannels; ++c) {
+                float& v = Param(ch_[c].p, knob, chompi);
+                v = Clamp01(v + d);
+            }
+            ShowAll(knob, chompi);
             UpdateAll();
             return;
         }
@@ -1387,7 +1388,7 @@ private:
     }
 
     // CHOMPI + push: the knob's two layers as the instrument has them (K4: the
-    // level and the place at power-on). On all: everyone's shifts to none, K4 the
+    // level and the place at power-on). On all: everyone's back to their instrument, K4 the
     // ensemble's level and the circle's size to the middle.
     void Reset(int knob) {
         if (all_) {
@@ -1398,9 +1399,10 @@ private:
                 ShowMeter(kMeterBar, .5f, .5f, true);
                 return;
             }
-            (knob == 0 ? off_strike_ : knob == 1 ? off_bright_ : off_decay_) = 0.f;
-            (knob == 0 ? off_shimmer_ : knob == 1 ? off_variation_ : off_buzz_) = 0.f;
-            ShowMeter(kMeterCentre, 0.f, -1.f, true);
+            for (int c = 0; c < kChannels; ++c)
+                for (bool second : {false, true})
+                    Param(ch_[c].p, knob, second) = Param(kMalletPresets[ch_[c].preset].p, knob, second);
+            ShowAll(knob, false);
             UpdateAll();
             return;
         }
@@ -1429,8 +1431,6 @@ private:
         return Wrap(float(c & 1 ? -out : out) * kStartArc / float(kChannels / 2));
     }
     static constexpr float kStartArc = .2f;
-
-    static void Offset(float& off, float d) { off = std::min(std::max(off + d, -.5f), .5f); }
 
     // Clicks that only count every few: a step (+1 or -1) once enough have
     // gathered on the same thing (id) within a second, else 0.
@@ -1470,8 +1470,6 @@ private:
     float swell_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
     uint32_t rng_ = 12345;
     bool all_ = false, show_load_ = false;
-    float off_bright_ = 0.f, off_decay_ = 0.f;
-    float off_strike_ = 0.f, off_shimmer_ = 0.f, off_buzz_ = 0.f, off_variation_ = 0.f;
     float room_ = .5f, volume_ = .4f, load_ = 0.f; // the volume at power-on: 6 dB under the old .8
     uint32_t shed_ = 0; // voices the load guard has cut
     float size_ = 1.f;  // the circle's size: 0 all in the middle, close; 1 as placed; 2 wider and further away

@@ -26,7 +26,7 @@ least every 0.5 s and every channel at least every 2 s, changed or not.
   its loop's notes (phase 0..16383 over the loop, note without the octave),
   the loop from its start. Up to 32 notes.
 - **ensemble** selects a channel, sets the tempo and play, and restarts every
-  loop together. The all-mode offsets, ensemble ratio, level and the circle's size
+  loop together. The ensemble ratio, level and the circle's size
   go back to neutral.
 - **start** is power-on: every channel on its own sound, no loops. The volume
   and the room stay as they are.
@@ -52,8 +52,8 @@ them. A longer loop adds rest after them; a shorter one silences the notes past
 its end, and meter keeps those (not listed) until the loop grows again.
 
 **state:** selected, flags, ensemble ratio, pending ensemble ratio+1, L0 ms lo,
-L0 ms hi, volume q7, room q7, the circle's size q7 (0..2), the ensemble's level q7 (0..2), the all-mode
-offsets strike, brightness, decay, shimmer, feel, buzz (q7, −.5..+.5), muted
+L0 ms hi, volume q7, room q7, the circle's size q7 (0..2), the ensemble's level q7 (0..2),
+six unused bytes (64; were the all-mode offsets, K1-K3 on all now turn every channel), muted
 (3 bytes, a bit per channel), listened to (3 bytes), held (CHOMPI 1, play 2,
 loop 4), load q7 (share of the audio callback's time), voices sounding, voices
 cut by the load guard so far (mod 128).
