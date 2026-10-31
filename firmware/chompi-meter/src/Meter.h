@@ -104,7 +104,7 @@ struct Channel {
     int octave = 0;
     int last_note = 60; // the last key played, before the octave: the preview note
     int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
-    int shift = 0; // the figure slid by loop held + wheel, in 16ths of its length (for the keys)
+    int shift = 0; // the figure slid by loop held + wheel, in 64ths of its length (from where it was kept)
 };
 
 // A channel's loop: each note at its time from the loop's start, in beats (L0
@@ -343,17 +343,26 @@ public:
         // Wheel: the selected channel's octave, a step every few clicks, shown on
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
         // tempo, L0, smoothly (right is faster); every loop follows. Loop held +
-        // turn: the selected channel's figure slides in its loop, a 16th of its
-        // length every two clicks (right later, left earlier), shown across the keys.
+        // turn: the selected channel's figure slides in its loop, a 64th of its
+        // length per click, nearly smooth (right later, left earlier), shown
+        // across the keys; loop held + push the wheel: back to where it was kept.
         // (Test build: CHOMPI + loop held + turn: the versions of its figure,
         // left older, right newer, shown on the black keys.)
         // CHOMPI + push the wheel: the tempo back to where it is at power-on.
         // (Its switch is on the encoder itself, not in the shift registers.)
-        if (chompi && hw.enc[kKnobs[kTransport].enc].RisingEdge()) l0_ = kStartL0 * sr_;
+        if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) {
+            if (chompi) l0_ = kStartL0 * sr_;
+            else if (loop_down_) { // loop held + push: the figure back where it was kept
+                Shift(sel_, -ch_[sel_].shift);
+                ShowMeter(kMeterBar, 0.f, -1.f, true);
+                shift_show_ = true;
+                loop_used_ = true;
+            }
+        }
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
             if (loop_down_ && !(kTestBuild && chompi)) {
-                if (const int step = Steps(inc, kStepShift, kClicksPerShift)) Shift(sel_, step);
+                Shift(sel_, inc);
                 shift_show_ = true;
                 loop_used_ = true; // turning is not holding to clear
             } else if (kTestBuild && loop_down_) {
@@ -1301,20 +1310,23 @@ private:
     }
 
     // Loop held + wheel: channel c's figure slides in its loop, later (right) or
-    // earlier (left), a 16th of its length per step, heard at once; what slides
-    // past the end comes in at the beginning. The loop itself stays where it
-    // is, in step with L0 (its light still flashes on its start).
+    // earlier (left), a 64th of its length per click, heard at once; what
+    // slides past the end comes in at the beginning. The loop itself stays
+    // where it is, in step with L0 (its light still flashes on its start). A
+    // note keeps whether it has played this round, so one just heard and
+    // pushed a little later does not play again.
     void Shift(int c, int steps) {
         Loop& lp = loop_[c];
         if (!lp.count || !steps) return;
         if (!shift_saved_) { Save(c); shift_saved_ = true; }
         const float len = Len(c), d = steps * len / kShiftSteps;
         for (int i = 0; i < lp.count; ++i) {
-            float a = std::fmod(lp.n[i].at + d, len);
+            LoopNote& n = lp.n[i];
+            float a = std::fmod(n.at + d, len);
             if (a < 0.f) a += len;
-            lp.n[i].at = a;
+            n.at = a;
+            n.phase = a / len;
         }
-        Place(c);
         ch_[c].shift = ((ch_[c].shift + steps) % kShiftSteps + kShiftSteps) % kShiftSteps;
         ShowMeter(kMeterBar, ch_[c].shift / float(kShiftSteps), -1.f, true);
     }
@@ -1599,11 +1611,9 @@ private:
     static constexpr float kNoKeepSeconds = .6f, kSelGlowSeconds = .5f;
     bool vshow_ = false, vshow_all_ = false; // stepping through versions: shown on the black keys
     bool shift_show_ = false, shift_saved_ = false; // sliding the figure (loop held + wheel); saved once per hold
-    static constexpr int kShiftSteps = 16;
+    static constexpr int kShiftSteps = 64;
     static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
     static constexpr int kClicksPerVersion = 2;
-    static constexpr int kStepShift = 101;    // ... and of sliding a figure
-    static constexpr int kClicksPerShift = 2;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 
