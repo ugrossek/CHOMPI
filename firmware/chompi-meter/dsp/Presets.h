@@ -42,7 +42,7 @@ static const MalletPreset kMalletPresets[] = {
     {"Mbira",        {0.f, 0.50f, 0.55f, 0.55f, 0.30f, 0.00f, 0.00f, 0}, -19.8f, kEngMbira}, // no caps: CHOMPI + K3 brings them
     {"Kora",         {0.f, 0.55f, 0.50f, 0.55f, 0.30f, 0.30f, 0.00f, 0}, -9.1f, kEngKora},   // no plate: CHOMPI + K3 brings it
     {"Hang",         {0.f, 0.50f, 0.55f, 0.40f, 0.25f, 0.30f, 0.00f, 0}, -0.2f, kEngHang}, // raised 7 dB, see above
-    {"Singing bowl", {0.f, 0.50f, 0.60f, 0.45f, 0.20f, 0.35f, 0.00f, 0}, -9.8f, kEngBowl}, // raised 5 dB
+    {"Singing bowl", {0.f, 0.50f, 0.25f, 0.45f, 0.20f, 0.35f, 0.00f, 0}, -9.8f, kEngBowl}, // raised 5 dB
     {"Bowed glass",  {0.f, 0.45f, 0.50f, 0.25f, 0.30f, 0.30f, 0.00f, 0}, -33.3f, kEngBowed},
     {"Voices",       {0.f, 0.50f, 0.25f, 0.50f, 0.35f, 0.30f, 0.40f, 0}, -17.3f, kEngVoices},
     {"Siku",         {0.f, 0.45f, 0.30f, 0.60f, 0.35f, 0.30f, 0.15f, 0}, -9.8f, kEngSiku},

@@ -318,7 +318,7 @@ struct Siku : Voice {
 // a tin plate with rings on the bridge, jingling with the string.
 struct Kora : Voice {
     Delay str, sym;
-    OnePole loss, sloss, exlp;
+    OnePole loss, sloss, exlp, dc;
     Res body[3];
     Contact plate[2];
     std::vector<float> ex_own;
@@ -332,6 +332,7 @@ struct Kora : Voice {
         sym.Init(int(s / 80.f));
         exmax = int(s / 40.f);
         ex = Floats(ex_own, exmax);
+        dc.Set(20.f, s);
         body[0].Set(118.f, .28f, .5f, s);
         body[1].Set(262.f, .14f, .35f, s);
         body[2].Set(730.f, .05f, .22f, s);
@@ -391,7 +392,9 @@ struct Kora : Voice {
         for (auto& r : body) b += r.Tick(drive);
         out = out * .75f + b;
         if (jingle > 0.f) out += jingle * .45f * (plate[0].Tick(y, rng) + plate[1].Tick(y * .7f, rng));
-        return out;
+        // The string loop keeps a little offset that dies far slower than the
+        // note (high up, ten seconds more): unheard, but it held the voice.
+        return dc.Hp(out);
     }
     bool Busy() const override { return exi < exn; }
 };
