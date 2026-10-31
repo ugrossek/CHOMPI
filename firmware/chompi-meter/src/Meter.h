@@ -104,6 +104,7 @@ struct Channel {
     int octave = 0;
     int last_note = 60; // the last key played, before the octave: the preview note
     int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
+    int shift = 0; // the figure slid by loop held + wheel, in 16ths of its length (for the keys)
 };
 
 // A channel's loop: each note at its time from the loop's start, in beats (L0
@@ -342,21 +343,24 @@ public:
         // Wheel: the selected channel's octave, a step every few clicks, shown on
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
         // tempo, L0, smoothly (right is faster); every loop follows. Loop held +
-        // turn: the versions of the selected channel's figure, left older, right
-        // newer (with CHOMPI: the ensemble's), shown on the black keys.
+        // turn: the selected channel's figure slides in its loop, a 16th of its
+        // length per click (right later, left earlier), shown across the keys.
+        // (Test build: CHOMPI + loop held + turn: the versions of its figure,
+        // left older, right newer, shown on the black keys.)
         // CHOMPI + push the wheel: the tempo back to where it is at power-on.
         // (Its switch is on the encoder itself, not in the shift registers.)
         if (chompi && hw.enc[kKnobs[kTransport].enc].RisingEdge()) l0_ = kStartL0 * sr_;
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (kTestBuild && loop_down_) {
-                if (const int step = Steps(inc, kStepVersions, kClicksPerVersion)) {
-                    if (chompi) BrowseAll(step);
-                    else Browse(sel_, step);
-                }
-                vshow_ = true;
-                vshow_all_ = chompi;
+            if (loop_down_ && !(kTestBuild && chompi)) {
+                Shift(sel_, inc);
+                shift_show_ = true;
                 loop_used_ = true; // turning is not holding to clear
+            } else if (kTestBuild && loop_down_) {
+                if (const int step = Steps(inc, kStepVersions, kClicksPerVersion)) Browse(sel_, step);
+                vshow_ = true;
+                vshow_all_ = false;
+                loop_used_ = true;
             } else if (chompi) {
                 l0_ = std::min(std::max(l0_ * std::pow(kTempoStep, float(-inc)), kMinL0 * sr_), kMaxL0 * sr_);
             } else {
@@ -431,14 +435,16 @@ public:
             loop_ratio_ = ch_[sel_].ratio;
             loop_span_ = Span(sel_, now_);
             loop_kept_ = Capture(sel_, now_, chompi) > 0;
+            shift_saved_ = false;
         }
         // While loop is held (a moment, so a tap does not flash them): the lengths
         // on the black keys, for loop + a black key.
-        len_show_ = kTestBuild && loop_down_ && !loop_chompi_ && !chompi && !vshow_ && loop_hold_ >= kLenShowBlocks;
+        len_show_ = kTestBuild && loop_down_ && !loop_chompi_ && !chompi && !vshow_ && !shift_show_ && loop_hold_ >= kLenShowBlocks;
         if (loop_down_) {
             if (!loop_held) {
                 loop_down_ = false;
                 vshow_ = false;
+                shift_show_ = false;
                 // A tap that kept nothing: say so (two dim blinks of its light).
                 if (!loop_kept_ && !loop_used_ && loop_hold_ < kTapBlocks) nokeep_ = kNoKeepSeconds;
             } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
@@ -447,6 +453,7 @@ public:
                     if (!loop_chompi_ && c != loop_ch_) continue;
                     Save(c);
                     loop_[c].count = 0;
+                    ch_[c].shift = 0;
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                     pending_[c] = -1;
@@ -884,6 +891,7 @@ private:
             ch.ratio = std::min(int(d[4]), kNumRatios - 1);
             ch.level = d[5] / 127.f;
             ch.pan = std::min(std::max((d[6] - 64) / 63.f, -1.f), 1.f);
+            ch.shift = 0;
             Place(c, true);
             muted_[c] = d[7];
             pending_[c] = -1;
@@ -1063,6 +1071,7 @@ private:
         kept_flash_ = 1.f;
         for (int i = 0; i < n; ++i) FlashNote(got[i].note);
         if (fresh) {
+            ch_[c].shift = 0;
             lp.count = 0;
             lp.pos = pos;
             // Where the window began after an L0 beat.
@@ -1291,6 +1300,25 @@ private:
         return -1;
     }
 
+    // Loop held + wheel: channel c's figure slides in its loop, later (right) or
+    // earlier (left), a 16th of its length per click, heard at once; what slides
+    // past the end comes in at the beginning. The loop itself stays where it
+    // is, in step with L0 (its light still flashes on its start).
+    void Shift(int c, int steps) {
+        Loop& lp = loop_[c];
+        if (!lp.count || !steps) return;
+        if (!shift_saved_) { Save(c); shift_saved_ = true; }
+        const float len = Len(c), d = steps * len / kShiftSteps;
+        for (int i = 0; i < lp.count; ++i) {
+            float a = std::fmod(lp.n[i].at + d, len);
+            if (a < 0.f) a += len;
+            lp.n[i].at = a;
+        }
+        Place(c);
+        ch_[c].shift = ((ch_[c].shift + steps) % kShiftSteps + kShiftSteps) % kShiftSteps;
+        ShowMeter(kMeterBar, ch_[c].shift / float(kShiftSteps), -1.f, true);
+    }
+
     // Channel `to` takes over the pattern of `from`: its loop and ratio, in step
     // with it. Everything else stays: `to` plays the figure on its own
     // instrument, in its own octave, with its own level, place and swell.
@@ -1299,6 +1327,7 @@ private:
         Save(to);
         loop_[to] = loop_[from];
         ch_[to].ratio = ch_[from].ratio;
+        ch_[to].shift = ch_[from].shift;
         pending_[to] = pending_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
@@ -1569,6 +1598,8 @@ private:
     static constexpr int kTapBlocks = 400;     // a loop press shorter than this is a tap
     static constexpr float kNoKeepSeconds = .6f, kSelGlowSeconds = .5f;
     bool vshow_ = false, vshow_all_ = false; // stepping through versions: shown on the black keys
+    bool shift_show_ = false, shift_saved_ = false; // sliding the figure (loop held + wheel); saved once per hold
+    static constexpr int kShiftSteps = 16;
     static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
     static constexpr int kClicksPerVersion = 2;
     bool reboot_armed_ = false, reboot_now_ = false;
