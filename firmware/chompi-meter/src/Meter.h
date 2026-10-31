@@ -104,7 +104,7 @@ struct Channel {
     int octave = 0;
     int last_note = 60; // the last key played, before the octave: the preview note
     int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
-    int shift = 0; // the figure slid by loop held + wheel, in 64ths of its length (from where it was kept)
+    float slide = 0.f; // how far loop held + wheel has slid the figure, in beats (for the keys)
 };
 
 // A channel's loop: each note at its time from the loop's start, in beats (L0
@@ -121,7 +121,8 @@ struct Channel {
 // now (at / ratio, wrapped); silent: not played (unused since the wrap); jit:
 // this repeat lands a little early or late (the feel); armed: not yet played in
 // this round.
-struct LoopNote { float at; int note; float phase = 0.f; bool silent = false; float jit = 0.f; bool armed = true; };
+struct LoopNote { float at; int note; float phase = 0.f; bool silent = false; float jit = 0.f; bool armed = true; float slid = 0.f; };
+// (slid: how far loop held + wheel has moved it, in beats, so it can go back exactly.)
 constexpr int kLoopNotes = 32;
 struct Loop {
     LoopNote n[kLoopNotes];
@@ -352,8 +353,10 @@ public:
         // (Its switch is on the encoder itself, not in the shift registers.)
         if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) {
             if (chompi) l0_ = kStartL0 * sr_;
-            else if (loop_down_) { // loop held + push: the figure back where it was kept
-                Shift(sel_, -ch_[sel_].shift);
+            else if (loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
+                if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
+                for (int c = 0; c < kChannels; ++c)
+                    if (all_ || c == sel_) Unslide(c);
                 ShowMeter(kMeterBar, 0.f, -1.f, true);
                 shift_show_ = true;
                 loop_used_ = true;
@@ -362,7 +365,11 @@ public:
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
             if (loop_down_ && !(kTestBuild && chompi)) {
-                Shift(sel_, inc);
+                if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
+                for (int c = 0; c < kChannels; ++c)
+                    if (all_ || c == sel_) Slide(c, inc);
+                const float len = Len(sel_), f = ch_[sel_].slide / len;
+                ShowMeter(kMeterBar, f - std::floor(f), -1.f, true);
                 shift_show_ = true;
                 loop_used_ = true; // turning is not holding to clear
             } else if (kTestBuild && loop_down_) {
@@ -462,7 +469,7 @@ public:
                     if (!loop_chompi_ && c != loop_ch_) continue;
                     Save(c);
                     loop_[c].count = 0;
-                    ch_[c].shift = 0;
+                    ch_[c].slide = 0.f;
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                     pending_[c] = -1;
@@ -900,7 +907,7 @@ private:
             ch.ratio = std::min(int(d[4]), kNumRatios - 1);
             ch.level = d[5] / 127.f;
             ch.pan = std::min(std::max((d[6] - 64) / 63.f, -1.f), 1.f);
-            ch.shift = 0;
+            ch.slide = 0.f;
             Place(c, true);
             muted_[c] = d[7];
             pending_[c] = -1;
@@ -1080,7 +1087,7 @@ private:
         kept_flash_ = 1.f;
         for (int i = 0; i < n; ++i) FlashNote(got[i].note);
         if (fresh) {
-            ch_[c].shift = 0;
+            ch_[c].slide = 0.f;
             lp.count = 0;
             lp.pos = pos;
             // Where the window began after an L0 beat.
@@ -1312,23 +1319,29 @@ private:
     // Loop held + wheel: channel c's figure slides in its loop, later (right) or
     // earlier (left), a 64th of its length per click, heard at once; what
     // slides past the end comes in at the beginning. The loop itself stays
-    // where it is, in step with L0 (its light still flashes on its start). A
-    // note keeps whether it has played this round, so one just heard and
-    // pushed a little later does not play again.
-    void Shift(int c, int steps) {
+    // where it is, in step with L0 (its light still flashes on its start).
+    // Each note keeps its slide in beats and its time stays whole (where it
+    // falls in the loop is worked out for the length it has now), so another
+    // length and back finds everything where it was, and Unslide puts each
+    // note back exactly. A note keeps whether it has played this round, so
+    // one just heard and pushed a little later does not play again.
+    void Slide(int c, int steps) {
         Loop& lp = loop_[c];
         if (!lp.count || !steps) return;
-        if (!shift_saved_) { Save(c); shift_saved_ = true; }
         const float len = Len(c), d = steps * len / kShiftSteps;
-        for (int i = 0; i < lp.count; ++i) {
-            LoopNote& n = lp.n[i];
-            float a = std::fmod(n.at + d, len);
-            if (a < 0.f) a += len;
-            n.at = a;
-            n.phase = a / len;
-        }
-        ch_[c].shift = ((ch_[c].shift + steps) % kShiftSteps + kShiftSteps) % kShiftSteps;
-        ShowMeter(kMeterBar, ch_[c].shift / float(kShiftSteps), -1.f, true);
+        for (int i = 0; i < lp.count; ++i) Move(c, lp.n[i], d);
+        ch_[c].slide += d;
+    }
+    void Unslide(int c) {
+        Loop& lp = loop_[c];
+        for (int i = 0; i < lp.count; ++i) Move(c, lp.n[i], -lp.n[i].slid);
+        ch_[c].slide = 0.f;
+    }
+    void Move(int c, LoopNote& n, float d) {
+        n.at += d;
+        n.slid += d;
+        const float p = n.at / Len(c);
+        n.phase = p - std::floor(p);
     }
 
     // Channel `to` takes over the pattern of `from`: its loop and ratio, in step
@@ -1339,7 +1352,7 @@ private:
         Save(to);
         loop_[to] = loop_[from];
         ch_[to].ratio = ch_[from].ratio;
-        ch_[to].shift = ch_[from].shift;
+        ch_[to].slide = ch_[from].slide;
         pending_[to] = pending_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
