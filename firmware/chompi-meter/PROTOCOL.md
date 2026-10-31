@@ -18,7 +18,7 @@ least every 0.5 s and every channel at least every 2 s, changed or not.
 |-----|----------|---------|
 | 01  | hello    | — (meter answers 41, then sends everything) |
 | 02  | hint     | 5 bytes, 7 bits each, low first: a bit per control id; those controls breathe in white |
-| 03  | channel  | c, preset, octave+2, ratio, level q7, place, muted, count, then count × (phase lo, phase hi, note) |
+| 03  | channel  | c, preset, octave+2, ratio, level q7, pan, muted, count, then count × (phase lo, phase hi, note) |
 | 04  | ensemble | selected channel, L0 ms lo, L0 ms hi (0: keep), running |
 | 05  | start    | — |
 
@@ -26,13 +26,12 @@ least every 0.5 s and every channel at least every 2 s, changed or not.
   its loop's notes (phase 0..16383 over the loop, note without the octave),
   the loop from its start. Up to 32 notes.
 - **ensemble** selects a channel, sets the tempo and play, and restarts every
-  loop together. The ensemble ratio, level and the circle's size
+  loop together. The ensemble ratio, level and the width
   go back to neutral.
 - **start** is power-on: every channel on its own sound, no loops. The volume
   and the room stay as they are.
 
-**place** is where the player stands on the circle around the listener: 0..127
-is one turn from in front, clockwise (32 right, 64 behind, 96 left).
+**pan** is the player's pan, 64 in the middle, 1 left, 127 right.
 
 A lesson sets up with start, a channel message for each player, then ensemble.
 
@@ -42,7 +41,7 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 |-----|---------|---------|
 | 41  | hello   | version (1), channels (15), presets (10) |
 | 42  | state   | see below |
-| 43  | channel | c, preset, octave+2, ratio, pending+1, level q7, place, strike, brightness, decay, shimmer, feel, buzz (q7), count, count × (phase lo, phase hi, note) |
+| 43  | channel | c, preset, octave+2, ratio, pending+1, level q7, pan, strike, brightness, decay, shimmer, feel, buzz (q7), count, count × (phase lo, phase hi, note) |
 | 44  | event   | kind, id, value |
 | 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi; about 10 a second |
 
@@ -52,7 +51,7 @@ them. A longer loop adds rest after them; a shorter one silences the notes past
 its end, and meter keeps those (not listed) until the loop grows again.
 
 **state:** selected, flags, ensemble ratio, pending ensemble ratio+1, L0 ms lo,
-L0 ms hi, volume q7, room q7, the circle's size q7 (0..2), the ensemble's level q7 (0..2),
+L0 ms hi, volume q7, room q7, the width q7 (0..2), the ensemble's level q7 (0..2),
 six unused bytes (64; were the all-mode offsets, K1-K3 on all now turn every channel), muted
 (3 bytes, a bit per channel), listened to (3 bytes), held (CHOMPI 1, play 2,
 loop 4), load q7 (share of the audio callback's time), voices sounding, voices

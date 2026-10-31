@@ -6,8 +6,8 @@
 // Everything here runs in the audio callback (controls once per block, then
 // the sound), except DrawLeds(), which the main loop calls.
 
-#include "../dsp/Circle.h"
 #include "../dsp/Mallet.h"
+#include "../dsp/Pan.h"
 #include "../dsp/Presets.h"
 #include "Voice.h"
 #include "board/hardware.h"
@@ -18,6 +18,14 @@
 #include <cstdint>
 
 namespace meter {
+
+// The release, or (make TEST=1) with what is still being tried: a figure's
+// versions (loop held + wheel) and choosing its length after playing (loop
+// held + a black key). The versions are saved either way.
+#ifndef CIRCLES_TEST
+#define CIRCLES_TEST 0
+#endif
+static constexpr bool kTestBuild = CIRCLES_TEST;
 
 using chompi::Hardware;
 using Sw = Hardware::SwId;
@@ -91,7 +99,7 @@ struct Channel {
     int preset = 0;
     MalletParams p;
     float level = .8f;
-    float place = 0.f; // where the player stands on the circle, a turn from in front (.25 right, .75 left)
+    float pan = 0.f; // -1 left .. 1 right
     int octave = 0;
     int last_note = 60; // the last key played, before the octave: the preview note
     int ratio = kRatioOne; // index into kRatios: the loop length is L0 times this
@@ -165,7 +173,6 @@ public:
             slot_[v].v.Init(sample_rate, v + 1, voice_mem + v * AnyVoice::kArenaFloats);
             slot_[v].ch = slot_[v].note = -1;
         }
-        for (auto& seat : seat_) seat.Init(sample_rate);
         PlaceAll(true);
     }
 
@@ -178,7 +185,7 @@ public:
             // Players 1-14 on the instruments of set 1 in key order, 15 on the first again.
             ch_[c].preset = kSetPresets[0][c % 14];
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
-            ch_[c].place = StartPlace(c); // in an arc in front, 15 places
+            ch_[c].pan = StartPan(c); // fanned out from the middle
             ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
             loop_[c].count = 0;
             loop_[c].seam = 0.f;
@@ -297,7 +304,7 @@ public:
                     if (all_) pending_ens_ = BlackIndex(k);
                     else pending_[sel_] = BlackIndex(k);
                     if (!running_) ApplyPending(); // stopped: no beat to wait for
-                } else if (loop_down_ && !loop_chompi_ && !kKeys[k].white) {
+                } else if (kTestBuild && loop_down_ && !loop_chompi_ && !kKeys[k].white) {
                     // Loop held + a black key: what was played before loop went
                     // down, kept again with this length. Another one: again.
                     Rekeep(loop_ch_, BlackIndex(k));
@@ -330,7 +337,7 @@ public:
         // newer (with CHOMPI: the ensemble's), shown on the black keys.
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (loop_down_) {
+            if (kTestBuild && loop_down_) {
                 if (const int step = Steps(inc, kStepVersions, kClicksPerVersion)) {
                     if (chompi) BrowseAll(step);
                     else Browse(sel_, step);
@@ -415,7 +422,7 @@ public:
         }
         // While loop is held (a moment, so a tap does not flash them): the lengths
         // on the black keys, for loop + a black key.
-        len_show_ = loop_down_ && !loop_chompi_ && !chompi && !vshow_ && loop_hold_ >= kLenShowBlocks;
+        len_show_ = kTestBuild && loop_down_ && !loop_chompi_ && !chompi && !vshow_ && loop_hold_ >= kLenShowBlocks;
         if (loop_down_) {
             if (!loop_held) {
                 loop_down_ = false;
@@ -490,15 +497,11 @@ public:
             // How loud it sounds, for the keys (the instrument's own loudness, not the channel's level).
             s.energy = s.v.Active() ? peak * preset_gain_[c.preset] : 0.f;
         }
-        // Each channel from its place on the circle; a block after its last
-        // voice it still runs, so the ear delay and the filters ring out.
+        // Each channel at its pan.
         for (int c = 0; c < kChannels; ++c) {
-            if (busy_[c]) quiet_[c] = 0;
-            else if (quiet_[c] < 2) { std::fill(bus_[c], bus_[c] + n, 0.f); quiet_[c]++; }
-            else continue;
-            seat_[c].Process(bus_[c], l, r, sl, sr, n);
+            if (!busy_[c]) continue;
+            pan_[c].Process(bus_[c], l, r, sl, sr, n);
             busy_[c] = false;
-            if (quiet_[c] == 2) seat_[c].Reset();
         }
     }
 
@@ -596,7 +599,7 @@ public:
         o[n++] = uint8_t(ch.ratio);
         o[n++] = uint8_t(pending_[c] + 1);
         o[n++] = Q7(ch.level);
-        o[n++] = uint8_t(int(ch.place * 128.f + .5f) & 127);
+        o[n++] = Q7(.5f + .5f * ch.pan);
         for (float v : {ch.p.strike, ch.p.brightness, ch.p.decay, ch.p.shimmer, ch.p.variation, ch.p.buzz})
             o[n++] = Q7(v);
         const Loop& lp = loop_[c];
@@ -822,7 +825,7 @@ private:
     }
 
     // The page's messages to the instrument (see PROTOCOL.md):
-    //   3 channel: c preset octave+2 ratio level place muted count (phase.lo phase.hi note)*
+    //   3 channel: c preset octave+2 ratio level pan muted count (phase.lo phase.hi note)*
     //     the sound from its preset, the loop from its start;
     //   4 ensemble: selected tempo.lo tempo.hi (L0 in ms) running; every loop
     //     from its start, the ensemble's level and the circle's size back to neutral;
@@ -843,7 +846,7 @@ private:
             ch.octave = std::min(std::max(int(d[3]) - 2, -2), 2);
             ch.ratio = std::min(int(d[4]), kNumRatios - 1);
             ch.level = d[5] / 127.f;
-            ch.place = d[6] / 128.f;
+            ch.pan = std::min(std::max((d[6] - 64) / 63.f, -1.f), 1.f);
             Place(c, true);
             muted_[c] = d[7];
             pending_[c] = -1;
@@ -1334,15 +1337,15 @@ private:
     //   K1 strike     | shimmer
     //   K2 brightness | feel (variation)
     //   K3 decay      | prep (the instrument's preparation; on the mallets the buzz)
-    //   K4 level      | place on the circle
+    //   K4 level      | pan
     // With the switch on all: K1-K3 turn every channel's own values, each from
     // where it is; K4 the ensemble's level | the circle's size.
     // Every turn shows its value on the keys (the meter).
     void Turn(int knob, int inc, bool chompi) {
         const float d = inc * .02f;
         if (all_) {
-            // K4 as on one channel: the level, and with CHOMPI the place on the
-            // circle (for all: the circle's size). The mark: as set.
+            // K4 as on one channel: the level, and with CHOMPI the pan (for
+            // all: the width). The mark: as set.
             if (knob == 3) {
                 float& v = chompi ? size_ : gain_;
                 v = std::min(std::max(v + 2.f * d, 0.f), 2.f);
@@ -1367,9 +1370,10 @@ private:
             if (chompi) {
                 // Round and round: 50 clicks a turn. The keys: in front at the
                 // middle C, the sides at the quarters, behind at both ends.
-                c.place = Wrap(c.place + d);
+                // Left to right in 50 clicks; the keys: the middle C in the middle.
+                c.pan = std::min(std::max(c.pan + 2.f * d, -1.f), 1.f);
                 Place(sel_, false);
-                ShowMeter(kMeterCentre, 2.f * (c.place < .5f ? c.place : c.place - 1.f));
+                ShowMeter(kMeterCentre, c.pan);
             } else {
                 c.level = Clamp01(c.level + d);
                 ShowMeter(kMeterBar, c.level, Channel().level);
@@ -1388,8 +1392,8 @@ private:
     }
 
     // CHOMPI + push: the knob's two layers as the instrument has them (K4: the
-    // level and the place at power-on). On all: everyone's back to their instrument, K4 the
-    // ensemble's level and the circle's size to the middle.
+    // level and the pan at power-on). On all: everyone's back to their instrument, K4 the
+    // ensemble's level and the width to the middle.
     void Reset(int knob) {
         if (all_) {
             if (knob == 3) {
@@ -1410,7 +1414,7 @@ private:
         const MalletParams& o = kMalletPresets[c.preset].p;
         if (knob == 3) {
             c.level = Channel().level;
-            c.place = StartPlace(sel_);
+            c.pan = StartPan(sel_);
             Place(sel_, false);
             ShowMeter(kMeterBar, c.level, c.level);
             return;
@@ -1423,14 +1427,14 @@ private:
         ShowMeter(kMeterBar, v, v);
         Update(sel_);
     }
-    // Where channel c stands at power-on: 1 in front, then outwards in an arc
-    // in front, neighbours on opposite sides (2 left, 3 right, 4 further left
-    // ...), the outermost a fifth of a turn to either side.
-    static float StartPlace(int c) {
+    // Channel c's pan at power-on: 1 in the middle, then outwards, neighbours
+    // on opposite sides (2 left, 3 right, 4 further left ...), the outermost
+    // most of the way to either side.
+    static float StartPan(int c) {
         const int out = (c + 1) / 2;
-        return Wrap(float(c & 1 ? -out : out) * kStartArc / float(kChannels / 2));
+        return float(c & 1 ? -out : out) * kStartWidth / float(kChannels / 2);
     }
-    static constexpr float kStartArc = .2f;
+    static constexpr float kStartWidth = .8f;
 
     // Clicks that only count every few: a step (+1 or -1) once enough have
     // gathered on the same thing (id) within a second, else 0.
@@ -1453,14 +1457,12 @@ private:
     float preset_gain_[kNumMalletPresets] = {};
     Channel ch_[kChannels];
     Slot slot_[kVoices];
-    Seat seat_[kChannels];       // each channel's place on the circle, as heard
+    Pan pan_[kChannels];         // each channel's pan, as heard
     float bus_[kChannels][64];   // each channel's sum in this block (blocks of up to 64)
     bool busy_[kChannels] = {};  // ... has a voice in it
-    uint8_t quiet_[kChannels] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}; // blocks since its last voice
-    static float Wrap(float x) { return x - std::floor(x); }
     void Place(int c, bool snap) {
-        seat_[c].Set(ch_[c].place, size_);
-        if (snap) seat_[c].Snap();
+        pan_[c].Set(ch_[c].pan, size_);
+        if (snap) pan_[c].Snap();
     }
     void PlaceAll(bool snap) { for (int c = 0; c < kChannels; ++c) Place(c, snap); }
     bool dirty_[kChannels] = {};
@@ -1472,7 +1474,7 @@ private:
     bool all_ = false, show_load_ = false;
     float room_ = .5f, volume_ = .4f, load_ = 0.f; // the volume at power-on: 6 dB under the old .8
     uint32_t shed_ = 0; // voices the load guard has cut
-    float size_ = 1.f;  // the circle's size: 0 all in the middle, close; 1 as placed; 2 wider and further away
+    float size_ = 1.f;  // the width: 0 all in the middle, 1 as panned, 2 pushed further out
     float gain_ = 1.f;  // the ensemble's level, on every channel's own (0..2)
 
     // The meter: while a knob turns (and a moment after), the keys show its value.
