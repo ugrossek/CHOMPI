@@ -533,6 +533,10 @@ public:
 
     uint32_t Misreads() const { return misreads_; }
 
+    // The USB link as the CHOMPI sees it, for the K6 view (Link sets it).
+    struct UsbView { bool heard, rx, tx_stuck, waiting; int state; }; // state: 0 off, 1 asleep, 2 set up
+    void SetUsbView(const UsbView& v) { usb_view_ = v; }
+
     int ActiveVoices() const {
         int n = 0;
         for (const auto& s : slot_) n += s.v.Active();
@@ -696,6 +700,19 @@ public:
                     const float* col = load_ < .6f ? kGreen : load_ < .85f ? kYellow : kRed;
                     std::copy(col, col + 3, rgb);
                 }
+                // The five highest keys: the USB link, for finding out why a page
+                // hears nothing. 25 a page said hello (3 s), 24 data comes in, 23
+                // sending is stuck, 22 messages wait to be read, 21 the computer
+                // has set the CHOMPI up (yellow: asleep).
+                const UsbView& u = usb_view_;
+                const float dim[3] = {.15f, 0.f, 0.f}, white[3] = {1.f, 1.f, 1.f}, off[3] = {0.f, 0.f, 0.f};
+                const float* show = nullptr;
+                if (k == 24) show = u.heard ? kGreen : dim;
+                else if (k == 23) show = u.rx ? white : off;
+                else if (k == 22) show = u.tx_stuck ? kRed : kGreen;
+                else if (k == 21) show = u.waiting ? kYellow : off;
+                else if (k == 20) show = u.state == 2 ? kGreen : u.state == 1 ? kYellow : kRed;
+                if (show) std::copy(show, show + 3, rgb);
             } else if (meter_wait_ > 0) {
                 // The meter, with the selected channel's notes over it in its colour.
                 static constexpr float kWhite[3] = {1.f, 1.f, 1.f};
@@ -1475,6 +1492,7 @@ private:
     uint64_t held_ = 0, pressed_ = 0;
     static constexpr int kMostDown = 12; // more switches down at once: a misread
     uint32_t misreads_ = 0;              // ... so many since power-on
+    UsbView usb_view_ = {};
 
     float sr_ = 48000.f;
     float preset_gain_[kNumMalletPresets] = {};

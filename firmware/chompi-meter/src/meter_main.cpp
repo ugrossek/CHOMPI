@@ -88,6 +88,10 @@ static float limit_env = 0.f;
  * again every ~230 ms), and a second interrupt that never comes. */
 static bool     prev_int_state = true, usb_handoff = false, usb_lent = false;
 static uint32_t usb_handoff_t = 0, usb_lent_t = 0, usb_quiet_t = 0;
+/* When a cable last came (power on it, after none): only then are the lines lent. */
+static bool     prev_vin = false;
+static uint32_t cable_t  = 0;
+static constexpr uint32_t kNewCableMs = 3000;
 
 /* Every charger register, waiting for the I2C transfer to land; false if it
  * did not within half a second. */
@@ -104,7 +108,8 @@ static bool ChargerRead()
  * detect the port, then take the lines. */
 static void UsbTakeOver()
 {
-    ChargerRead();
+    if(ChargerRead())
+        prev_vin = (hw.mp_buff_[1] >> 6) & 1;
     System::Delay(100);
     hw.usb_sw.Write(false);        // give USB to the charger
     System::Delay(1);
@@ -126,7 +131,16 @@ static void ServiceUsbSwitch(uint32_t now)
 
     if(interrupt)
     {
-        if(!ChargerRead())
+        const bool read = ChargerRead();
+        if(read)
+        {
+            // Power on the cable now, and not before: a cable has come.
+            const bool vin = (hw.mp_buff_[1] >> 6) & 1;
+            if(vin && !prev_vin)
+                cable_t = now | 1;
+            prev_vin = vin;
+        }
+        if(!read)
             prev_int_state = true; // stale registers: look again next pass
         else if((hw.mp_buff_[0] & 0B11110000) == 0 && usb_lent)
         {
@@ -139,13 +153,12 @@ static void ServiceUsbSwitch(uint32_t now)
         {
             // still settling from the last round: the lines stay with us
         }
-        else if((hw.mp_buff_[0] & 0B11110000) == 0 && hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED)
+        else if((hw.mp_buff_[0] & 0B11110000) == 0 && !(cable_t && now - cable_t < kNewCableMs))
         {
-            // The computer has found the CHOMPI and is talking to it, so this is
-            // no new cable (the charger tells of charging, say): the lines stay
-            // with us. Lent out, the CHOMPI would be gone from the computer for
-            // up to 1.5 s. (Unplugged, the USB core goes to sleep, so a cable
-            // plugged in again is still looked at.)
+            // No cable has just come (the charger tells of charging, or of the
+            // traffic on the lines: a page saying hello set it off every time):
+            // the lines stay with us. Lent out, the CHOMPI would be gone from
+            // the computer for 1.5 s.
         }
         else if((hw.mp_buff_[0] & 0B11110000) == 0) // DPDM_STAT unknown
         {

@@ -18,8 +18,18 @@
 #include "usbd_cdc.h"
 extern USBD_HandleTypeDef hUsbDeviceHS;    // libDaisy's USB device (the CHOMPI's USB-MIDI)
 extern PCD_HandleTypeDef hpcd_USB_OTG_HS; // and its port
+extern "C" void CDC_Set_Rx_Callback_HS(void (*cb)(uint8_t* buf, uint32_t* size));
+void ReceiveCallback(uint8_t* buffer, uint32_t* length); // libDaisy's USB-MIDI receive (hid/usb_midi.cpp)
 
 namespace meter {
+
+// Every USB packet from the computer passes here on its way to libDaisy, and
+// is counted: the K6 view shows whether data comes in at all.
+inline volatile uint32_t g_usb_rx = 0;
+inline void CountingRx(uint8_t* buffer, uint32_t* length) {
+    g_usb_rx = g_usb_rx + 1;
+    ReceiveCallback(buffer, length);
+}
 
 class Link {
 public:
@@ -35,6 +45,17 @@ public:
         // pulled: the computer finds it anew, and a new start clears the send.
         // (Nobody reading is no reason: with no page, a send just waits.)
         hw.usb_midi.Listen();
+        if (!counting_) { CDC_Set_Rx_Callback_HS(CountingRx); counting_ = true; }
+        {
+            // The K6 view of the link.
+            if (g_usb_rx != rx_seen_) { rx_seen_ = g_usb_rx; rx_t_ = now; }
+            const auto* c = static_cast<const USBD_CDC_HandleTypeDef*>(hUsbDeviceHS.pClassData);
+            if (c && c->TxState != 0) { if (!busy_t_) busy_t_ = now | 1; } else busy_t_ = 0;
+            const uint8_t st = hUsbDeviceHS.dev_state;
+            in.SetUsbView({hello_ && now - hello_ < kQuietMs, rx_t_ && now - rx_t_ < 200,
+                           busy_t_ && now - busy_t_ > 500, hw.usb_midi.HasEvents(),
+                           st == USBD_STATE_CONFIGURED ? 2 : st == USBD_STATE_SUSPENDED ? 1 : 0});
+        }
         if (replug_t_) {
             if (int32_t(now - replug_t_) < 0) return;
             HAL_PCD_DevConnect(&hpcd_USB_OTG_HS);
@@ -160,6 +181,8 @@ private:
 
     bool active_ = false;
     uint32_t stuck_t_ = 0, reset_t_ = 0, resets_ = 0, replug_t_ = 0;
+    bool counting_ = false;
+    uint32_t rx_seen_ = 0, rx_t_ = 0, busy_t_ = 0;
     uint32_t hello_ = 0, sent_ = 0, state_t_ = 0, clock_t_ = 0;
     uint8_t out_[kOut];
     int n_ = 0;
