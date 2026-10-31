@@ -733,13 +733,13 @@ public:
             key_flash_[k] *= std::exp(-dt / .25f);
         }
 
-        // Knobs: the selected channel's colour; with the switch on all, the
-        // colours of all channels, passing along the four knobs a step per L0 beat.
+        // Knobs: the selected channel's colour; with the switch on all, white
+        // (everyone, as the meter on the keys shows it).
         led_time_ += dt;
         for (int n = 0; n < 4; ++n) {
-            const float* kc = sel_col;
-            if (all_) kc = kPresetColor[ch_[(l0_beats_ + n) % kChannels].preset];
-            Pth(kKnobs[n].led, kc[0], kc[1], kc[2]);
+            static constexpr float kAll = .6f;
+            if (all_) Pth(kKnobs[n].led, kAll, kAll, kAll);
+            else Pth(kKnobs[n].led, sel_col[0], sel_col[1], sel_col[2]);
         }
         Pth(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
 
