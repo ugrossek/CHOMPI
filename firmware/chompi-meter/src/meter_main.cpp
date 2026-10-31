@@ -138,6 +138,14 @@ static void ServiceUsbSwitch(uint32_t now)
         {
             // still settling from the last round: the lines stay with us
         }
+        else if((hw.mp_buff_[0] & 0B11110000) == 0 && hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED)
+        {
+            // The computer has found the CHOMPI and is talking to it, so this is
+            // no new cable (the charger tells of charging, say): the lines stay
+            // with us. Lent out, the CHOMPI would be gone from the computer for
+            // up to 1.5 s. (Unplugged, the USB core goes to sleep, so a cable
+            // plugged in again is still looked at.)
+        }
         else if((hw.mp_buff_[0] & 0B11110000) == 0) // DPDM_STAT unknown
         {
             hw.USBMidiActive(false);
@@ -146,6 +154,7 @@ static void ServiceUsbSwitch(uint32_t now)
             usb_handoff_t = now;
             usb_lent      = true;
             usb_lent_t    = now;
+            page_link.lent++;
         }
         else
         {

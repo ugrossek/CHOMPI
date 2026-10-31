@@ -43,7 +43,7 @@ A lesson sets up with start, a channel message for each player, then ensemble.
 | 42  | state   | see below |
 | 43  | channel | c, preset, octave+2, ratio, pending+1, level q7, pan, strike, brightness, decay, shimmer, feel, buzz (q7), count, count × (phase lo, phase hi, note) |
 | 44  | event   | kind, id, value |
-| 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi, then how often USB was restarted since power-on (0..127); about 10 a second |
+| 45  | clock   | L0's place, then each channel's place in its loop (15 ×), each 0..16383 as lo, hi, then how often USB was restarted and how often the charger had the USB lines, since power-on (0..127 each); about 10 a second |
 
 **channel** (43) lists the notes that sound, at their places in the loop as it
 is now. A loop's length is a window on its notes: a new ratio never stretches

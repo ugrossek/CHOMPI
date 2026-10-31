@@ -34,13 +34,15 @@ static const MalletPreset kMalletPresets[] = {
     {"Muffled",   {0.100f, 0.50f, 0.55f, 0.55f, 0.40f, 0.00f, 0.7f, 1}, +0.0f}, // muffle
     // The sound study's instruments, each at its own setting (study/render.cpp
     // Default); the gain matches each one's loudest 0.3 s to the marimba's.
+    // That reads a low, round note louder than it sounds: the hang and the bowl
+    // are raised to where the others are on A-weighted single notes, C3 .. E5.
     //                     brightness decay strike  feel  shimmer prep
     {"Amadinda",     {0.f, 0.50f, 0.40f, 0.70f, 0.35f, 0.10f, 0.30f, 0}, -8.7f, kEngAmadinda},
     {"Gangsa",       {0.f, 0.55f, 0.60f, 0.70f, 0.30f, 0.75f, 0.30f, 0}, -12.7f, kEngGangsa},
     {"Mbira",        {0.f, 0.50f, 0.55f, 0.55f, 0.30f, 0.00f, 0.50f, 0}, -19.8f, kEngMbira},
     {"Kora",         {0.f, 0.55f, 0.50f, 0.55f, 0.30f, 0.30f, 0.25f, 0}, -9.1f, kEngKora},
-    {"Hang",         {0.f, 0.50f, 0.55f, 0.40f, 0.25f, 0.30f, 0.00f, 0}, -7.2f, kEngHang},
-    {"Singing bowl", {0.f, 0.50f, 0.60f, 0.45f, 0.20f, 0.35f, 0.00f, 0}, -14.8f, kEngBowl},
+    {"Hang",         {0.f, 0.50f, 0.55f, 0.40f, 0.25f, 0.30f, 0.00f, 0}, -0.2f, kEngHang}, // raised 7 dB, see above
+    {"Singing bowl", {0.f, 0.50f, 0.60f, 0.45f, 0.20f, 0.35f, 0.00f, 0}, -9.8f, kEngBowl}, // raised 5 dB
     {"Bowed glass",  {0.f, 0.45f, 0.50f, 0.25f, 0.30f, 0.30f, 0.00f, 0}, -33.3f, kEngBowed},
     {"Voices",       {0.f, 0.50f, 0.25f, 0.50f, 0.35f, 0.30f, 0.40f, 0}, -17.3f, kEngVoices},
     {"Siku",         {0.f, 0.45f, 0.30f, 0.60f, 0.35f, 0.30f, 0.15f, 0}, -9.8f, kEngSiku},

@@ -16,7 +16,8 @@
 #include <cstring>
 
 #include "usbd_cdc.h"
-extern USBD_HandleTypeDef hUsbDeviceHS; // libDaisy's USB device (the CHOMPI's USB-MIDI)
+extern USBD_HandleTypeDef hUsbDeviceHS;    // libDaisy's USB device (the CHOMPI's USB-MIDI)
+extern PCD_HandleTypeDef hpcd_USB_OTG_HS; // and its port
 
 namespace meter {
 
@@ -24,23 +25,32 @@ class Link {
 public:
     static constexpr uint8_t kVersion = 1;
 
+    uint32_t lent = 0; // how often the charger had the USB lines (meter_main)
+
     void Poll(chompi::Hardware& hw, Instrument& in, uint32_t now) {
         // USB that has got stuck comes back by itself. A receive the USB stack
-        // switched off (an overflow) starts again; a send that never finishes
-        // (the cable was pulled while one was on its way, and the USB core never
-        // heard of it) restarts the USB device, as TAPE does when a send fails:
-        // the computer then finds the CHOMPI anew.
+        // switched off (an overflow) starts again. A send that never finishes
+        // while the page is still saying hello (so the computer is there, and
+        // hears us not) unplugs the CHOMPI for a moment, as if the cable were
+        // pulled: the computer finds it anew, and a new start clears the send.
+        // (Nobody reading is no reason: with no page, a send just waits.)
         hw.usb_midi.Listen();
+        if (replug_t_) {
+            if (int32_t(now - replug_t_) < 0) return;
+            HAL_PCD_DevConnect(&hpcd_USB_OTG_HS);
+            replug_t_ = 0;
+        }
         const auto* cdc = static_cast<const USBD_CDC_HandleTypeDef*>(hUsbDeviceHS.pClassData);
-        if (hw.usb_midi_active && cdc && cdc->TxState != 0) {
+        if (hw.usb_midi_active && active_ && now - hello_ < kHelloMs && cdc && cdc->TxState != 0) {
             if (!stuck_t_) stuck_t_ = now | 1;
             else if (now - stuck_t_ > kStuckMs && now - reset_t_ > kResetMs) {
-                hw.ResetUSBMidi();
-                hw.usb_midi.Listen();
+                HAL_PCD_DevDisconnect(&hpcd_USB_OTG_HS);
+                replug_t_ = (now + kUnplugMs) | 1;
                 resets_++;
                 reset_t_ = now;
                 stuck_t_ = 0;
                 active_ = false;
+                return;
             }
         } else {
             stuck_t_ = 0;
@@ -74,10 +84,12 @@ public:
 
         if (now - clock_t_ >= kClockMs) {
             clock_t_ = now;
-            // The clock, then how often USB was restarted (for the page to show).
+            // The clock, then how often USB was restarted and how often the
+            // charger had the lines (for the page to show).
             const int n = in.DescribeClock(b);
             b[n] = uint8_t(resets_ & 127);
-            Add(0x45, b, n + 1);
+            b[n + 1] = uint8_t(lent & 127);
+            Add(0x45, b, n + 2);
         }
 
         int sent = 0;
@@ -103,6 +115,8 @@ private:
     static constexpr uint32_t kQuietMs = 3000; // no hello for so long: the page is gone
     static constexpr uint32_t kStuckMs = 1500; // a send still on its way after so long: stuck (a busy
                                                // computer can take a few hundred ms to read)
+    static constexpr uint32_t kHelloMs = 1500; // ... while a hello came so recently
+    static constexpr uint32_t kUnplugMs = 300; // unplugged so long, for the computer to notice
     static constexpr uint32_t kResetMs = 2000; // at most one USB restart so often
     static constexpr uint32_t kSendMs = 10;    // a message bundle at most so often
     static constexpr uint32_t kAgainMs = 500;  // the state at least so often
@@ -143,7 +157,7 @@ private:
     }
 
     bool active_ = false;
-    uint32_t stuck_t_ = 0, reset_t_ = 0, resets_ = 0;
+    uint32_t stuck_t_ = 0, reset_t_ = 0, resets_ = 0, replug_t_ = 0;
     uint32_t hello_ = 0, sent_ = 0, state_t_ = 0, clock_t_ = 0;
     uint8_t out_[kOut];
     int n_ = 0;
