@@ -223,7 +223,23 @@ public:
     // ---- Controls (audio callback, once per block) --------------------------
     void Controls(Hardware& hw, size_t block) {
         auto& sr = hw.button_sr;
-        const bool chompi = sr.State(int(Sw::KEY_26));
+        // The switches, once per block: down now (held_), down now and up last
+        // block (pressed_; the shift register's own RisingEdge only re-arms after
+        // FallingEdge is asked). More down at once than two hands can hold is a
+        // misread (every key at once: with play among them, a tap on every
+        // player, which muted them all); that block is left out, so it presses
+        // nothing.
+        uint64_t down = 0;
+        for (int i = 0; i < kSwitches; ++i)
+            if (sr.State(i)) down |= uint64_t(1) << i;
+        if (__builtin_popcountll(down) > kMostDown) {
+            if (__builtin_popcountll(held_) <= kMostDown) misreads_++;
+            down = held_;
+        }
+        pressed_ = down & ~held_;
+        const uint64_t released = held_ & ~down;
+        held_ = down;
+        const bool chompi = Down(int(Sw::KEY_26));
         const bool all = !hw.GetToggleState();
         if (all != all_) Event(kEvSwitch, kIdSwitch, all);
         all_ = all;
@@ -235,14 +251,6 @@ public:
             mail_ready_ = false;
         }
 
-        // Presses: a switch that is down now and was up last block. (The shift
-        // register's own RisingEdge only re-arms after FallingEdge is asked.)
-        uint64_t down = 0;
-        for (int i = 0; i < kSwitches; ++i)
-            if (sr.State(i)) down |= uint64_t(1) << i;
-        pressed_ = down & ~held_;
-        const uint64_t released = held_ & ~down;
-        held_ = down;
         for (int id = 0; id < kIdKnob; ++id) {
             const int i = SwitchOf(id);
             if ((pressed_ >> i) & 1) Event(kEvPress, id);
@@ -253,7 +261,7 @@ public:
         // the white keys); play + a tap on a white key mutes that channel (or
         // unmutes it), play + the white key held listens to it; otherwise the
         // key plays.
-        const bool play_held = sr.State(int(Sw::KEY_27)), loop_held = sr.State(int(Sw::KEY_28));
+        const bool play_held = Down(int(Sw::KEY_27)), loop_held = Down(int(Sw::KEY_28));
         if (!chompi) { sound_view_ = false; tap_key_ = -1; }
         // CHOMPI pressed: the keys show the players at once, not the last knob's value.
         if (Pressed(int(Sw::KEY_26))) meter_wait_ = 0;
@@ -318,7 +326,7 @@ public:
             }
         }
 
-        if (tap_again_ && tap_key_ >= 0 && !sr.State(int(kKeys[tap_key_].sw))) {
+        if (tap_again_ && tap_key_ >= 0 && !Down(int(kKeys[tap_key_].sw))) {
             sound_view_ = true;
             view_set_ = SetOf(ch_[sel_].preset, view_set_);
             tap_again_ = false;
@@ -368,7 +376,7 @@ public:
         }
 
         // Right knob held: show voices and load.
-        show_load_ = sr.State(kKnobs[kVolume].push);
+        show_load_ = Down(kKnobs[kVolume].push);
 
         // Play starts all loops on the press (so a start lands where it was
         // meant), and stops them when let go, unless it listened or muted (or
@@ -399,7 +407,7 @@ public:
         for (int k = 0; k < 25; ++k) {
             if (!kKeys[k].white) continue;
             const int c = WhiteIndex(k);
-            if (sr.State(int(kKeys[k].sw))) {
+            if (Down(int(kKeys[k].sw))) {
                 if (white_down_[c] >= 0 && ++white_down_[c] == kListenBlocks && play_held) listen_ |= 1u << c;
             } else {
                 if (white_down_[c] >= 0 && white_down_[c] < kListenBlocks) muted_[c] = !muted_[c];
@@ -469,10 +477,10 @@ public:
         }
 
         // Reboot: CHOMPI + lowest and highest white key, held 2 s, then let go.
-        const bool combo = chompi && sr.State(int(Sw::KEY_1)) && sr.State(int(Sw::KEY_15));
+        const bool combo = chompi && Down(int(Sw::KEY_1)) && Down(int(Sw::KEY_15));
         reboot_hold_ = combo ? reboot_hold_ + 1 : 0;
         if (reboot_hold_ > kRebootBlocks) reboot_armed_ = true;
-        if (reboot_armed_ && !AnyKeyHeld(hw)) reboot_now_ = true;
+        if (reboot_armed_ && !AnyKeyHeld()) reboot_now_ = true;
 
         // Parameter changes reach the ringing voices once per block.
         for (int c = 0; c < kChannels; ++c)
@@ -516,6 +524,8 @@ public:
             if (slot_[v].v.Active() && (oldest < 0 || slot_[v].age < slot_[oldest].age)) oldest = v;
         if (oldest >= 0) { slot_[oldest].v.Stop(); shed_++; }
     }
+
+    uint32_t Misreads() const { return misreads_; }
 
     int ActiveVoices() const {
         int n = 0;
@@ -633,7 +643,7 @@ public:
     // ---- LEDs (main loop) ------------------------------------------------------
     void DrawLeds(Hardware& hw, float dt) {
         using namespace chompi;
-        const bool chompi = hw.button_sr.State(int(Sw::KEY_26));
+        const bool chompi = Down(int(Sw::KEY_26));
         const float* sel_col = kPresetColor[ch_[sel_].preset];
         // The control the page points at flickers white over what it shows, four
         // times a second: quicker than any beat, so it never reads as one.
@@ -1270,11 +1280,10 @@ private:
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
 
-    static bool AnyKeyHeld(Hardware& hw) {
+    bool AnyKeyHeld() const {
         for (const Key& k : kKeys)
-            if (hw.button_sr.State(int(k.sw))) return true;
-        return hw.button_sr.State(int(Sw::KEY_26)) || hw.button_sr.State(int(Sw::KEY_27))
-               || hw.button_sr.State(int(Sw::KEY_28));
+            if (Down(int(k.sw))) return true;
+        return Down(int(Sw::KEY_26)) || Down(int(Sw::KEY_27)) || Down(int(Sw::KEY_28));
     }
 
     MalletParams Effective(int c) const { return ch_[c].p; }
@@ -1456,7 +1465,10 @@ private:
 
     static constexpr int kSwitches = 40; // 5 shift registers of 8
     bool Pressed(int i) const { return (pressed_ >> i) & 1; }
+    bool Down(int i) const { return (held_ >> i) & 1; }
     uint64_t held_ = 0, pressed_ = 0;
+    static constexpr int kMostDown = 12; // more switches down at once: a misread
+    uint32_t misreads_ = 0;              // ... so many since power-on
 
     float sr_ = 48000.f;
     float preset_gain_[kNumMalletPresets] = {};

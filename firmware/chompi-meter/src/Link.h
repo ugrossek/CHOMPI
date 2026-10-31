@@ -84,12 +84,14 @@ public:
 
         if (now - clock_t_ >= kClockMs) {
             clock_t_ = now;
-            // The clock, then how often USB was restarted and how often the
-            // charger had the lines (for the page to show).
+            // The clock, then how often USB was restarted, how often the
+            // charger had the lines and how often the keys were misread (for
+            // the page to show).
             const int n = in.DescribeClock(b);
             b[n] = uint8_t(resets_ & 127);
             b[n + 1] = uint8_t(lent & 127);
-            Add(0x45, b, n + 2);
+            b[n + 2] = uint8_t(std::min(in.Misreads(), uint32_t(127)));
+            Add(0x45, b, n + 3);
         }
 
         int sent = 0;
