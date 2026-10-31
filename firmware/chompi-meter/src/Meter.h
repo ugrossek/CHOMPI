@@ -20,7 +20,7 @@
 namespace meter {
 
 // The release, or (make TEST=1) with what is still being tried: a figure's
-// versions (loop held + wheel) and choosing its length after playing (loop
+// versions (CHOMPI + loop held + wheel) and choosing its length after playing (loop
 // held + a black key). The versions are saved either way.
 #ifndef CIRCLES_TEST
 #define CIRCLES_TEST 0
@@ -356,7 +356,7 @@ public:
             else if (loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
                 if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
                 for (int c = 0; c < kChannels; ++c)
-                    if (all_ || c == sel_) Unslide(c);
+                    if (all_ || c == sel_) Back(c);
                 ShowMeter(kMeterBar, 0.f, -1.f, true);
                 shift_show_ = true;
                 loop_used_ = true;
@@ -365,11 +365,13 @@ public:
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
             if (loop_down_ && !(kTestBuild && chompi)) {
-                if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
-                for (int c = 0; c < kChannels; ++c)
-                    if (all_ || c == sel_) Slide(c, inc);
-                const float len = Len(sel_), f = ch_[sel_].slide / len;
-                ShowMeter(kMeterBar, f - std::floor(f), -1.f, true);
+                // (On all, nothing: everyone sliding together is not heard.)
+                if (!all_) {
+                    if (!shift_saved_) { Save(sel_); shift_saved_ = true; }
+                    Slide(sel_, inc);
+                    const float f = ch_[sel_].slide / Len(sel_);
+                    ShowMeter(kMeterBar, f - std::floor(f), -1.f, true);
+                }
                 shift_show_ = true;
                 loop_used_ = true; // turning is not holding to clear
             } else if (kTestBuild && loop_down_) {
@@ -920,6 +922,7 @@ private:
             }
             lp.pos = 0.f;
             lp.seam = 0.f;
+            Kept(c);
             hist_[c].since = now_;
             swell_[c] = 1.f;
             Update(c);
@@ -1090,6 +1093,7 @@ private:
             ch_[c].slide = 0.f;
             lp.count = 0;
             lp.pos = pos;
+            Kept(c);
             // Where the window began after an L0 beat.
             float b = l0_pos_ - (float(now_ - t) + window) / Beat();
             lp.seam = b - std::floor(b);
@@ -1337,6 +1341,17 @@ private:
         for (int i = 0; i < lp.count; ++i) Move(c, lp.n[i], -lp.n[i].slid);
         ch_[c].slide = 0.f;
     }
+    // Loop held + push: the figure back exactly where it sat against L0 when it
+    // was kept, its slides undone and any drift too (another length for a
+    // while): its loop goes on as if nothing had moved it since.
+    double Beats() const { return double(l0_beats_) + double(l0_pos_); }
+    void Kept(int c) { kept_beat_[c] = Beats(); kept_pos_[c] = loop_[c].pos; }
+    void Back(int c) {
+        Unslide(c);
+        const double p = kept_pos_[c] + (Beats() - kept_beat_[c]) / Len(c);
+        loop_[c].pos = float(p - std::floor(p));
+        Place(c);
+    }
     void Move(int c, LoopNote& n, float d) {
         n.at += d;
         n.slid += d;
@@ -1353,6 +1368,8 @@ private:
         loop_[to] = loop_[from];
         ch_[to].ratio = ch_[from].ratio;
         ch_[to].slide = ch_[from].slide;
+        kept_beat_[to] = kept_beat_[from];
+        kept_pos_[to] = kept_pos_[from];
         pending_[to] = pending_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
@@ -1596,6 +1613,8 @@ private:
     float l0_ = 96000.f;    // L0 in samples (2 s)
     float l0_pos_ = 0.f, l0_flash_ = 0.f, ch_flash_[kChannels] = {};
     uint32_t l0_beats_ = 0; // L0 beats so far
+    double kept_beat_[kChannels] = {}; // when each figure was kept (Beats), and where its loop was
+    float kept_pos_[kChannels] = {};
     bool running_ = true;
     bool loop_down_ = false, loop_used_ = false, loop_chompi_ = false;
     bool play_down_ = false, play_used_ = false;
