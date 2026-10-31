@@ -1,14 +1,19 @@
 # meter firmware for the CHOMPI.
 #   make            build build/CIRCLES.bin (GCC Arm 10.3-2021.10 on the PATH), the release
+#   make SLIDE=1    ... with sliding a figure (loop held + wheel), for beta 2
 #   make TEST=1 BUILD_DIR=build-test
 #                   build build-test/CIRCLES-TEST.bin, with what is still being
-#                   tried: a figure's versions (loop + wheel) and choosing its
-#                   length after playing (loop held + a black key)
+#                   tried: the slide, a figure's versions (CHOMPI + loop held +
+#                   wheel) and choosing its length after playing (loop held + a
+#                   black key)
 
 TARGET = CIRCLES
+ifeq ($(SLIDE),1)
+C_DEFS += -DCIRCLES_SLIDE=1
+endif
 ifeq ($(TEST),1)
 TARGET = CIRCLES-TEST
-C_DEFS += -DCIRCLES_TEST=1
+C_DEFS += -DCIRCLES_TEST=1 -DCIRCLES_SLIDE=1
 endif
 
 # The prebuilt libDaisy and DaisySP that come with TAPE. Rebuilding them with

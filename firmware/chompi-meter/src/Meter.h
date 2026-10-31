@@ -26,6 +26,12 @@ namespace meter {
 #define CIRCLES_TEST 0
 #endif
 static constexpr bool kTestBuild = CIRCLES_TEST;
+// Sliding a figure (loop held + wheel; loop held + push: back where it was kept)
+// comes in beta 2: make SLIDE=1, and in the test build.
+#ifndef CIRCLES_SLIDE
+#define CIRCLES_SLIDE 0
+#endif
+static constexpr bool kSlide = CIRCLES_SLIDE;
 
 using chompi::Hardware;
 using Sw = Hardware::SwId;
@@ -353,7 +359,7 @@ public:
         // (Its switch is on the encoder itself, not in the shift registers.)
         if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) {
             if (chompi) l0_ = kStartL0 * sr_;
-            else if (loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
+            else if (kSlide && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
                 if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
                 for (int c = 0; c < kChannels; ++c)
                     if (all_ || c == sel_) Back(c);
@@ -364,7 +370,7 @@ public:
         }
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (loop_down_ && !(kTestBuild && chompi)) {
+            if (kSlide && loop_down_ && !(kTestBuild && chompi)) {
                 // (On all, nothing: everyone sliding together is not heard.)
                 if (!all_) {
                     if (!shift_saved_) { Save(sel_); shift_saved_ = true; }
