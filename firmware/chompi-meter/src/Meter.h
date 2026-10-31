@@ -60,8 +60,9 @@ constexpr int kPlayLed = 7, kLoopLed = 8;
 constexpr int kWheelLeds[2] = {5, 6};
 
 // A colour per preset, so a channel's sound shows on its key: ten hues as far
-// apart as the LEDs allow; an instrument that takes the place of one of today's
-// takes its colour too, the six new ones the hues left between.
+// apart as the LEDs allow, then the new ones. The fourteen on the white keys
+// all differ, and no two neighbours are near (green, lime and sea green, or
+// white and warm white, stand apart).
 static const float kPresetColor[kNumMalletPresets][3] = {
     {1.0f, .35f, .00f}, // wood: orange
     {1.0f, .00f, .00f}, // marimba: red
@@ -72,13 +73,13 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {.45f, .00f, 1.0f}, // gong: purple
     {1.0f, .00f, .60f}, // felt: pink
     {.00f, 1.0f, .00f}, // snare bar: green
-    {.55f, 1.0f, .00f}, // muffled: lime
-    {1.0f, .35f, .00f}, // amadinda: orange, as wood
+    {1.0f, .60f, .25f}, // muffled: warm white
+    {1.0f, .00f, 1.0f}, // amadinda: magenta
     {1.0f, .85f, .00f}, // gangsa: yellow, as bronze
-    {.45f, .00f, 1.0f}, // mbira: purple
-    {.55f, 1.0f, .00f}, // kora: lime
+    {.00f, 1.0f, .45f}, // mbira: sea green
+    {1.0f, .00f, .60f}, // kora: pink, as felt
     {.00f, 1.0f, 1.0f}, // hang: cyan, as glass
-    {1.0f, 1.0f, 1.0f}, // singing bowl: white, as bell
+    {.55f, 1.0f, .00f}, // singing bowl: lime
     {1.0f, .00f, .60f}, // bowed glass: pink, as felt
     {.00f, 1.0f, .00f}, // voices: green, as the snare bar
     {.00f, 1.0f, .45f}, // siku: sea green
