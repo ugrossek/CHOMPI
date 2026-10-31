@@ -179,7 +179,7 @@ public:
     // As at power-on: every channel on its own sound, no loops, everything at
     // its start. (The volume and the room stay as they are.)
     void Start() {
-        l0_ = 2.f * sr_;
+        l0_ = kStartL0 * sr_;
         for (int c = 0; c < kChannels; ++c) {
             ch_[c] = Channel();
             // Players 1-14 on the instruments of set 1 in key order, 15 on the first again.
@@ -335,6 +335,9 @@ public:
         // tempo, L0, smoothly (right is faster); every loop follows. Loop held +
         // turn: the versions of the selected channel's figure, left older, right
         // newer (with CHOMPI: the ensemble's), shown on the black keys.
+        // CHOMPI + push the wheel: the tempo back to where it is at power-on.
+        // (Its switch is on the encoder itself, not in the shift registers.)
+        if (chompi && hw.enc[kKnobs[kTransport].enc].RisingEdge()) l0_ = kStartL0 * sr_;
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
             if (kTestBuild && loop_down_) {
@@ -733,13 +736,13 @@ public:
             key_flash_[k] *= std::exp(-dt / .25f);
         }
 
-        // Knobs: the selected channel's colour; with the switch on all, white
-        // (everyone, as the meter on the keys shows it).
+        // Knobs: the selected channel's colour; with the switch on all, four
+        // different colours, steady (no one channel looks like that: everyone).
         led_time_ += dt;
+        static constexpr float kAllCol[4][3] = {{1.f, .35f, 0.f}, {1.f, .85f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}};
         for (int n = 0; n < 4; ++n) {
-            static constexpr float kAll = .6f;
-            if (all_) Pth(kKnobs[n].led, kAll, kAll, kAll);
-            else Pth(kKnobs[n].led, sel_col[0], sel_col[1], sel_col[2]);
+            const float* kc = all_ ? kAllCol[n] : sel_col;
+            Pth(kKnobs[n].led, kc[0], kc[1], kc[2]);
         }
         Pth(kKnobs[kTransport].led, sel_col[0], sel_col[1], sel_col[2]);
 
@@ -922,6 +925,7 @@ private:
 
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
+    static constexpr float kStartL0 = 2.f;             // L0 at power-on, s
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
 
     static int BlackIndex(int k) {

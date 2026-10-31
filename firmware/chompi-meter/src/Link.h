@@ -37,6 +37,7 @@ public:
             else if (now - stuck_t_ > kStuckMs && now - reset_t_ > kResetMs) {
                 hw.ResetUSBMidi();
                 hw.usb_midi.Listen();
+                resets_++;
                 reset_t_ = now;
                 stuck_t_ = 0;
                 active_ = false;
@@ -73,7 +74,10 @@ public:
 
         if (now - clock_t_ >= kClockMs) {
             clock_t_ = now;
-            Add(0x45, b, in.DescribeClock(b));
+            // The clock, then how often USB was restarted (for the page to show).
+            const int n = in.DescribeClock(b);
+            b[n] = uint8_t(resets_ & 127);
+            Add(0x45, b, n + 1);
         }
 
         int sent = 0;
@@ -97,7 +101,8 @@ public:
 
 private:
     static constexpr uint32_t kQuietMs = 3000; // no hello for so long: the page is gone
-    static constexpr uint32_t kStuckMs = 300;  // a send still on its way after so long: stuck
+    static constexpr uint32_t kStuckMs = 1500; // a send still on its way after so long: stuck (a busy
+                                               // computer can take a few hundred ms to read)
     static constexpr uint32_t kResetMs = 2000; // at most one USB restart so often
     static constexpr uint32_t kSendMs = 10;    // a message bundle at most so often
     static constexpr uint32_t kAgainMs = 500;  // the state at least so often
@@ -138,7 +143,7 @@ private:
     }
 
     bool active_ = false;
-    uint32_t stuck_t_ = 0, reset_t_ = 0;
+    uint32_t stuck_t_ = 0, reset_t_ = 0, resets_ = 0;
     uint32_t hello_ = 0, sent_ = 0, state_t_ = 0, clock_t_ = 0;
     uint8_t out_[kOut];
     int n_ = 0;
