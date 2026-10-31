@@ -18,16 +18,54 @@
 #include "usbd_cdc.h"
 extern USBD_HandleTypeDef hUsbDeviceHS;    // libDaisy's USB device (the CHOMPI's USB-MIDI)
 extern "C" void CDC_Set_Rx_Callback_HS(void (*cb)(uint8_t* buf, uint32_t* size));
-void ReceiveCallback(uint8_t* buffer, uint32_t* length); // libDaisy's USB-MIDI receive (hid/usb_midi.cpp)
 
 namespace meter {
 
-// Every USB packet from the computer passes here on its way to libDaisy, and
-// is counted: the K6 view shows whether data comes in at all.
+// What the page sends, taken straight from the USB packets (in the USB
+// interrupt) instead of through libDaisy's MIDI receive: its buffer, parser
+// and event queue could stop passing anything on, for good (seen on the
+// hardware: data came in, no message came out). CIRCLES only needs SysEx: a
+// message is the bytes between F0 and F7; a new F0 or another status byte
+// starts over, so a lost byte costs one message, not the rest. Finished
+// messages wait in a small queue with one writer (here) and one reader (the
+// main loop). The packets are counted for the K6 view.
+struct RxMessage { uint8_t d[128]; int n; };
+constexpr int kRxQueue = 8;
+inline RxMessage g_rx_q[kRxQueue];
+inline volatile int g_rx_head = 0, g_rx_tail = 0;
+inline uint8_t g_rx_cur[128];
+inline int g_rx_n = -1; // -1: not inside a message
 inline volatile uint32_t g_usb_rx = 0;
-inline void CountingRx(uint8_t* buffer, uint32_t* length) {
+
+inline void RxByte(uint8_t b) {
+    if (b == 0xF0) { g_rx_n = 0; return; }
+    if (g_rx_n < 0) return;
+    if (b == 0xF7) {
+        const int next = (g_rx_head + 1) % kRxQueue;
+        if (next != g_rx_tail) { // (full: this one is lost; the page sends again)
+            RxMessage& m = g_rx_q[g_rx_head];
+            std::memcpy(m.d, g_rx_cur, g_rx_n);
+            m.n = g_rx_n;
+            __sync_synchronize();
+            g_rx_head = next;
+        }
+        g_rx_n = -1;
+        return;
+    }
+    if (b & 0x80) { g_rx_n = -1; return; } // another status byte: that message is broken
+    if (g_rx_n < int(sizeof g_rx_cur)) g_rx_cur[g_rx_n++] = b;
+    else g_rx_n = -1; // too long for anything CIRCLES knows
+}
+
+inline void UsbRx(uint8_t* buffer, uint32_t* length) {
     g_usb_rx = g_usb_rx + 1;
-    ReceiveCallback(buffer, length);
+    // USB-MIDI: 4-byte packets, the low half of the first byte says what
+    // follows (4: SysEx goes on, 3 bytes; 5, 6, 7: it ends with 1, 2, 3; F: one byte).
+    for (uint32_t i = 0; i + 4 <= *length; i += 4) {
+        const uint8_t cin = buffer[i] & 0x0F;
+        const int n = cin == 0x4 || cin == 0x7 ? 3 : cin == 0x6 ? 2 : cin == 0x5 || cin == 0xF ? 1 : 0;
+        for (int k = 0; k < n; ++k) RxByte(buffer[i + 1 + k]);
+    }
 }
 
 class Link {
@@ -37,12 +75,12 @@ public:
     uint32_t lent = 0; // how often the charger had the USB lines (meter_main)
 
     void Poll(chompi::Hardware& hw, Instrument& in, uint32_t now) {
-        // A receive the USB stack switched off (an overflow) starts again. (A
+        // (libDaisy's receive is not used, see UsbRx; listening costs nothing.) A
         // send nobody reads just waits: an earlier version unplugged the CHOMPI
         // then, and that fired when a page said its first hello, which some
         // computers took badly.)
         hw.usb_midi.Listen();
-        if (!counting_) { CDC_Set_Rx_Callback_HS(CountingRx); counting_ = true; }
+        if (!counting_) { CDC_Set_Rx_Callback_HS(UsbRx); counting_ = true; }
         {
             // The K6 view of the link.
             if (g_usb_rx != rx_seen_) { rx_seen_ = g_usb_rx; rx_t_ = now; }
@@ -50,14 +88,15 @@ public:
             if (c && c->TxState != 0) { if (!busy_t_) busy_t_ = now | 1; } else busy_t_ = 0;
             const uint8_t st = hUsbDeviceHS.dev_state;
             in.SetUsbView({hello_ && now - hello_ < kQuietMs, rx_t_ && now - rx_t_ < 200,
-                           busy_t_ && now - busy_t_ > 500, hw.usb_midi.HasEvents(),
+                           busy_t_ && now - busy_t_ > 500, g_rx_tail != g_rx_head,
                            st == USBD_STATE_CONFIGURED ? 2 : st == USBD_STATE_SUSPENDED ? 1 : 0});
         }
 
-        while (hw.usb_midi.HasEvents()) {
-            daisy::MidiEvent e = hw.usb_midi.PopEvent();
-            if (e.type == daisy::SystemCommon && e.sc_type == daisy::SystemExclusive)
-                Receive(in, e.sysex_data, e.sysex_message_len, now);
+        while (g_rx_tail != g_rx_head) {
+            const RxMessage& m = g_rx_q[g_rx_tail];
+            Receive(in, m.d, m.n, now);
+            __sync_synchronize();
+            g_rx_tail = (g_rx_tail + 1) % kRxQueue;
         }
 
         if (!active_ || !hw.usb_midi_active) return;
