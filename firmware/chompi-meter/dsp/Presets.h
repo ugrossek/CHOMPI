@@ -59,7 +59,11 @@ static constexpr int kNumClassicPresets = 10; // today's ten, all on the mallet 
 // -1: nothing on that key.
 static constexpr int kSets = 1;
 static const int8_t kSetPresets[kSets][15] = {
-    {1, 10, 11, 12, 13, 14, 2, 15, 16, 6, 18, 19, 7, 21, -1}, // voices and hands out: gong, felt
+    // Chosen by CPU (BENCH, cycles per note): no siku, bowed glass, tape or
+    // voices, which sound on and cost twice as much. Keys 1-8 short, for
+    // rhythm: wood, marimba, amadinda, gangsa, mbira, kora, snare bar, muffled;
+    // 9-14 long, for melodies: vibes, bell, hang, singing bowl, gong, pulse piano.
+    {0, 1, 10, 11, 12, 13, 8, 9, 2, 5, 14, 15, 6, 19, -1},
 };
 
 } // namespace meter

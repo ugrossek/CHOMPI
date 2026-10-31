@@ -662,7 +662,7 @@ public:
                 const int b = BlackIndex(k);
                 if (b == ch_[sel_].ratio) {
                     rgb[0] = rgb[1] = rgb[2] = 1.f;
-                } else if (loop_span_ > 0.f && (kRatios[b] <= kRatios[loop_ratio_] || kRatios[b] * kRatios[ens_] * Beat() >= loop_span_)) {
+                } else if (loop_span_ > 0.f && (kRatios[b] <= kRatios[loop_ratio_] || kRatios[b] * Beat() >= loop_span_)) {
                     for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * .45f;
                 } else {
                     rgb[0] = rgb[1] = rgb[2] = .04f;
@@ -931,11 +931,11 @@ private:
         return b;
     }
 
-    // On the beat: the ensemble's new length (a factor on every loop's length,
-    // not on the notes: the tempo stays) and each channel's new ratio. Either
-    // way a new window on the same notes: notes past the new end wrap round,
-    // and unfold again when the loop grows. The loop goes on from where it is
-    // in time; past the new end, wrapped round, as its notes.
+    // On the beat: the ensemble's new length (a tempo: every loop keeps its
+    // place and its notes, all play faster or slower together) and each
+    // channel's new ratio, a new window on the same notes: notes past the new
+    // end wrap round, and unfold again when the loop grows. The loop goes on
+    // from where it is in time; past the new end, wrapped round, as its notes.
     void ApplyPending() {
         float was[kChannels];
         for (int c = 0; c < kChannels; ++c) was[c] = Len(c);
@@ -970,11 +970,11 @@ private:
         }
     }
 
-    // The beat: L0 times the ensemble's ratio. A channel's loop: the beat times its ratio.
-    // The beat: L0, the tempo. A channel's loop: L0 times the ensemble's length
-    // times its own ratio (Len, in beats).
-    float Beat() const { return l0_; }
-    float Len(int c) const { return kRatios[ens_] * kRatios[ch_[c].ratio]; }
+    // The beat: L0 times the ensemble's length, a tempo: every figure stays whole
+    // and plays faster or slower. A channel's loop: the beat times its ratio
+    // (Len, in beats).
+    float Beat() const { return l0_ * kRatios[ens_]; }
+    float Len(int c) const { return kRatios[ch_[c].ratio]; }
     float LoopSamples(int c) const { return Beat() * Len(c); }
 
     void Remember(int c, int note) {
@@ -1052,7 +1052,7 @@ private:
         hist_[c].since = loop_since_;
         ch_[c].ratio = ratio;
         pending_[c] = -1;
-        const float window = Beat() * kRatios[ens_] * std::max(kRatios[ratio], kRatios[loop_ratio_]);
+        const float window = Beat() * std::max(kRatios[ratio], kRatios[loop_ratio_]);
         if (Capture(c, loop_t_, false, !loop_kept_, window) > 0) {
             loop_kept_ = true;
             Place(c);
@@ -1066,7 +1066,7 @@ private:
     // keep, at most the longest length): a length fits when it is this long.
     float Span(int c, uint32_t t) const {
         const History& h = hist_[c];
-        const float longest = Beat() * kRatios[ens_] * kRatios[kNumRatios - 1];
+        const float longest = Beat() * kRatios[kNumRatios - 1];
         float span = 0.f;
         for (int i = 0; i < h.count; ++i) {
             const Played& e = h.e[(h.head - h.count + i + kHistory) % kHistory];
