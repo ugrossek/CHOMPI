@@ -38,6 +38,8 @@ public:
     void Strike(float freq, const MalletPreset& preset, const MalletParams& p, float velocity) {
         fade_ = 1.f;
         fade_step_ = 0.f;
+        peak_ = blk_ = 0.f;
+        blk_n_ = blocks_ = under_ = 0;
         if (preset.engine != engine_) Build(preset.engine);
         if (engine_ == kEngMallet) { m_.Strike(freq, p, velocity); return; }
         sd::Knobs k;
@@ -57,6 +59,19 @@ public:
             fade_ -= fade_step_;
             if (fade_ <= 0.f) { fade_ = 0.f; fade_step_ = 0.f; Stop(); }
             y *= fade_;
+        }
+        // The tail: 50 dB under its own loudest, a note is lost under the others and
+        // the room, but still costs as much as at its loudest. It fades out (50 ms)
+        // once it has stayed there for a second (a beating pair dips for a
+        // moment, as deep as it likes), and its voice is free again.
+        const float a = std::fabs(y);
+        if (a > blk_) blk_ = a;
+        if (++blk_n_ == kTailBlock) {
+            if (blk_ > peak_) peak_ = blk_;
+            under_ = blk_ < peak_ * kTail ? under_ + 1 : 0;
+            if (++blocks_ > kTailWait && under_ >= kTailUnder && fade_step_ == 0.f) Fade(.05f);
+            blk_ = 0.f;
+            blk_n_ = 0;
         }
         return y;
     }
@@ -102,6 +117,10 @@ private:
     uint32_t seed_ = 1;
     float* arena_ = nullptr;
     float fade_ = 1.f, fade_step_ = 0.f;
+    static constexpr float kTail = .00316f; // -50 dB
+    static constexpr int kTailBlock = 480, kTailWait = 10, kTailUnder = 100; // 10 ms; not before 100 ms in; 1 s under
+    float peak_ = 0.f, blk_ = 0.f;
+    int blk_n_ = 0, blocks_ = 0, under_ = 0;
     alignas(8) unsigned char mem_[kMem];
 };
 

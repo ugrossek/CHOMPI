@@ -84,13 +84,14 @@ struct Res {
         a1 = 2.f * std::sqrt(a2) * std::cos(w);
     }
     float Tick(float x) {
-        const float in = bp ? x - x2 : x;
-        x2 = x1; x1 = x;
+        float in = x;
+        if (bp) { in = x - x2; x2 = x1; x1 = x; } // (only a noise-driven one needs the inputs)
         const float y = a1 * y1 - a2 * y2 + g * in;
         y2 = y1; y1 = y;
         return y;
     }
     void Clear() { y1 = y2 = x1 = x2 = 0.f; }
+    bool Quiet() const { return std::fabs(y1) + std::fabs(y2) < 1e-6f; }
     bool bp = false;
     float x1 = 0, x2 = 0;
 };
@@ -109,6 +110,12 @@ struct Contact {
         th = th_cur = threshold;
     }
     float Tick(float x, Rng& r) {
+        // Not reached, and its rings have died away: nothing to do (most of a
+        // note's tail, where it would cost as much as the rest of the voice).
+        if (b1 == 0.f && std::fabs(x) <= th_cur && ring[0].Quiet() && ring[1].Quiet()) {
+            touching = false;
+            return 0.f;
+        }
         const bool t = std::fabs(x) > th_cur;
         if (t && !touching) { th_cur = th * (.6f + .8f * r.U()); jit = .4f + 1.2f * r.U(); }
         touching = t;

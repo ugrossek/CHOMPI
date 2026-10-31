@@ -517,12 +517,18 @@ public:
         }
     }
 
-    // Load guard: the callback is too slow, drop the oldest voice.
+    // Load guard: the callback is too slow, drop the quietest voice, as heard
+    // (one fading out anyway first): it is missed least.
     void ShedVoice() {
-        int oldest = -1;
-        for (int v = 0; v < kVoices; ++v)
-            if (slot_[v].v.Active() && (oldest < 0 || slot_[v].age < slot_[oldest].age)) oldest = v;
-        if (oldest >= 0) { slot_[oldest].v.Stop(); shed_++; }
+        int quietest = -1;
+        float least = 0.f;
+        for (int v = 0; v < kVoices; ++v) {
+            const Slot& s = slot_[v];
+            if (!s.v.Active()) continue;
+            const float e = s.v.Fading() ? 0.f : s.energy * ch_[s.ch].level * gate_[s.ch];
+            if (quietest < 0 || e < least) { quietest = v; least = e; }
+        }
+        if (quietest >= 0) { slot_[quietest].v.Stop(); shed_++; }
     }
 
     uint32_t Misreads() const { return misreads_; }
