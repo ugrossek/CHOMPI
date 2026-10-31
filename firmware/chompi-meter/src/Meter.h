@@ -68,7 +68,7 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {1.0f, .00f, .00f}, // marimba: red
     {.00f, .00f, 1.0f}, // vibes: blue
     {1.0f, .85f, .00f}, // bronze: yellow
-    {.00f, 1.0f, 1.0f}, // glass: cyan
+    {.00f, .45f, 1.0f}, // glass: sky (cyan went to the hang)
     {1.0f, 1.0f, 1.0f}, // bell: white
     {.45f, .00f, 1.0f}, // gong: purple
     {1.0f, .00f, .60f}, // felt: pink
@@ -78,12 +78,12 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {1.0f, .85f, .00f}, // gangsa: yellow, as bronze
     {.00f, 1.0f, .45f}, // mbira: sea green
     {1.0f, .00f, .60f}, // kora: pink, as felt
-    {.00f, 1.0f, 1.0f}, // hang: cyan, as glass
+    {.00f, 1.0f, 1.0f}, // hang: cyan
     {.55f, 1.0f, .00f}, // singing bowl: lime
     {1.0f, .00f, .60f}, // bowed glass: pink, as felt
     {.00f, 1.0f, .00f}, // voices: green, as the snare bar
     {.00f, 1.0f, .45f}, // siku: sea green
-    {.00f, .45f, 1.0f}, // pulse piano: sky
+    {.00f, .45f, 1.0f}, // pulse piano: sky, as glass
     {1.0f, .00f, 1.0f}, // hands: magenta
     {1.0f, .60f, .25f}, // tape: warm white
 };

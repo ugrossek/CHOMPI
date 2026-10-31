@@ -39,8 +39,8 @@ static const MalletPreset kMalletPresets[] = {
     //                     brightness decay strike  feel  shimmer prep
     {"Amadinda",     {0.f, 0.50f, 0.40f, 0.70f, 0.35f, 0.10f, 0.30f, 0}, -8.7f, kEngAmadinda},
     {"Gangsa",       {0.f, 0.55f, 0.60f, 0.70f, 0.30f, 0.75f, 0.30f, 0}, -12.7f, kEngGangsa},
-    {"Mbira",        {0.f, 0.50f, 0.55f, 0.55f, 0.30f, 0.00f, 0.50f, 0}, -19.8f, kEngMbira},
-    {"Kora",         {0.f, 0.55f, 0.50f, 0.55f, 0.30f, 0.30f, 0.25f, 0}, -9.1f, kEngKora},
+    {"Mbira",        {0.f, 0.50f, 0.55f, 0.55f, 0.30f, 0.00f, 0.00f, 0}, -19.8f, kEngMbira}, // no caps: CHOMPI + K3 brings them
+    {"Kora",         {0.f, 0.55f, 0.50f, 0.55f, 0.30f, 0.30f, 0.00f, 0}, -9.1f, kEngKora},   // no plate: CHOMPI + K3 brings it
     {"Hang",         {0.f, 0.50f, 0.55f, 0.40f, 0.25f, 0.30f, 0.00f, 0}, -0.2f, kEngHang}, // raised 7 dB, see above
     {"Singing bowl", {0.f, 0.50f, 0.60f, 0.45f, 0.20f, 0.35f, 0.00f, 0}, -9.8f, kEngBowl}, // raised 5 dB
     {"Bowed glass",  {0.f, 0.45f, 0.50f, 0.25f, 0.30f, 0.30f, 0.00f, 0}, -33.3f, kEngBowed},
@@ -62,10 +62,11 @@ static constexpr int kNumClassicPresets = 10; // today's ten, all on the mallet 
 static constexpr int kSets = 1;
 static const int8_t kSetPresets[kSets][15] = {
     // Chosen by CPU (BENCH, cycles per note): no siku, bowed glass, tape or
-    // voices, which sound on and cost twice as much. Keys 1-8 short, for
-    // rhythm: wood, marimba, amadinda, gangsa, mbira, kora, snare bar, muffled;
-    // 9-14 long, for melodies: vibes, bell, hang, singing bowl, gong, pulse piano.
-    {0, 1, 10, 11, 12, 13, 8, 9, 2, 5, 14, 15, 6, 19, -1},
+    // voices, which sound on and cost twice as much, and glass in place of the
+    // pulse piano, the dearest of the rest. Keys 1-8 short, for rhythm: wood,
+    // marimba, amadinda, gangsa, mbira, kora, snare bar, muffled; 9-14 long,
+    // for melodies: vibes, bell, hang, singing bowl, gong, glass.
+    {0, 1, 10, 11, 12, 13, 8, 9, 2, 5, 14, 15, 6, 4, -1},
 };
 
 } // namespace meter
