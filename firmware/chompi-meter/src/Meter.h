@@ -344,7 +344,7 @@ public:
         // the black keys (the keys stay free to try it). CHOMPI + turn: the
         // tempo, L0, smoothly (right is faster); every loop follows. Loop held +
         // turn: the selected channel's figure slides in its loop, a 16th of its
-        // length per click (right later, left earlier), shown across the keys.
+        // length every two clicks (right later, left earlier), shown across the keys.
         // (Test build: CHOMPI + loop held + turn: the versions of its figure,
         // left older, right newer, shown on the black keys.)
         // CHOMPI + push the wheel: the tempo back to where it is at power-on.
@@ -353,7 +353,7 @@ public:
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
             if (loop_down_ && !(kTestBuild && chompi)) {
-                Shift(sel_, inc);
+                if (const int step = Steps(inc, kStepShift, kClicksPerShift)) Shift(sel_, step);
                 shift_show_ = true;
                 loop_used_ = true; // turning is not holding to clear
             } else if (kTestBuild && loop_down_) {
@@ -1301,7 +1301,7 @@ private:
     }
 
     // Loop held + wheel: channel c's figure slides in its loop, later (right) or
-    // earlier (left), a 16th of its length per click, heard at once; what slides
+    // earlier (left), a 16th of its length per step, heard at once; what slides
     // past the end comes in at the beginning. The loop itself stays where it
     // is, in step with L0 (its light still flashes on its start).
     void Shift(int c, int steps) {
@@ -1602,6 +1602,8 @@ private:
     static constexpr int kShiftSteps = 16;
     static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
     static constexpr int kClicksPerVersion = 2;
+    static constexpr int kStepShift = 101;    // ... and of sliding a figure
+    static constexpr int kClicksPerShift = 2;
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 
