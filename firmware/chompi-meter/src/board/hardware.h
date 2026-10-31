@@ -335,11 +335,17 @@ namespace chompi
             uint16_t address = 0x3F;
 
             uint8_t tx_buff[] = {0x11};
-            i2c.TransmitBlocking(address, tx_buff, 1, 200);
-
             read_ready = false;
-            size_t buff_size = 0x06;
-            i2c.ReceiveDma(address | 0B10000000, mp_buff_, buff_size, batteryCallback, this);
+            // Blocking, with a time limit (meter). A DMA read that never
+            // finished (a hiccup on the bus) left the I2C busy, and the next
+            // call waited for it for ever with no time limit (libDaisy): the
+            // main loop stopped, the panel froze and the page heard nothing,
+            // while the sound played on. A blocking read gives up instead.
+            if(i2c.TransmitBlocking(address, tx_buff, 1, 5) != daisy::I2CHandle::Result::OK)
+                return;
+            if(i2c.ReceiveBlocking(address | 0B10000000, mp_buff_, 0x06, 5) != daisy::I2CHandle::Result::OK)
+                return;
+            batteryCallback(this, daisy::I2CHandle::Result::OK);
         }
 
         static void batteryCallback(void *context, daisy::I2CHandle::Result result)

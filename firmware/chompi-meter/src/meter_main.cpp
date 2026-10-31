@@ -72,6 +72,7 @@ static constexpr int32_t kGuardWait = 8;
 static float   guard_load = 0.f;
 static int32_t guard_wait = 0;
 static float   room_set   = -1.f;
+static volatile uint32_t main_beat = 0, stuck_shown = 0; // the main loop's last round (ms)
 
 /* Output limiter: above kLimitLevel the sum is scaled down. */
 static constexpr float kLimitLevel = .6f, kLimitAttack = .2f, kLimitRelease = .99996f;
@@ -182,6 +183,17 @@ static void ServiceUsbSwitch(uint32_t now)
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
     const uint32_t start = DWT->CYCCNT;
+
+    /* The main loop has not come round for a second: it is stuck (the panel
+     * would freeze, the page hear nothing). Say so: the play light blinks red. */
+    const uint32_t now_ms = System::GetNow();
+    if(main_beat && now_ms - main_beat > 1000 && now_ms - stuck_shown > 250)
+    {
+        stuck_shown = now_ms;
+        const float on = (now_ms / 250) % 2 ? 1.f : 0.f;
+        chompi::SetPthLedFloat(meter::kPlayLed, on, 0.f, 0.f);
+        chompi::fill_led_data();
+    }
 
     hw.ProcessAllControls();
     instrument.Controls(hw, size);
@@ -302,7 +314,9 @@ int main(void)
 
         page_link.Poll(hw, instrument, now);
 
-        if(now - batt > 20)
+        main_beat = now;
+
+        if(now - batt > 250) // the battery and the charger, four times a second
         {
             hw.LowBatteryLockoutCheck();
             batt = now;
