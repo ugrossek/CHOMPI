@@ -6,10 +6,17 @@
 #                   tried: the slide, a figure's versions (CHOMPI + loop held +
 #                   wheel) and choosing its length after playing (loop held + a
 #                   black key)
+#   make DRIFT=1 BUILD_DIR=build-drift
+#                   build build-drift/CIRCLES-DRIFT.bin: the slide, and every
+#                   player at its own speed, pulled towards its place against L0
 
 TARGET = CIRCLES
 ifeq ($(SLIDE),1)
 C_DEFS += -DCIRCLES_SLIDE=1
+endif
+ifeq ($(DRIFT),1)
+TARGET = CIRCLES-DRIFT
+C_DEFS += -DCIRCLES_DRIFT=1 -DCIRCLES_SLIDE=1
 endif
 ifeq ($(TEST),1)
 TARGET = CIRCLES-TEST

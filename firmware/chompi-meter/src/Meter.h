@@ -32,6 +32,17 @@ static constexpr bool kTestBuild = CIRCLES_TEST;
 #define CIRCLES_SLIDE 0
 #endif
 static constexpr bool kSlide = CIRCLES_SLIDE;
+// Drift (make DRIFT=1, with the slide): every player runs at its own speed,
+// pulled towards its ghost, where it would be had it stayed in step with L0:
+//   speed = 1 + detune + pull * sin 2pi (ghost - where it is), kept to 0.5 .. 1.5.
+// Play held + wheel detunes the chosen player, play held + push: exact again;
+// loop held + wheel gives it a kick (the slide), loop held + push: it glides
+// home; on all, loop held + wheel is the pull. A new length lands at the
+// player's own loop start, so nothing jumps but what a hand does.
+#ifndef CIRCLES_DRIFT
+#define CIRCLES_DRIFT 0
+#endif
+static constexpr bool kDrift = CIRCLES_DRIFT;
 
 using chompi::Hardware;
 using Sw = Hardware::SwId;
@@ -203,7 +214,10 @@ public:
             muted_[c] = false;
             swell_[c] = 1.f;
             dirty_[c] = true;
+            detune_[c] = 0.f;
+            glide_[c] = false;
         }
+        pull_ = kStartPull;
         sel_ = 0;
         running_ = true;
         ens_ = kRatioOne;
@@ -221,6 +235,7 @@ public:
         for (int c = 0; c < kChannels; ++c) {
             const float p = -loop_[c].seam / Len(c);
             loop_[c].pos = p - std::floor(p);
+            Anchor(c);
             for (int i = 0; i < loop_[c].count; ++i) {
                 loop_[c].n[i].armed = true;
                 loop_[c].n[i].jit = 0.f;
@@ -357,9 +372,27 @@ public:
         // left older, right newer, shown on the black keys.)
         // CHOMPI + push the wheel: the tempo back to where it is at power-on.
         // (Its switch is on the encoder itself, not in the shift registers.)
+        // (Drift: play held + turn detunes the selected player, 0.1% a click
+        // up to 5% either way, right faster, shown as a centre bar; play held
+        // + push: exact again (on all: everyone; play held + turn does
+        // nothing there). Loop held + turn: a kick, a 64th of its length per
+        // click, and the pull brings it back; loop held + push: it glides
+        // home; the keys show where it is against its place, live. On all,
+        // loop held + turn: the pull, loop held + push: everyone home.)
         if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) {
             if (chompi) l0_ = kStartL0 * sr_;
-            else if (kSlide && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
+            else if (kDrift && play_held) {
+                for (int c = 0; c < kChannels; ++c)
+                    if (all_ || c == sel_) detune_[c] = 0.f;
+                ShowMeter(kMeterCentre, 0.f);
+                play_used_ = true;
+            } else if (kDrift && loop_down_) {
+                for (int c = 0; c < kChannels; ++c)
+                    if (all_ || c == sel_) glide_[c] = true;
+                ShowPhase();
+                shift_show_ = true;
+                loop_used_ = true;
+            } else if (kSlide && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
                 if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
                 for (int c = 0; c < kChannels; ++c)
                     if (all_ || c == sel_) Back(c);
@@ -370,7 +403,23 @@ public:
         }
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (kSlide && loop_down_ && !(kTestBuild && chompi)) {
+            if (kDrift && play_held && !chompi) {
+                if (!all_) {
+                    detune_[sel_] = std::min(std::max(detune_[sel_] + inc * kDetuneStep, -kMaxDetune), kMaxDetune);
+                    ShowMeter(kMeterCentre, detune_[sel_] / kMaxDetune);
+                }
+                play_used_ = true;
+            } else if (kDrift && loop_down_ && !(kTestBuild && chompi)) {
+                if (all_) {
+                    pull_ = std::min(std::max(pull_ + inc * kPullStep, 0.f), kMaxPull);
+                    ShowMeter(kMeterBar, pull_ / kMaxPull, kStartPull / kMaxPull, true);
+                } else {
+                    Kick(sel_, inc);
+                    ShowPhase();
+                }
+                shift_show_ = true;
+                loop_used_ = true;
+            } else if (kSlide && loop_down_ && !(kTestBuild && chompi)) {
                 // (On all, nothing: everyone sliding together is not heard.)
                 if (!all_) {
                     if (!shift_saved_) { Save(sel_); shift_saved_ = true; }
@@ -481,6 +530,8 @@ public:
                     hist_[c].since = now_;
                     ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
                     pending_[c] = -1;
+                    detune_[c] = 0.f;         // ... and in step
+                    glide_[c] = false;
                 }
                 loop_used_ = true;
             }
@@ -502,9 +553,15 @@ public:
                 l0_flash_ = 1.f;
                 l0_beats_++;
                 Event(kEvBeat, 0, int(l0_beats_ & 63));
-                ApplyPending();
+                ApplyPending(!kDrift); // (drift: a player's length at its own loop start, see Advance)
             }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
+        }
+        // The keys show where the player is against its place, live (it is
+        // pulled or glides there): while loop is held, or it glides.
+        if (meter_phase_ && meter_wait_ > 0) {
+            meter_v_ = 2.f * Off(meter_ch_);
+            if (loop_down_ || glide_[meter_ch_]) meter_wait_ = kMeterBlocks;
         }
 
         // Reboot: CHOMPI + lowest and highest white key, held 2 s, then let go.
@@ -994,6 +1051,13 @@ private:
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
     static constexpr float kStartL0 = 2.f;             // L0 at power-on, s
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
+    // Drift: detune 0.1% a click up to 5%; the pull 0.5% a click up to 20%, 4% at
+    // power-on; gliding home pulls with at least 30% and no detune, until it
+    // is within a 256th of its loop; the speed stays within half and 1.5 times.
+    static constexpr float kDetuneStep = .001f, kMaxDetune = .05f;
+    static constexpr float kPullStep = .005f, kMaxPull = .2f, kStartPull = .04f;
+    static constexpr float kGlidePull = .3f, kHome = 1.f / 256;
+    static constexpr float kSlowest = .5f, kFastest = 1.5f;
 
     static int BlackIndex(int k) {
         int b = 0;
@@ -1006,13 +1070,14 @@ private:
     // channel's new ratio, a new window on the same notes: notes past the new
     // end wrap round, and unfold again when the loop grows. The loop goes on
     // from where it is in time; past the new end, wrapped round, as its notes.
-    void ApplyPending() {
+    // players: the channels' new lengths too (drift: only when stopped).
+    void ApplyPending(bool players = true) {
         float was[kChannels];
         for (int c = 0; c < kChannels; ++c) was[c] = Len(c);
         if (pending_ens_ >= 0) ens_ = pending_ens_;
         pending_ens_ = -1;
         for (int c = 0; c < kChannels; ++c) {
-            if (pending_[c] >= 0) {
+            if (pending_[c] >= 0 && players) {
                 if (pending_[c] != ch_[c].ratio) Save(c);
                 ch_[c].ratio = pending_[c];
                 pending_[c] = -1;
@@ -1151,8 +1216,28 @@ private:
 
     void Advance(int c, size_t block) {
         Loop& lp = loop_[c];
+        float step = block / LoopSamples(c);
+        if (kDrift) step *= Speed(c);
+        // Drift: a new length waits for the player's own loop start, where
+        // the time in its loop and its place agree, and goes on from there.
+        if (kDrift && pending_[c] >= 0 && lp.pos + step >= 1.f) {
+            const float rest = lp.pos + step - 1.f, was = Len(c);
+            Sweep(c, 1.f);
+            if (pending_[c] != ch_[c].ratio) Save(c);
+            ch_[c].ratio = pending_[c];
+            pending_[c] = -1;
+            Place(c);
+            Sweep(c, rest * was / Len(c));
+            return;
+        }
+        Sweep(c, lp.pos + step);
+    }
+
+    // Channel c's loop on from where it is to `to` (1 and over: round past its
+    // start), its notes struck on the way.
+    void Sweep(int c, float to) {
+        Loop& lp = loop_[c];
         const float from = lp.pos;
-        float to = from + block / LoopSamples(c);
         const bool wrap = to >= 1.f;
         if (wrap) { to -= 1.f; ch_flash_[c] = 1.f; }
         lp.pos = to;
@@ -1223,6 +1308,7 @@ private:
         pending_[c] = -1;
         const float p = f.pos + float(now_ - f.t) / LoopSamples(c);
         lp.pos = p - std::floor(p);
+        Anchor(c);
         Place(c);
     }
     // A new slot at the newest end of a ring (the oldest goes when it is full).
@@ -1351,7 +1437,41 @@ private:
     // was kept, its slides undone and any drift too (another length for a
     // while): its loop goes on as if nothing had moved it since.
     double Beats() const { return double(l0_beats_) + double(l0_pos_); }
-    void Kept(int c) { kept_beat_[c] = Beats(); kept_pos_[c] = loop_[c].pos; }
+    void Kept(int c) { kept_beat_[c] = Beats(); kept_pos_[c] = loop_[c].pos; Anchor(c); }
+
+    // Drift. A player's place (its ghost): where its loop would be had it gone
+    // on in step with L0, at the length it has now, since it was kept where it
+    // is (or set going by Restart). home_: the beat its loop started on then.
+    void Anchor(int c) { home_[c] = Beats() - double(loop_[c].pos) * Len(c); }
+    // How far its place is ahead of where it is, in loops, -0.5 .. 0.5
+    // (above 0: it is behind, its notes come later).
+    float Off(int c) const {
+        double e = (Beats() - home_[c]) / Len(c) - loop_[c].pos;
+        e -= std::floor(e + .5);
+        return float(e);
+    }
+    // How fast it goes now, 1 being in step: its detune and the pull towards
+    // its place (gliding home: a strong pull and no detune, until it is there).
+    float Speed(int c) {
+        const float off = Off(c);
+        if (glide_[c] && std::fabs(off) < kHome) glide_[c] = false;
+        const float pull = glide_[c] ? std::max(pull_, kGlidePull) : pull_;
+        const float m = 1.f + (glide_[c] ? 0.f : detune_[c]) + pull * std::sin(2.f * float(M_PI) * off);
+        return std::min(std::max(m, kSlowest), kFastest);
+    }
+    // Loop held + wheel: a kick, a 64th of its length per click; right: later
+    // (the loop back a little, its notes just heard not again), left: earlier
+    // (the notes skipped come next time round).
+    void Kick(int c, int steps) {
+        const float p = loop_[c].pos - float(steps) / kShiftSteps;
+        loop_[c].pos = p - std::floor(p);
+    }
+    // The keys show channel c's place against its ghost (live, see Controls).
+    void ShowPhase() {
+        ShowMeter(kMeterCentre, 2.f * Off(sel_));
+        meter_phase_ = true;
+        meter_ch_ = sel_;
+    }
     void Back(int c) {
         Unslide(c);
         const double p = kept_pos_[c] + (Beats() - kept_beat_[c]) / Len(c);
@@ -1376,6 +1496,8 @@ private:
         ch_[to].slide = ch_[from].slide;
         kept_beat_[to] = kept_beat_[from];
         kept_pos_[to] = kept_pos_[from];
+        home_[to] = home_[from]; // the same place (its detune stays its own)
+        glide_[to] = false;
         pending_[to] = pending_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
@@ -1608,7 +1730,10 @@ private:
         meter_mark_ = mark;
         meter_white_ = white;
         meter_wait_ = kMeterBlocks;
+        meter_phase_ = false;
     }
+    bool meter_phase_ = false; // the meter is a player's place against its ghost (drift) ...
+    int meter_ch_ = 0;         // ... this player's
     float key_flash_[25] = {}, note_flash_[kChannels] = {};
     int step_clicks_ = 0, step_id_ = 0, step_idle_ = 0, oct_show_ = 0;
     int reboot_hold_ = 0;
@@ -1621,6 +1746,10 @@ private:
     uint32_t l0_beats_ = 0; // L0 beats so far
     double kept_beat_[kChannels] = {}; // when each figure was kept (Beats), and where its loop was
     float kept_pos_[kChannels] = {};
+    double home_[kChannels] = {};      // drift: the beat each loop's place started on (see Anchor)
+    float detune_[kChannels] = {};     // ... each player's own speed, -0.05 .. 0.05
+    bool glide_[kChannels] = {};       // ... gliding home
+    float pull_ = kStartPull;          // ... how strongly everyone is pulled to their place
     bool running_ = true;
     bool loop_down_ = false, loop_used_ = false, loop_chompi_ = false;
     bool play_down_ = false, play_used_ = false;
