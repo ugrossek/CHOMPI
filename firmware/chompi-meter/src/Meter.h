@@ -428,7 +428,7 @@ public:
                     ShowMeter(kMeterBar, f - std::floor(f), -1.f, true);
                 }
                 shift_show_ = true;
-                loop_used_ = true; // turning is not holding to clear
+                loop_used_ = true; // (not a tap that kept nothing)
             } else if (kTestBuild && loop_down_) {
                 if (const int step = Steps(inc, kStepVersions, kClicksPerVersion)) Browse(sel_, step);
                 vshow_ = true;
@@ -458,7 +458,14 @@ public:
         // Play starts all loops on the press (so a start lands where it was
         // meant), and stops them when let go, unless it listened or muted (or
         // CHOMPI was held). Listening only means something while they run.
-        if (Pressed(int(Sw::KEY_27))) {
+        // Loop held + play: the selected channel's figure is cleared (the
+        // switch on all: every channel's), and play neither starts nor stops.
+        if (Pressed(int(Sw::KEY_27)) && loop_down_) {
+            play_down_ = true;
+            play_used_ = true;
+            Clear(all_);
+            loop_used_ = true;
+        } else if (Pressed(int(Sw::KEY_27))) {
             play_down_ = true;
             play_used_ = chompi;
             // CHOMPI + play while a page guides: leave the lesson. Its lights go
@@ -494,9 +501,8 @@ public:
         }
 
         // Loop: a press turns what was just played on the selected channel into
-        // its loop, at once (CHOMPI + loop: adds to the loop). Held 2 s (the
-        // light turns red after 1 s): clears the channel; CHOMPI + loop held
-        // 2 s: clears every channel.
+        // its loop, at once (CHOMPI + loop: adds to the loop). Loop held + play:
+        // clears it (see above); holding loop alone never does.
         if (Pressed(int(Sw::KEY_28))) {
             loop_down_ = true;
             loop_used_ = false;
@@ -520,20 +526,8 @@ public:
                 shift_show_ = false;
                 // A tap that kept nothing: say so (two dim blinks of its light).
                 if (!loop_kept_ && !loop_used_ && loop_hold_ < kTapBlocks) nokeep_ = kNoKeepSeconds;
-            } else if (++loop_hold_ == kClearBlocks && !loop_used_) {
-                if (loop_chompi_) SaveAll();
-                for (int c = 0; c < kChannels; ++c) {
-                    if (!loop_chompi_ && c != loop_ch_) continue;
-                    Save(c);
-                    loop_[c].count = 0;
-                    ch_[c].slide = 0.f;
-                    hist_[c].since = now_;
-                    ch_[c].ratio = kRatioOne; // a cleared channel starts over at 1
-                    pending_[c] = -1;
-                    detune_[c] = 0.f;         // ... and in step
-                    glide_[c] = false;
-                }
-                loop_used_ = true;
+            } else {
+                loop_hold_++;
             }
         }
 
@@ -880,8 +874,9 @@ public:
         // and a beat each time it comes round; without one, nearly dark.
         Pth(kPlayLed, 0.f, running_ ? .5f : 0.f, 0.f);
         const float lb = loop_[sel_].count ? .25f + (running_ ? .6f * ch_flash_[sel_] : 0.f) : .03f;
-        if (loop_down_ && !loop_used_ && loop_hold_ >= kClearWarnBlocks) {
-            Pth(kLoopLed, 1.f, 0.f, 0.f); // keep holding to clear
+        if (cleared_ > 0.f) {
+            const float r = cleared_ / kClearedSeconds; // cleared: red, fading out
+            Pth(kLoopLed, r, 0.f, 0.f);
         } else if (nokeep_ > 0.f) {
             // Nothing to keep: two dim white blinks.
             const float w = std::fmod(kNoKeepSeconds - nokeep_, .3f) < .15f ? .35f : 0.f;
@@ -892,6 +887,7 @@ public:
         }
         kept_flash_ *= std::exp(-dt / .2f);
         nokeep_ = std::max(nokeep_ - dt, 0.f);
+        cleared_ = std::max(cleared_ - dt, 0.f);
         sel_glow_ = std::max(sel_glow_ - dt, 0.f);
         fill_led_data();
 
@@ -1043,8 +1039,25 @@ private:
     static constexpr float kYellow[3] = {1.f, .8f, 0.f};
     static constexpr float kRed[3] = {1.f, 0.f, 0.f};
 
-    static constexpr int kClearBlocks = 2000;     // loop held 2 s: clear
-    static constexpr int kClearWarnBlocks = 1000; // ... the light red from 1 s
+    // Loop held + play: channel loop_ch_'s figure cleared (everyone: every
+    // channel's); a cleared channel starts over at 1, in step.
+    void Clear(bool everyone) {
+        if (everyone) SaveAll();
+        for (int c = 0; c < kChannels; ++c) {
+            if (!everyone && c != loop_ch_) continue;
+            Save(c);
+            loop_[c].count = 0;
+            ch_[c].slide = 0.f;
+            hist_[c].since = now_;
+            ch_[c].ratio = kRatioOne;
+            pending_[c] = -1;
+            detune_[c] = 0.f;
+            glide_[c] = false;
+        }
+        cleared_ = kClearedSeconds;
+    }
+    static constexpr float kClearedSeconds = .5f; // the loop light red, fading, after a clear
+    float cleared_ = 0.f;
 
 
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
@@ -1184,7 +1197,7 @@ private:
     // own length: what loop kept (its own length back from the press) wraps
     // into it, as a new length would; longer: it reaches back that far.
     void Rekeep(int c, int ratio) {
-        loop_used_ = true; // not holding to clear
+        loop_used_ = true; // (not a tap that kept nothing)
         const int was = ch_[c].ratio;
         hist_[c].since = loop_since_;
         ch_[c].ratio = ratio;
