@@ -548,6 +548,9 @@ public:
                 l0_beats_++;
                 Event(kEvBeat, 0, int(l0_beats_ & 63));
                 ApplyPending(!kDrift); // (drift: a player's length at its own loop start, see Advance)
+                // Before the first figure: a click on every L0, to play the first one to.
+                // Only L0 itself: there is no metre to count beats in.
+                if (!AnyFigure()) click_ = 0;
             }
             for (int c = 0; c < kChannels; ++c) Advance(c, block);
         }
@@ -597,6 +600,25 @@ public:
             pan_[c].Process(bus_[c], l, r, sl, sr, n);
             busy_[c] = false;
         }
+        // The click: a short high blip, in the middle and dry (not in the room).
+        if (click_ >= 0) {
+            const int len = int(kClickSeconds * sr_);
+            const float w = 2.f * float(M_PI) * kClickHz / sr_, fall = std::exp(-1.f / (kClickDecay * sr_));
+            float env = kClickLevel * std::pow(fall, float(click_));
+            for (size_t i = 0; i < n && click_ < len; ++i, ++click_, env *= fall) {
+                const float y = env * std::sin(w * float(click_));
+                l[i] += y;
+                r[i] += y;
+            }
+            if (click_ >= len) click_ = -1;
+        }
+    }
+
+    // Any player has a figure (the click stops with the first).
+    bool AnyFigure() const {
+        for (int c = 0; c < kChannels; ++c)
+            if (loop_[c].count > 0) return true;
+        return false;
     }
 
     // Load guard: the callback is too slow, drop the quietest voice, as heard
@@ -1756,6 +1778,10 @@ private:
     uint32_t now_ = 0;      // samples since start
     float l0_ = 96000.f;    // L0 in samples (2 s)
     float l0_pos_ = 0.f, l0_flash_ = 0.f, ch_flash_[kChannels] = {};
+    // The click before the first figure: samples into it, -1 silent. A sine at
+    // kClickHz falling by e every kClickDecay, kClickSeconds long.
+    int click_ = -1;
+    static constexpr float kClickHz = 2000.f, kClickDecay = .006f, kClickSeconds = .04f, kClickLevel = .25f;
     uint32_t l0_beats_ = 0; // L0 beats so far
     double kept_beat_[kChannels] = {}; // when each figure was kept (Beats), and where its loop was
     float kept_pos_[kChannels] = {};
