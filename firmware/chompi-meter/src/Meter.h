@@ -43,6 +43,16 @@ static constexpr bool kSlide = CIRCLES_SLIDE;
 #define CIRCLES_DRIFT 0
 #endif
 static constexpr bool kDrift = CIRCLES_DRIFT;
+// The figure library (make LIBRARY=1, with drift): every figure kept goes into
+// one list, in the order it was kept, and any player can take any of them.
+// CHOMPI + loop held + wheel moves the chosen player on to the next figure
+// (right) or back to the one before (left); on all, every player that has a
+// figure. The new figure lands at the player's own loop start, in its own
+// sound and octave; while turning, the keys show its notes.
+#ifndef CIRCLES_LIBRARY
+#define CIRCLES_LIBRARY 0
+#endif
+static constexpr bool kLibrary = CIRCLES_LIBRARY;
 
 using chompi::Hardware;
 using Sw = Hardware::SwId;
@@ -168,6 +178,9 @@ struct History {
 // Plain data in SDRAM, set up in Init (no constructors run there).
 struct Figure { LoopNote n[kLoopNotes]; int count; float seam; int ratio; float pos; uint32_t t; };
 constexpr int kVersions = 8, kEnsembleVersions = 4;
+// The library: the last kLibrarySize figures kept. Figure number s (counted from
+// the first ever kept) sits at lib[s % kLibrarySize]; the oldest go when it is full.
+constexpr int kLibrarySize = 128;
 // A ring of saved versions: head the oldest, count how many; cur the one
 // playing while stepping (-1: the figure as it is, not stepped to).
 struct Ring { int head, count, cur; };
@@ -176,6 +189,8 @@ struct Versions {
     Ring ring[kChannels];
     Figure e[kEnsembleVersions][kChannels];
     Ring ering;
+    Figure lib[kLibrarySize];
+    int lib_next; // how many figures were ever put in
 };
 
 class Instrument {
@@ -186,6 +201,7 @@ public:
         ver_ = versions;
         for (Ring& r : ver_->ring) r = {0, 0, -1};
         ver_->ering = {0, 0, -1};
+        ver_->lib_next = 0;
         Start();
         for (int i = 0; i < kNumMalletPresets; ++i)
             preset_gain_[i] = std::pow(10.f, kMalletPresets[i].gain_db / 20.f);
@@ -216,6 +232,7 @@ public:
             dirty_[c] = true;
             detune_[c] = 0.f;
             glide_[c] = false;
+            lib_at_[c] = lib_next_[c] = -1; // (the library itself stays)
         }
         pull_ = kStartPull;
         sel_ = 0;
@@ -409,6 +426,17 @@ public:
                     ShowMeter(kMeterCentre, detune_[sel_] / kMaxDetune);
                 }
                 play_used_ = true;
+            } else if (kLibrary && loop_down_ && chompi) {
+                // CHOMPI + loop held + turn: the chosen player (on all: everyone
+                // with a figure) on to the next figure in the library, or back.
+                if (const int step = Steps(inc, kStepLibrary, kClicksPerVersion)) {
+                    bool moved = false;
+                    lib_show_fig_ = -1;
+                    for (int c = 0; c < kChannels; ++c)
+                        if (all_ ? loop_[c].count > 0 : c == sel_) moved |= MoveOn(c, step);
+                    if (!moved) nokeep_ = kNoKeepSeconds; // nowhere to go: two dim blinks
+                }
+                loop_used_ = true;
             } else if (kDrift && loop_down_ && !(kTestBuild && chompi)) {
                 if (all_) {
                     pull_ = std::min(std::max(pull_ + inc * kPullStep, 0.f), kMaxPull);
@@ -444,6 +472,7 @@ public:
         if (step_idle_ > 0) step_idle_--;
         if (oct_show_ > 0) oct_show_--;
         if (meter_wait_ > 0) meter_wait_--;
+        if (lib_show_ > 0) lib_show_--;
         // Right knob: volume; CHOMPI + turn: the room.
         if (const int inc = hw.enc[kKnobs[kVolume].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kVolume, inc);
@@ -783,6 +812,14 @@ public:
                 const Ring& r = vshow_all_ ? ver_->ering : ver_->ring[sel_];
                 const int b = BlackIndex(k);
                 rgb[0] = rgb[1] = rgb[2] = b < r.count ? (b == r.cur ? 1.f : .12f) : 0.f;
+            } else if (kLibrary && lib_show_ > 0 && lib_show_fig_ >= 0) {
+                // Moving on in the library: the figure's notes, in the chosen
+                // player's colour (fading out at the end, as the meter does).
+                const Figure& f = LibFig(lib_show_fig_);
+                bool on = false;
+                for (int i = 0; i < f.count && !on; ++i) on = f.n[i].note == kKeys[k].note;
+                const float b = on ? std::min(1.f, lib_show_ / kMeterFadeBlocks) : 0.f;
+                for (int j = 0; j < 3; ++j) rgb[j] = sel_col[j] * b;
             } else if (len_show_ && !kKeys[k].white) {
                 // Loop held: the lengths. The figure's own white; in the channel's
                 // colour every shorter one (what was kept wraps into it) and every
@@ -904,7 +941,12 @@ public:
             const float w = std::fmod(kNoKeepSeconds - nokeep_, .3f) < .15f ? .35f : 0.f;
             Pth(kLoopLed, w, w, w);
         } else {
-            const float b = std::max(lb, kept_flash_);
+            float b = std::max(lb, kept_flash_);
+            // A figure from the library waiting for the player's loop start: the
+            // loop light swells, as a length waiting on its black key.
+            bool waits = false;
+            for (int c = 0; c < kChannels; ++c) waits |= lib_next_[c] >= 0 && (all_ || c == sel_);
+            if (kLibrary && waits) b = .1f + .9f * (.5f + .5f * std::cos(led_time_ * 2.f * float(M_PI) * 1.5f));
             Pth(kLoopLed, sel_col[0] * b, sel_col[1] * b, sel_col[2] * b);
         }
         kept_flash_ *= std::exp(-dt / .2f);
@@ -991,6 +1033,7 @@ private:
             ch.level = d[5] / 127.f;
             ch.pan = std::min(std::max((d[6] - 64) / 63.f, -1.f), 1.f);
             ch.slide = 0.f;
+            lib_at_[c] = lib_next_[c] = -1; // a figure from the page, not from the library
             Place(c, true);
             muted_[c] = d[7];
             pending_[c] = -1;
@@ -1075,6 +1118,7 @@ private:
             pending_[c] = -1;
             detune_[c] = 0.f;
             glide_[c] = false;
+            lib_next_[c] = -1; // (it stays where it was in the library)
         }
         cleared_ = kClearedSeconds;
     }
@@ -1210,6 +1254,7 @@ private:
                 if (lp.n[j].note == got[i].note && !lp.n[j].silent && std::fabs(lp.n[j].phase - got[i].phase) < .01f) twin = true;
             if (!twin && lp.count < kLoopNotes) lp.n[lp.count++] = got[i];
         }
+        if (kLibrary) LibAdd(c);
         return n;
     }
 
@@ -1253,6 +1298,15 @@ private:
         Loop& lp = loop_[c];
         float step = block / LoopSamples(c);
         if (kDrift) step *= Speed(c);
+        // The library: the next figure comes in at the player's own loop start,
+        // the old one played to its end.
+        if (kLibrary && lib_next_[c] >= 0 && lp.pos + step >= 1.f) {
+            const float rest = lp.pos + step - 1.f, was = Len(c);
+            Sweep(c, 1.f);
+            Take(c, lib_next_[c], 0.f);
+            Sweep(c, rest * was / Len(c));
+            return;
+        }
         // Drift: a new length waits for the player's own loop start, where
         // the time in its loop and its place agree, and goes on from there.
         if (kDrift && pending_[c] >= 0 && lp.pos + step >= 1.f) {
@@ -1423,6 +1477,60 @@ private:
         }
     }
 
+    // ---- The library ---------------------------------------------------------------
+    // The oldest figure still in it, and one past the newest.
+    int LibFirst() const { return std::max(ver_->lib_next - kLibrarySize, 0); }
+    const Figure& LibFig(int s) const { return ver_->lib[s % kLibrarySize]; }
+    // Channel c's figure as it is now (just kept), into the library; the same as
+    // the newest: not again. Either way, c plays it now.
+    void LibAdd(int c) {
+        Figure f;
+        Keep(c, f);
+        const int last = ver_->lib_next - 1;
+        if (last >= 0 && Same(f, LibFig(last))) {
+            lib_at_[c] = last;
+        } else {
+            ver_->lib[ver_->lib_next % kLibrarySize] = f;
+            lib_at_[c] = ver_->lib_next++;
+        }
+        lib_next_[c] = -1;
+    }
+    // Channel c one figure on (dir +1) or back (-1), from the one it waits for or
+    // else the one it plays; a player with none from the library starts at the
+    // oldest. It lands at the player's loop start (stopped: at once). Its notes
+    // show on the keys. False: there is no figure that way.
+    bool MoveOn(int c, int dir) {
+        const int from = lib_next_[c] >= 0 ? lib_next_[c] : lib_at_[c];
+        int to = from < 0 ? (dir > 0 ? LibFirst() : -1) : std::max(from, LibFirst() - 1) + dir;
+        if (to < LibFirst() || to >= ver_->lib_next) return false;
+        lib_next_[c] = to == lib_at_[c] ? -1 : to; // back to the one it plays: nothing waits
+        if (c == sel_ || lib_show_fig_ < 0) { lib_show_fig_ = to; lib_show_ = kMeterBlocks; }
+        if (!running_ && lib_next_[c] >= 0) { Take(c, to, 0.f); }
+        return true;
+    }
+    // Channel c takes figure s, its loop at pos (0: its start): the notes and the
+    // length; its sound, octave, level and place stay. It plays it from where it
+    // is against L0, its ghost too (nothing pulls it elsewhere).
+    void Take(int c, int s, float pos) {
+        const Figure& f = LibFig(s);
+        Save(c);
+        Loop& lp = loop_[c];
+        std::copy(f.n, f.n + f.count, lp.n);
+        lp.count = f.count;
+        ch_[c].ratio = f.ratio;
+        ch_[c].slide = 0.f;
+        pending_[c] = -1;
+        lp.pos = pos;
+        // Where this loop starts after an L0 beat, so a restart keeps it there.
+        const float b = l0_pos_ - pos * Len(c);
+        lp.seam = b - std::floor(b);
+        Place(c);
+        Kept(c);
+        hist_[c].since = now_; // what was played before is not kept with it
+        lib_at_[c] = s;
+        lib_next_[c] = -1;
+    }
+
     float Rand() {
         rng_ = rng_ * 1664525u + 1013904223u;
         return float(rng_ >> 8) * (1.f / 16777216.f);
@@ -1534,6 +1642,8 @@ private:
         home_[to] = home_[from]; // the same place (its detune stays its own)
         glide_[to] = false;
         pending_[to] = pending_[from];
+        lib_at_[to] = lib_at_[from];
+        lib_next_[to] = lib_next_[from];
         hist_[to].since = now_; // older notes played on `to` are not looped any more
     }
 
@@ -1820,6 +1930,12 @@ private:
     static constexpr int kShiftSteps = 64;
     static constexpr int kStepVersions = 100; // Steps() id of the versions (the octave's: the channel)
     static constexpr int kClicksPerVersion = 2;
+    // The library: the figure each player plays (its number, -1: none from the
+    // library) and the one it moves on to at its next loop start (-1: none).
+    int lib_at_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+    int lib_next_[kChannels] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+    int lib_show_ = 0, lib_show_fig_ = -1; // a figure's notes on the keys, so many blocks more
+    static constexpr int kStepLibrary = 101; // Steps() id of the library
     bool reboot_armed_ = false, reboot_now_ = false;
 };
 
