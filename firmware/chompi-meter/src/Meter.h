@@ -35,10 +35,12 @@ static constexpr bool kSlide = CIRCLES_SLIDE;
 // Drift (make DRIFT=1, with the slide): every player runs at its own speed,
 // pulled towards its ghost, where it would be had it stayed in step with L0:
 //   speed = 1 + detune + pull * sin 2pi (ghost - where it is), kept to 0.5 .. 1.5.
-// Play held + wheel detunes the chosen player, play held + push: exact again;
-// loop held + wheel gives it a kick (the slide), loop held + push: it glides
-// home; on all, loop held + wheel is the pull. A new length lands at the
-// player's own loop start, so nothing jumps but what a hand does.
+// All of it on CHOMPI + play held, which neither starts nor stops: the keys show
+// where the chosen player is against its place, live; + wheel turned: its detune
+// (on all: the pull), + wheel pushed and turned: a kick, + wheel pushed and let
+// go without turning: exact and home again (on all: everyone). Play and loop on
+// their own are what they are without drift. A new length lands at the player's
+// own loop start, so nothing jumps but what a hand does.
 #ifndef CIRCLES_DRIFT
 #define CIRCLES_DRIFT 0
 #endif
@@ -298,7 +300,11 @@ public:
             const int i = int(kKeys[k].sw);
             if (Pressed(i)) {
                 key_flash_[k] = 1.f;
-                if (play_held) {
+                if (kDrift && chompi && play_held && kKeys[k].white) {
+                    // Looking at the drift: another player to look at.
+                    sel_ = WhiteIndex(k);
+                    chose_ = true;
+                } else if (play_held) {
                     if (kKeys[k].white) white_down_[WhiteIndex(k)] = 0; // tap or hold: see below
                     play_used_ = true;
                 } else if (sound_view_ && kKeys[k].white) {
@@ -372,27 +378,27 @@ public:
         // left older, right newer, shown on the black keys.)
         // CHOMPI + push the wheel: the tempo back to where it is at power-on.
         // (Its switch is on the encoder itself, not in the shift registers.)
-        // (Drift: play held + turn detunes the selected player, 0.1% a click
-        // up to 5% either way, right faster, shown as a centre bar; play held
-        // + push: exact again (on all: everyone; play held + turn does
-        // nothing there). Loop held + turn: a kick, a 64th of its length per
-        // click, and the pull brings it back; loop held + push: it glides
-        // home; the keys show where it is against its place, live. On all,
-        // loop held + turn: the pull, loop held + push: everyone home.)
-        if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) {
+        // (Drift, all with CHOMPI + play held, the keys showing where the
+        // selected player is against its place, live: + turn detunes it, 0.1%
+        // a click up to 5% either way, right faster, shown as a centre bar for
+        // a moment; + push and turn: a kick, a 64th of its length per click,
+        // and the pull brings it back; + push and let go: exact again and it
+        // glides home. On all: + turn is the pull, + push and let go: everyone
+        // exact and home. Play or loop held + turn: nothing.)
+        // Drift: CHOMPI + play held is looking at the chosen player's drift (and
+        // changing it); play does not stop when let go.
+        const bool look = kDrift && chompi && play_held;
+        if (look) play_used_ = true;
+        if (hw.enc[kKnobs[kTransport].enc].RisingEdge()) wheel_turned_ = false;
+        if (look && hw.enc[kKnobs[kTransport].enc].FallingEdge() && !wheel_turned_) {
+            // Pushed and let go without turning: exact and home again.
+            for (int c = 0; c < kChannels; ++c)
+                if (all_ || c == sel_) { detune_[c] = 0.f; glide_[c] = true; }
+            ShowPhase();
+        }
+        if (hw.enc[kKnobs[kTransport].enc].RisingEdge() && !look) {
             if (chompi) l0_ = kStartL0 * sr_;
-            else if (kDrift && play_held) {
-                for (int c = 0; c < kChannels; ++c)
-                    if (all_ || c == sel_) detune_[c] = 0.f;
-                ShowMeter(kMeterCentre, 0.f);
-                play_used_ = true;
-            } else if (kDrift && loop_down_) {
-                for (int c = 0; c < kChannels; ++c)
-                    if (all_ || c == sel_) glide_[c] = true;
-                ShowPhase();
-                shift_show_ = true;
-                loop_used_ = true;
-            } else if (kSlide && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
+            else if (kSlide && !kDrift && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
                 if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
                 for (int c = 0; c < kChannels; ++c)
                     if (all_ || c == sel_) Back(c);
@@ -403,22 +409,25 @@ public:
         }
         if (const int inc = hw.enc[kKnobs[kTransport].enc].Increment()) {
             Event(kEvTurn, kIdKnob + kTransport, inc);
-            if (kDrift && play_held && !chompi) {
-                if (!all_) {
-                    detune_[sel_] = std::min(std::max(detune_[sel_] + inc * kDetuneStep, -kMaxDetune), kMaxDetune);
-                    ShowMeter(kMeterCentre, detune_[sel_] / kMaxDetune);
-                }
-                play_used_ = true;
-            } else if (kDrift && loop_down_ && !(kTestBuild && chompi)) {
-                if (all_) {
+            if (look) {
+                const bool pushed = hw.enc[kKnobs[kTransport].enc].Pressed();
+                if (pushed) wheel_turned_ = true;
+                if (pushed && !all_) {
+                    Kick(sel_, inc);
+                    ShowPhase();
+                } else if (pushed) {
+                    // (On all, a kick for everyone together is not heard: nothing.)
+                } else if (all_) {
                     pull_ = std::min(std::max(pull_ + inc * kPullStep, 0.f), kMaxPull);
                     ShowMeter(kMeterBar, pull_ / kMaxPull, kStartPull / kMaxPull, true);
                 } else {
-                    Kick(sel_, inc);
-                    ShowPhase();
+                    detune_[sel_] = std::min(std::max(detune_[sel_] + inc * kDetuneStep, -kMaxDetune), kMaxDetune);
+                    ShowMeter(kMeterCentre, detune_[sel_] / kMaxDetune);
                 }
-                shift_show_ = true;
-                loop_used_ = true;
+            } else if (kDrift && (play_held || loop_down_)) {
+                // (Drift: play or loop held + wheel do nothing; see CHOMPI + play.)
+                if (loop_down_) loop_used_ = true;
+                if (play_held) play_used_ = true; // (a turn is not a tap: play does not stop)
             } else if (kSlide && loop_down_ && !(kTestBuild && chompi)) {
                 // (On all, nothing: everyone sliding together is not heard.)
                 if (!all_) {
@@ -556,9 +565,12 @@ public:
         }
         // The keys show where the player is against its place, live (it is
         // pulled or glides there): while loop is held, or it glides.
+        // (Looking, CHOMPI + play held: the place, again a moment after a value.)
+        if (kDrift && chompi && play_held &&
+            (meter_phase_ ? meter_wait_ == 0 || meter_ch_ != sel_ : meter_wait_ < kMeterBlocks * 2 / 3)) ShowPhase();
         if (meter_phase_ && meter_wait_ > 0) {
             meter_v_ = 2.f * Off(meter_ch_);
-            if (loop_down_ || glide_[meter_ch_]) meter_wait_ = kMeterBlocks;
+            if ((chompi && play_held) || glide_[meter_ch_]) meter_wait_ = kMeterBlocks;
         }
 
         // Reboot: CHOMPI + lowest and highest white key, held 2 s, then let go.
@@ -1767,6 +1779,7 @@ private:
         meter_wait_ = kMeterBlocks;
         meter_phase_ = false;
     }
+    bool wheel_turned_ = false; // the wheel turned while pushed (a kick), so its release is not 'home'
     bool meter_phase_ = false; // the meter is a player's place against its ghost (drift) ...
     int meter_ch_ = 0;         // ... this player's
     float key_flash_[25] = {}, note_flash_[kChannels] = {};
