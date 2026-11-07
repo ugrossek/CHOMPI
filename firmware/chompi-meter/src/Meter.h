@@ -118,6 +118,22 @@ static const float kPresetColor[kNumMalletPresets][3] = {
     {.00f, .45f, 1.0f}, // pulse piano: sky, as glass
     {1.0f, .00f, 1.0f}, // hands: magenta
     {1.0f, .60f, .25f}, // tape: warm white
+    // The second set: the same fourteen hues in another order (a kick and a
+    // marimba look alike on a player's key; the instrument view tells them apart).
+    {1.0f, .00f, .00f}, // kick: red
+    {1.0f, .35f, .00f}, // tom: orange
+    {1.0f, 1.0f, 1.0f}, // snare: white
+    {1.0f, .00f, .60f}, // clap: pink
+    {1.0f, .85f, .00f}, // hi-hat: yellow
+    {.00f, 1.0f, .45f}, // cowbell: sea green
+    {1.0f, .00f, 1.0f}, // blip: magenta
+    {.55f, 1.0f, .00f}, // acid: lime
+    {1.0f, .60f, .25f}, // FM piano: warm white
+    {.00f, .45f, 1.0f}, // FM bell: sky
+    {.00f, 1.0f, .00f}, // chip lead: green
+    {.45f, .00f, 1.0f}, // saw stab: purple
+    {.00f, 1.0f, 1.0f}, // grit: cyan
+    {.00f, .00f, 1.0f}, // FM bass: blue
 };
 
 // Loop lengths as ratios of L0, one per black key from the lowest.

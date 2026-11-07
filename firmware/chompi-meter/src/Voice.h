@@ -1,6 +1,7 @@
 #pragma once
 // A voice of the pool: the mallet, or one of the sound study's instruments
-// (study/instruments.h), whichever the note's preset asks for. A study voice
+// (study/instruments.h) or the second set's (study/synths.h), whichever the
+// note's preset asks for. A study voice
 // is built in the slot's own memory when the slot changes instrument, its
 // buffers in the slot's piece of SDRAM, so nothing is allocated while playing.
 
@@ -9,6 +10,7 @@
 #include "../dsp/Mallet.h"
 #include "../dsp/Presets.h"
 #include "../study/instruments.h"
+#include "../study/synths.h"
 
 namespace meter {
 
@@ -100,6 +102,14 @@ private:
             case kEngBowl: s_ = new (at) sd::Bowl(); break;
             case kEngPiano: s_ = new (at) sd::Piano(); break;
             case kEngHang: s_ = new (at) sd::Hang(); break;
+            case kEngKick: s_ = new (at) sd::Kick(); break;
+            case kEngTom: s_ = new (at) sd::Tom(); break;
+            case kEngNoise: s_ = new (at) sd::Noise(); break;
+            case kEngMetal: s_ = new (at) sd::Metal(); break;
+            case kEngChip: s_ = new (at) sd::Chip(); break;
+            case kEngAcid: s_ = new (at) sd::Acid(); break;
+            case kEngFm: s_ = new (at) sd::Fm(); break;
+            case kEngGrit: s_ = new (at) sd::Grit(); break;
             default: s_ = new (at) sd::Tape(); break;
         }
         sd::Arena a{arena_, size_t(kArenaFloats)};
@@ -109,7 +119,8 @@ private:
     }
 
     static constexpr size_t kMem = MaxSize<sd::Gangsa, sd::Mbira, sd::Amadinda, sd::Siku, sd::Kora, sd::Voices, sd::Hands,
-                                           sd::Bowed, sd::Bowl, sd::Piano, sd::Hang, sd::Tape>();
+                                           sd::Bowed, sd::Bowl, sd::Piano, sd::Hang, sd::Tape, sd::Kick, sd::Tom,
+                                           sd::Noise, sd::Metal, sd::Chip, sd::Acid, sd::Fm, sd::Grit>();
     MalletVoice m_;
     sd::Voice* s_ = nullptr;
     int engine_ = kEngMallet;

@@ -1,7 +1,8 @@
 // CIRCLES sound study: how much of the CHOMPI each new voice costs.
 //
 // A test firmware, not an instrument. At power-on it times every voice of the
-// study (../instruments.h) on the CHOMPI's own core, at C3, C4 and C5, for the
+// study (../instruments.h) and of the second set (../synths.h) on the
+// CHOMPI's own core, at C3, C4 and C5, for the
 // first half second of a note, next to today's mallet voice (dsp/Mallet.h),
 // the room (dsp/room.h) and a player's place on the circle (dsp/Circle.h).
 // Then it waits for bench.html over USB-MIDI and sends the results.
@@ -16,6 +17,7 @@
 #include "board/hardware.h"
 #include "board/temp_led_stuff.h"
 #include "../instruments.h"
+#include "../synths.h"
 #include "../../dsp/Mallet.h"
 #include "../../dsp/Presets.h"
 #include "../../dsp/room.h"
@@ -197,6 +199,23 @@ static void RunAll() {
     Bench<Piano>("Piano bolt", K(.50f, .50f, .50f, .10f, .25f, .70f));
     Bench<Hang>("Hang", K(.40f, .50f, .55f, .30f, .25f, .00f));
     Bench<Tape>("Tape", K(.30f, .40f, .50f, .30f, .40f, .30f));
+    // The second set (../synths.h), each at its preset, and once more with what costs most.
+    Bench<Kick>("Kick", K(.55f, .30f, .35f, .00f, .20f, .15f));
+    Bench<Tom>("Tom", K(.45f, .20f, .35f, .45f, .25f, .10f));
+    Bench<Noise>("Snare", K(.60f, .45f, .25f, .10f, .30f, .00f));
+    Bench<Noise>("Clap", K(.30f, .35f, .35f, .10f, .35f, .85f));
+    Bench<Metal>("Hi-hat", K(.50f, .85f, .08f, 1.f, .30f, .00f));
+    Bench<Metal>("Hi-hat ring", K(.50f, .85f, .40f, 1.f, .30f, 1.f));
+    Bench<Metal>("Cowbell", K(.30f, .35f, .25f, .00f, .25f, .00f));
+    Bench<Chip>("Blip", K(.60f, .50f, .12f, .00f, .20f, .00f));
+    Bench<Acid>("Acid", K(.70f, .25f, .30f, .00f, .30f, .75f));
+    Bench<Fm>("FM piano", K(.55f, .25f, .50f, .40f, .30f, .20f));
+    Bench<Fm>("FM bell", K(.60f, .30f, .75f, .30f, .25f, .55f));
+    Bench<Chip>("Chip lead", K(.15f, .45f, .45f, .60f, .25f, .00f));
+    Bench<Acid>("Saw stab", K(.40f, .55f, .35f, .80f, .30f, .20f));
+    Bench<Grit>("Grit", K(.35f, .55f, .35f, .40f, .30f, .30f));
+    Bench<Grit>("Grit stutter", K(1.f, 1.f, .35f, .40f, .30f, 1.f));
+    Bench<Fm>("FM bass", K(.50f, .35f, .30f, .00f, .25f, .05f));
     Line("e,%d", nlines + 1);
 }
 
