@@ -1,0 +1,308 @@
+<title>CIRCLES Set 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a drum machine's panel. A strip of fourteen keys on top (the white keys,
+   coloured by row like a step sequencer), then one card per sound in key order,
+   rhythm keys and melody keys, then the pieces. Spectrograms are printouts on the panel. */
+:root {
+  --panel: #e4e6e9;       /* the machine's grey */
+  --card: #f3f4f5;
+  --ink: #1a1c20;
+  --soft: #5b6068;
+  --rule: #c7cbd1;
+  --k-red: #d8432a;       /* 808 key colours, one per row of four */
+  --k-orange: #e8731c;
+  --k-yellow: #e6b52c;
+  --k-white: #f7f5ee;
+  --keep: #2f7a46; --maybe: #9a6a10; --no: #a8352b;
+  --display: "Big Shoulders Display", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --panel: #17191c; --card: #202328; --ink: #eceef0; --soft: #a2a8b0; --rule: #34383e;
+    --k-white: #d9d6cc; --keep: #6cc285; --maybe: #e0b049; --no: #ee7a6e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --panel: #17191c; --card: #202328; --ink: #eceef0; --soft: #a2a8b0; --rule: #34383e;
+  --k-white: #d9d6cc; --keep: #6cc285; --maybe: #e0b049; --no: #ee7a6e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--panel); color: var(--ink); font: 400 16px/1.5 var(--body); margin: 0; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 34px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(44px, 9vw, 84px); line-height: .9; text-transform: uppercase; }
+h2 { font-size: 30px; text-transform: uppercase; line-height: 1; }
+h3 { font-size: 26px; line-height: 1; }
+.lead { max-width: 64ch; margin: 12px 0 0; color: var(--soft); }
+.lead b { color: var(--ink); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* the key strip */
+.keys { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 6px; }
+.key { appearance: none; border: 0; border-radius: 4px; padding: 0; min-height: 64px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; padding: 6px 6px 7px; color: #1a1c20; box-shadow: inset 0 -4px 0 rgba(0,0,0,.18); font: 500 12px/1.1 var(--mono); }
+.key .n { font-weight: 500; }
+.key .nm { font: 600 13px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.key .v { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,.18); }
+.key[data-v="keep"] .v { background: var(--keep); box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+.key[data-v="maybe"] .v { background: var(--maybe); box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+.key[data-v="no"] .v { background: var(--no); box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+.key:focus-visible, button:focus-visible, textarea:focus-visible, .spec:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.r0 { background: var(--k-red); } .r1 { background: var(--k-orange); } .r2 { background: var(--k-yellow); } .r3 { background: var(--k-white); }
+.rows { display: flex; justify-content: space-between; color: var(--soft); font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; margin-top: 6px; }
+@media (max-width: 720px) {
+  .keys { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .key { min-height: 56px; }
+}
+.tally { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 500 14px var(--mono); color: var(--soft); }
+.tally b { color: var(--ink); font-weight: 500; }
+.tally .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+/* cards */
+.group { display: grid; gap: 14px; }
+.group > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+.group > header p { margin: 0; color: var(--soft); }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 820px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--card); border-radius: 6px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.top { display: flex; gap: 12px; align-items: flex-start; }
+.chip { flex: none; width: 40px; height: 46px; border-radius: 4px; box-shadow: inset 0 -4px 0 rgba(0,0,0,.18); color: #1a1c20; font: 500 14px var(--mono); display: grid; place-items: center; }
+.what { min-width: 0; display: grid; gap: 2px; }
+.what .eng { font: 500 12px var(--mono); color: var(--soft); text-transform: uppercase; letter-spacing: .06em; }
+.what p { margin: 0; }
+.cpu { margin-left: auto; flex: none; text-align: right; font: 500 12px/1.3 var(--mono); color: var(--soft); }
+.cpu b { display: block; font-size: 18px; color: var(--ink); font-weight: 500; }
+.play { display: flex; gap: 10px; align-items: stretch; }
+.pbtn { flex: none; width: 46px; border-radius: 4px; border: 0; background: var(--ink); color: var(--panel); cursor: pointer; display: grid; place-items: center; }
+.pbtn svg { width: 16px; height: 16px; fill: currentColor; }
+.spec { position: relative; flex: 1; min-width: 0; height: 68px; border-radius: 3px; overflow: hidden; cursor: pointer; background: var(--panel); }
+.spec img { display: block; width: 100%; height: 100%; object-fit: fill; }
+.spec .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--k-orange); left: 0; opacity: 0; }
+.spec.on .head { opacity: 1; }
+.spec .half { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--soft); opacity: .7; }
+.spec .t { position: absolute; right: 4px; bottom: 2px; font: 500 11px var(--mono); color: var(--soft); background: color-mix(in srgb, var(--panel) 80%, transparent); padding: 0 3px; border-radius: 2px; }
+:root[data-theme="dark"] .spec img { filter: invert(.92) hue-rotate(180deg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .spec img { filter: invert(.92) hue-rotate(180deg); } }
+.then { margin: 0; font-size: 14px; color: var(--soft); }
+.then b { color: var(--ink); font-weight: 700; }
+.knobs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.kn { display: grid; gap: 3px; font: 500 11px var(--mono); color: var(--soft); }
+.kn .bar { height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.kn .bar i { display: block; height: 100%; background: var(--ink); }
+.kn.ch .bar i { background: var(--k-orange); }
+.verdict { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vb { font: 700 14px var(--body); border: 1.5px solid var(--rule); background: transparent; color: var(--ink); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.vb[aria-pressed="true"][data-v="keep"] { background: var(--keep); border-color: var(--keep); color: var(--card); }
+.vb[aria-pressed="true"][data-v="maybe"] { background: var(--maybe); border-color: var(--maybe); color: var(--card); }
+.vb[aria-pressed="true"][data-v="no"] { background: var(--no); border-color: var(--no); color: var(--card); }
+.saved { font: 500 12px var(--mono); color: var(--soft); margin-left: auto; }
+textarea { width: 100%; min-height: 40px; resize: vertical; font: 400 15px/1.4 var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; }
+.players { display: flex; flex-wrap: wrap; gap: 6px; }
+.players span { font: 500 12px var(--mono); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 7px; color: var(--soft); }
+.note { font-size: 14px; color: var(--soft); max-width: 75ch; }
+.note p { margin: 0 0 8px; }
+.banner { font: 500 13px var(--mono); color: var(--soft); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>CIRCLES<br>Set 2</h1>
+    <p class="lead">Fourteen electronic sounds for the white keys: a drum machine on keys <b>1–8</b>, FM, acid and chip sounds for melodies on keys <b>9–14</b>. They answer to the same six knobs as set 1. Each clip plays the sound as it would come up, then turns one knob, at the dashed line. Mark each one <b>Keep</b>, <b>Maybe</b> or <b>No</b> and add a note. I read the answers from here.</p>
+  </header>
+
+  <section aria-label="The fourteen keys">
+    <div class="keys" id="keys"></div>
+    <div class="rows"><span>Rhythm · keys 1–8</span><span>Melody · keys 9–14</span></div>
+  </section>
+
+  <div class="tally" id="tally" aria-live="polite"></div>
+  <p class="banner" id="banner" hidden></p>
+
+  <section class="group">
+    <header><h2>Rhythm keys</h2><p>Short sounds for patterns. The drums take their pitch from the key.</p></header>
+    <div class="cards" id="rhythm"></div>
+  </section>
+
+  <section class="group">
+    <header><h2>Melody keys</h2><p>Pitched sounds, longer and shorter.</p></header>
+    <div class="cards" id="melody"></div>
+  </section>
+
+  <section class="group">
+    <header><h2>In circles</h2><p>Loops at CIRCLES' lengths, as you would play them: each player's ratio of L0 is in its name.</p></header>
+    <div class="cards" id="pieces"></div>
+  </section>
+
+  <section class="note">
+    <p><b>How these were made.</b> Rendered on the computer from the C++ that would go into the firmware (<span class="mono">study/synths.h</span>), through CIRCLES' own pan and room. Nothing is in the firmware yet.</p>
+    <p><b>CPU</b> is measured on the computer against one mallet voice of set 1. Set 1's gangsa costs <span class="mono" id="gangsa">×2.6</span> on the same scale, so anything near that fits as well as set 1 does. The CHOMPI's own numbers come later, from the bench firmware.</p>
+    <p><b>The knobs</b> under each card are where that sound comes up: K1 strike, K2 bright, K3 decay, and in orange the CHOMPI layer: shimmer, feel, prep.</p>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const ROW = (k) => "r" + Math.floor((k - 1) / 4) % 4;
+const $ = (id) => document.getElementById(id);
+const state = {};       // clip id -> {verdict, note}
+let db = null;
+const audio = new Audio();
+audio.preload = "none";
+let playing = null;     // the card's clip id
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v13l11-6.5z"/></svg>';
+const STOP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h4v12H3zM9 2h4v12H9z"/></svg>';
+
+function card(c) {
+  const d = el("article", "card" + (c.piece ? " wide" : ""));
+  d.id = "c-" + c.id;
+  const top = el("div", "top");
+  if (!c.piece) { const ch = el("div", "chip " + ROW(c.key), String(c.key)); ch.setAttribute("aria-label", "white key " + c.key); top.append(ch); }
+  const w = el("div", "what");
+  if (!c.piece) w.append(el("span", "eng", c.engine));
+  w.append(el("h3", "", c.title));
+  if (c.desc) w.append(el("p", "", c.desc));
+  top.append(w);
+  if (c.cpu != null) { const cp = el("div", "cpu"); cp.innerHTML = "<b>×" + c.cpu.toFixed(1) + "</b>a mallet"; top.append(cp); }
+  d.append(top);
+
+  const pl = el("div", "play");
+  const b = el("button", "pbtn"); b.innerHTML = PLAY; b.setAttribute("aria-label", "Play " + c.title); b.id = "p-" + c.id;
+  const sp = el("div", "spec"); sp.tabIndex = 0; sp.setAttribute("role", "slider"); sp.setAttribute("aria-label", "Seek in " + c.title);
+  const img = el("img"); img.src = "s/" + c.id + ".png"; img.alt = "Spectrogram of " + c.title; img.loading = "lazy";
+  sp.append(img);
+  if (!c.piece) { const h = el("i", "half"); h.style.left = (100 * c.half / c.dur) + "%"; sp.append(h); }
+  sp.append(el("i", "head"));
+  sp.append(el("span", "t", c.dur.toFixed(0) + " s"));
+  pl.append(b, sp);
+  d.append(pl);
+  b.onclick = () => toggle(c);
+  sp.onclick = (e) => { const r = sp.getBoundingClientRect(); seek(c, (e.clientX - r.left) / r.width); };
+  sp.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(c); } };
+
+  if (c.then) { const t = el("p", "then"); t.innerHTML = "<b>At the line:</b> "; t.append(document.createTextNode(c.then)); d.append(t); }
+  if (c.players) { const ps = el("div", "players"); c.players.forEach((p) => ps.append(el("span", "", p))); d.append(ps); }
+  if (c.knobs) {
+    const kn = el("div", "knobs");
+    const names = ["strike", "bright", "decay", "shimmer", "feel", "prep"];
+    c.knobs.forEach((v, i) => {
+      const k = el("div", "kn" + (i > 2 ? " ch" : ""));
+      k.append(el("span", "", names[i] + " " + v.toFixed(2).replace(/^0/, "")));
+      const bar = el("span", "bar"); const f = el("i"); f.style.width = (100 * v) + "%"; bar.append(f); k.append(bar);
+      kn.append(k);
+    });
+    d.append(kn);
+  }
+
+  const vd = el("div", "verdict");
+  [["keep", "Keep"], ["maybe", "Maybe"], ["no", "No"]].forEach(([v, label]) => {
+    const vb = el("button", "vb", label); vb.dataset.v = v; vb.setAttribute("aria-pressed", "false"); vb.id = "v-" + c.id + "-" + v;
+    vb.onclick = () => choose(c.id, v);
+    vd.append(vb);
+  });
+  const sv = el("span", "saved"); sv.id = "s-" + c.id; vd.append(sv);
+  d.append(vd);
+  const ta = el("textarea"); ta.id = "n-" + c.id; ta.placeholder = "A note (optional): what works, what doesn't";
+  let tm = 0;
+  ta.oninput = () => { clearTimeout(tm); tm = setTimeout(() => note(c.id, ta.value), 1200); };
+  ta.onblur = () => { clearTimeout(tm); note(c.id, ta.value); };
+  d.append(ta);
+  return d;
+}
+
+function toggle(c) {
+  if (playing === c.id && !audio.paused) { audio.pause(); return; }
+  start(c, 0);
+}
+function start(c, frac) {
+  if (playing !== c.id) {
+    stopMarks();
+    playing = c.id;
+    audio.src = "a/" + c.id + ".mp3";
+  }
+  const go = () => { if (frac > 0 && isFinite(audio.duration)) audio.currentTime = frac * audio.duration; audio.play().catch(() => {}); };
+  if (audio.readyState >= 1) go(); else audio.addEventListener("loadedmetadata", go, { once: true }), audio.load();
+}
+function seek(c, frac) { frac = Math.min(Math.max(frac, 0), .999); if (playing === c.id && audio.readyState >= 1) { audio.currentTime = frac * audio.duration; if (audio.paused) audio.play().catch(() => {}); } else start(c, frac); }
+function stopMarks() {
+  if (!playing) return;
+  const b = $("p-" + playing); if (b) b.innerHTML = PLAY;
+  const s = document.querySelector("#c-" + playing + " .spec"); if (s) s.classList.remove("on");
+}
+audio.addEventListener("play", () => { const b = $("p-" + playing); if (b) b.innerHTML = STOP; const s = document.querySelector("#c-" + playing + " .spec"); if (s) s.classList.add("on"); });
+audio.addEventListener("pause", () => { const b = $("p-" + playing); if (b) b.innerHTML = PLAY; });
+audio.addEventListener("ended", () => { stopMarks(); });
+audio.addEventListener("timeupdate", tick);
+function tick() {
+  if (!playing || !audio.duration) return;
+  const h = document.querySelector("#c-" + playing + " .head");
+  if (h) h.style.left = (100 * audio.currentTime / audio.duration) + "%";
+}
+(function loop() { if (!audio.paused) tick(); requestAnimationFrame(loop); })();
+
+// ---- answers --------------------------------------------------------------
+const writes = {};
+function save(id) {
+  if (!db) return;
+  const body = { verdict: state[id]?.verdict || "", note: state[id]?.note || "", at: new Date().toISOString() };
+  const s = $("s-" + id); if (s) s.textContent = "Saving…";
+  writes[id] = (writes[id] || Promise.resolve()).then(() => db.collection("verdicts").doc(id).set(body))
+    .then(() => { if (s) s.textContent = "Saved"; })
+    .catch(() => { if (s) s.textContent = "Not saved: this view can't write"; });
+}
+function choose(id, v) {
+  state[id] = { ...(state[id] || {}), verdict: state[id]?.verdict === v ? "" : v };
+  paint(id); save(id);
+}
+function note(id, text) {
+  if ((state[id]?.note || "") === text) return;
+  state[id] = { ...(state[id] || {}), note: text };
+  save(id);
+}
+function paint(id) {
+  const v = state[id]?.verdict || "";
+  ["keep", "maybe", "no"].forEach((x) => { const b = $("v-" + id + "-" + x); if (b) b.setAttribute("aria-pressed", String(v === x)); });
+  const k = document.querySelector('.key[data-id="' + id + '"]'); if (k) k.dataset.v = v;
+  const ta = $("n-" + id); if (ta && document.activeElement !== ta && (state[id]?.note || "") !== ta.value) ta.value = state[id]?.note || "";
+  tally();
+}
+function tally() {
+  const all = DATA.clips.map((c) => state[c.id]?.verdict || "");
+  const n = (v) => all.filter((x) => x === v).length;
+  $("tally").innerHTML = "";
+  [["keep", "kept", "var(--keep)"], ["maybe", "maybe", "var(--maybe)"], ["no", "no", "var(--no)"], ["", "not marked yet", "var(--rule)"]].forEach(([v, label, col]) => {
+    const s = el("span"); const d = el("i", "dot"); d.style.background = col; s.append(d, el("b", "", String(n(v))), document.createTextNode(" " + label)); $("tally").append(s);
+  });
+}
+
+// ---- build ----------------------------------------------------------------
+DATA.clips.forEach((c) => {
+  const host = c.piece ? "pieces" : c.key <= 8 ? "rhythm" : "melody";
+  $(host).append(card(c));
+  if (!c.piece) {
+    const k = el("button", "key " + ROW(c.key)); k.dataset.id = c.id; k.setAttribute("aria-label", "Key " + c.key + ", " + c.title);
+    k.append(el("span", "n", String(c.key)), el("span", "nm", c.short || c.title), el("span", "v"));
+    k.onclick = () => { $("c-" + c.id).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); start(c, 0); };
+    $("keys").append(k);
+  }
+});
+$("gangsa").textContent = "×" + DATA.gangsa.toFixed(1);
+tally();
+
+(async () => {
+  try { db = await window.claude?.use?.("db"); } catch (e) { db = null; }
+  if (!db) { $("banner").hidden = false; $("banner").textContent = "Answers can't be saved in this view. Open the page on claude.ai, signed in."; document.querySelectorAll(".vb, textarea").forEach((x) => x.disabled = true); return; }
+  const slow = setTimeout(() => { $("banner").hidden = false; $("banner").textContent = "Saved answers can't be reached yet. What you mark is saved once they can."; }, 10000);
+  db.collection("verdicts").onSnapshot((snap) => {
+    if (!snap.metadata.fromCache) { clearTimeout(slow); $("banner").hidden = true; }
+    snap.docs.forEach((d) => { const b = d.data() || {}; state[d.id] = { verdict: b.verdict || "", note: b.note || "" }; paint(d.id); });
+  }, () => { clearTimeout(slow); $("banner").hidden = false; $("banner").textContent = "Saved answers can't be read in this view."; });
+})();
+</script>
