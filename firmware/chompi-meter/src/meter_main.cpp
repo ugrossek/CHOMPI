@@ -9,6 +9,7 @@
 #include "board/temp_led_stuff.h"
 #include "Meter.h"
 #include "Link.h"
+#include "Options.h"
 #include "../dsp/room.h"
 
 #include <cerrno>
@@ -21,6 +22,10 @@ Hardware hw;
 meter::Instrument instrument;
 meter::Link page_link;
 meter::Room room_rv;
+// The card, for the settings only (drift builds: Options.h).
+SdmmcHandler sdmmc;
+FatFSInterface fsi;
+meter::Options options;
 static float DSY_SDRAM_BSS room_mem[meter::Room::kMemory];
 // The figures' versions, as raw memory: nothing may be constructed in SDRAM
 // before it is set up; Instrument::Init sets the rings up.
@@ -294,8 +299,22 @@ int main(void)
     if(sleep_state > 4000)
         hw.MpWrite(0x08, 0B10111111); // shipping mode
 
+    if(meter::kDrift)
+    {
+        /* The settings, from /CIRCLES/options.json (made with the defaults
+         * when it is not there). No card: the defaults. */
+        SdmmcHandler::Config sd_cfg;
+        sd_cfg.speed = SdmmcHandler::Speed::FAST;
+        sd_cfg.width = SdmmcHandler::BusWidth::BITS_4;
+        sdmmc.Init(sd_cfg);
+        fsi.Init(FatFSInterface::Config::MEDIA_SD);
+        if(f_mount(&fsi.GetSDFileSystem(), fsi.GetSDPath(), 1) == FR_OK)
+            options.Load();
+    }
+
     const float sr = hw.seed.AudioSampleRate();
     instrument.Init(sr, reinterpret_cast<meter::Versions*>(versions_mem), voice_mem);
+    instrument.SetAlign(options.align);
     room_rv.Init(sr, room_mem);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // cycle counter for the load guard

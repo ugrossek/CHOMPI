@@ -9,6 +9,11 @@
 #   make DRIFT=1 BUILD_DIR=build-drift
 #                   build build-drift/CIRCLES-DRIFT.bin: the slide, and every
 #                   player at its own speed, pulled towards its place against L0
+#   make LIBRARY=1 BUILD_DIR=build-library
+#                   build build-library/CIRCLES-LIBRARY.bin: drift, and the
+#                   figure library (every kept figure in one list; CHOMPI + loop
+#                   held + wheel moves the chosen player, on all everyone, on to
+#                   the next figure or back)
 
 TARGET = CIRCLES
 ifeq ($(SLIDE),1)
@@ -17,6 +22,10 @@ endif
 ifeq ($(DRIFT),1)
 TARGET = CIRCLES-DRIFT
 C_DEFS += -DCIRCLES_DRIFT=1 -DCIRCLES_SLIDE=1
+endif
+ifeq ($(LIBRARY),1)
+TARGET = CIRCLES-LIBRARY
+C_DEFS += -DCIRCLES_LIBRARY=1 -DCIRCLES_DRIFT=1 -DCIRCLES_SLIDE=1
 endif
 ifeq ($(TEST),1)
 TARGET = CIRCLES-TEST
@@ -36,6 +45,11 @@ LDSCRIPT = chompi_sram.lds
 
 CPP_SOURCES = meter_main.cpp \
 	board/encoder.cpp
+
+# The settings on the card (Options.h): FatFS and TAPE's JSON reader.
+USE_FATFS = 1
+C_SOURCES += $(CHOMPI_LIBS)/coreJSON/source/core_json.c
+C_INCLUDES += -I$(CHOMPI_LIBS)/coreJSON/source/include
 
 C_INCLUDES += -Iboard -I$(CHOMPI_LIBS)/libDaisy/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
 
