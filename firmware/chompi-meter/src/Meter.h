@@ -64,9 +64,12 @@ using Sw = Hardware::SwId;
 
 constexpr int kChannels = 15;
 constexpr int kVoices = 32; // the pool all channels share; the load guard limits it in practice
-// The style, chosen at power-on: mallets (set 1, the room) or acid house (set 2,
-// a bar at 124 BPM, the kick ducking everyone else, drive, and a delay in place
-// of the room, meter_main.cpp). Both sets stay in the instrument view.
+// The style: mallets (set 1, the room), or acid house, hidden: CHOMPI tapped
+// five times, quickly and on its own, starts afresh there (and five more taps
+// go back). Acid house: set 2 on the players, a bar at 124 BPM, the kick ducking
+// everyone else, a resonant lowpass on all but the bass drum on all with CHOMPI +
+// K4 (where the width is), and drive (meter_main.cpp). The room is the room's.
+// Both sets stay in the instrument view.
 constexpr int kStyleMallets = 0, kStyleAcid = 1, kStyles = 2;
 
 // Keyboard: the shift register index of each key, low to high, its note and
@@ -241,6 +244,7 @@ public:
     // its start. (The volume and the room stay as they are.)
     void Start() {
         l0_ = StartL0() * sr_;
+        filter_ = 1.f;
         const int set = style_ == kStyleAcid ? 1 : 0;
         view_set_ = set;
         for (int c = 0; c < kChannels; ++c) {
@@ -318,17 +322,27 @@ public:
             mail_ready_ = false;
         }
 
-        // Power-on: the style first, nothing else (C# mallets, D# acid house;
-        // the one chosen last time the brighter). It stays until the CHOMPI is
-        // switched on again (or rebooted).
-        if (style_ < 0) {
-            for (int k = 0; k < 25; ++k)
-                if (!kKeys[k].white && BlackIndex(k) < kStyles && Pressed(int(kKeys[k].sw))) {
-                    style_ = BlackIndex(k);
+        // CHOMPI tapped five times, on its own (each tap short, the next soon
+        // after, nothing else pressed meanwhile): the other style, from the start.
+        tap_clock_ += float(block) / sr_;
+        const uint64_t others = TapOthers();
+        if (pressed_ & others) style_taps_ = 0;
+        if (Pressed(int(Sw::KEY_26))) {
+            if (tap_clock_ > kStyleTapGap) style_taps_ = 0;
+            tap_clock_ = 0.f;
+        }
+        if ((released >> int(Sw::KEY_26)) & 1) {
+            if (tap_clock_ < kStyleTapHold && (held_ & others) == 0) {
+                if (++style_taps_ >= kStyleTaps) {
+                    style_taps_ = 0;
+                    style_ = style_ == kStyleAcid ? kStyleMallets : kStyleAcid;
                     Start();
-                    break;
+                    style_show_ = kStyleShowSeconds;
                 }
-            return;
+            } else {
+                style_taps_ = 0;
+            }
+            tap_clock_ = 0.f;
         }
 
         for (int id = 0; id < kIdKnob; ++id) {
@@ -678,7 +692,7 @@ public:
         }
         // Acid house: every player that is not a kick ducks under the kicks
         // (quickly down, back in about 150 ms), the pump of the style.
-        if (style_ == kStyleAcid) Duck(n);
+        if (style_ == kStyleAcid) { Duck(n); Filter(n); }
         // Each channel at its pan.
         for (int c = 0; c < kChannels; ++c) {
             if (!busy_[c]) continue;
@@ -722,6 +736,24 @@ public:
     }
     static constexpr float kDuckDepth = .6f, kDuckFull = .2f; // 8 dB under a full kick
 
+    // The lowpass on every player but the bass drum: 80 Hz closed .. 16 kHz, resonant; all the way open, not there.
+    void Filter(size_t n) {
+        if (filter_ >= .995f) { filter_set_ = -1.f; return; }
+        if (filter_ != filter_set_) {
+            const float fc = 80.f * std::exp2(7.64f * filter_); // 80 Hz .. 16 kHz
+            for (sd::Svf& f : filt_) f.Set(fc, kFilterQ, sr_);
+            if (filter_set_ < 0.f) for (sd::Svf& f : filt_) f.ic1 = f.ic2 = 0.f;
+            filter_set_ = filter_;
+        }
+        for (int c = 0; c < kChannels; ++c) {
+            if (!busy_[c]) continue;
+            const int e = kMalletPresets[ch_[c].preset].engine;
+            if (e == kEngKick) continue;
+            for (size_t i = 0; i < n; ++i) bus_[c][i] = filt_[c].Lp(bus_[c][i]);
+        }
+    }
+    static constexpr float kFilterQ = 2.5f;
+
     // Any player has a figure (the click stops with the first).
     bool AnyFigure() const {
         for (int c = 0; c < kChannels; ++c)
@@ -756,9 +788,8 @@ public:
     }
 
     float Room() const { return room_; }
-    // The style: -1 not chosen yet (power-on), else kStyleMallets or kStyleAcid.
+    // The style, kStyleMallets or kStyleAcid.
     int Style() const { return style_; }
-    void SetLastStyle(int s) { last_style_ = s; }
     // L0 now, in seconds (the acid house delay follows it).
     float L0Seconds() const { return l0_ / sr_; }
     float Volume() const { return volume_; }
@@ -892,16 +923,13 @@ public:
 
         for (int k = 0; k < 25; ++k) {
             float rgb[3] = {0.f, 0.f, 0.f};
-            if (style_ < 0) {
-                // Power-on: the two styles, breathing, C# mallets (the marimba's
-                // red), D# acid house (the acid's lime); last time's brighter.
-                const int b = kKeys[k].white ? -1 : BlackIndex(k);
-                if (b >= 0 && b < kStyles) {
-                    const float* col = kPresetColor[b == kStyleAcid ? kSetPresets[1][7] : kSetPresets[0][1]];
-                    const float breath = .6f + .4f * std::sin(2.f * float(M_PI) * .5f * led_time_);
-                    const float lvl = (b == last_style_ ? 1.f : .25f) * breath;
-                    for (int j = 0; j < 3; ++j) rgb[j] = col[j] * lvl;
-                }
+            if (style_show_ > 0.f) {
+                // Into a style: every key in its colour (acid house the acid's
+                // lime, mallets the marimba's red), a wave up the keys, fading.
+                const float* col = kPresetColor[style_ == kStyleAcid ? kSetPresets[1][7] : kSetPresets[0][1]];
+                const float t = kStyleShowSeconds - style_show_, at = float(k) / 25.f * .4f;
+                const float lvl = t < at ? 0.f : std::min(1.f, style_show_ / .5f);
+                for (int j = 0; j < 3; ++j) rgb[j] = col[j] * lvl;
             } else if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
             } else if (vshow_ && !kKeys[k].white) {
@@ -1012,6 +1040,7 @@ public:
         // Knobs: the selected channel's colour; with the switch on all, four
         // different colours, steady (no one channel looks like that: everyone).
         led_time_ += dt;
+        if (style_show_ > 0.f) style_show_ = std::max(0.f, style_show_ - dt);
         static constexpr float kAllCol[4][3] = {{1.f, .35f, 0.f}, {1.f, .85f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}};
         for (int n = 0; n < 4; ++n) {
             const float* kc = all_ ? kAllCol[n] : sel_col;
@@ -1851,6 +1880,11 @@ private:
             // K4 as on one channel: the level, and with CHOMPI the pan (for
             // all: the width). The mark: as set.
             if (knob == 3) {
+                if (chompi && style_ == kStyleAcid) { // acid house: the filter sweep takes the width's place
+                    filter_ = Clamp01(filter_ + d);
+                    ShowMeter(kMeterBar, filter_, 1.f, true);
+                    return;
+                }
                 float& v = chompi ? size_ : gain_;
                 v = std::min(std::max(v + 2.f * d, 0.f), 2.f);
                 if (chompi) PlaceAll(false);
@@ -1903,6 +1937,7 @@ private:
             if (knob == 3) {
                 gain_ = 1.f;
                 size_ = 1.f;
+                filter_ = 1.f;
                 PlaceAll(false);
                 ShowMeter(kMeterBar, .5f, .5f, true);
                 return;
@@ -2033,9 +2068,23 @@ private:
     static constexpr int kListenBlocks = 250; // play + white held this long: listen; shorter: a tap, mute
     bool sound_view_ = false; // the selected channel's sound on the white keys
     int view_set_ = 0;        // the set of instruments shown there
-    int style_ = -1;          // chosen at power-on (-1: not yet)
-    int last_style_ = 0;      // ... the one chosen last time (options.json), shown brighter
+    int style_ = kStyleMallets;
+    int style_taps_ = 0;      // CHOMPI tapped on its own, so many times in a row
+    float tap_clock_ = 0.f;   // ... since it last went down or up, s
+    float style_show_ = 0.f;  // the keys showing the new style, s left
+    static constexpr int kStyleTaps = 5;
+    // The switches that count as "something else" while CHOMPI is tapped: the 25 keys, play
+    // and loop. Not the toggle (its bit is down in one position), the unused inputs or the knobs.
+    static uint64_t TapOthers() {
+        uint64_t m = 0;
+        for (const Key& k : kKeys) m |= uint64_t(1) << int(k.sw);
+        return m | (uint64_t(1) << int(Sw::KEY_27)) | (uint64_t(1) << int(Sw::KEY_28));
+    }
+    static constexpr float kStyleTapHold = .3f, kStyleTapGap = .4f, kStyleShowSeconds = 1.2f;
     float duck_env_ = 0.f;    // acid house: the kick, heard by everything else
+    float filter_ = 1.f;      // acid house: the lowpass, 0 closed .. 1 open (CHOMPI + K4 on all)
+    float filter_set_ = -1.f; // ... as the filters have it
+    sd::Svf filt_[kChannels];
     int tap_key_ = -1;        // the white key last tapped with CHOMPI held
     bool tap_again_ = false;  // ... and it was tapped before: the sounds on letting go
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};

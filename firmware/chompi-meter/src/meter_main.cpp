@@ -11,7 +11,6 @@
 #include "Link.h"
 #include "Options.h"
 #include "../dsp/room.h"
-#include "../dsp/Echo.h"
 
 #include <cerrno>
 #include <cstddef>
@@ -23,13 +22,11 @@ Hardware hw;
 meter::Instrument instrument;
 meter::Link page_link;
 meter::Room room_rv;
-meter::Echo echo; // acid house: in place of the room
 // The card, for the settings only (drift builds: Options.h).
 SdmmcHandler sdmmc;
 FatFSInterface fsi;
 meter::Options options;
 static float DSY_SDRAM_BSS room_mem[meter::Room::kMemory];
-static float DSY_SDRAM_BSS echo_mem[meter::Echo::kMemory];
 // The figures' versions, as raw memory: nothing may be constructed in SDRAM
 // before it is set up; Instrument::Init sets the rings up.
 alignas(8) static uint8_t DSY_SDRAM_BSS versions_mem[sizeof(meter::Versions)];
@@ -39,9 +36,8 @@ static float DSY_SDRAM_BSS voice_mem[meter::kVoices * meter::AnyVoice::kArenaFlo
 /* Wet level of the room at room .5, about 10 dB under the dry sound (measured
  * on an impulse). */
 static constexpr float kRoomWet = .77f;
-/* Acid house: the delay's repeats at amount .5 (as loud as the room's), and the
- * drive on the sum: up to 2x into the soft clip, the quiet parts 3 dB up. */
-static constexpr float kEchoWet = .6f, kDrive = 2.f, kDriveGain = 1.4f;
+/* Acid house: the drive on the sum, up to 2x into the soft clip, the quiet parts 3 dB up. */
+static constexpr float kDrive = 2.f, kDriveGain = 1.4f;
 
 /* A bounded heap in D2 RAM, for the few things that malloc (the USB stack).
  * newlib's own _sbrk doesn't stop at the end of RAM. */
@@ -222,18 +218,15 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     hw.ProcessAllControls();
     instrument.Controls(hw, size);
 
-    const float room = instrument.Room();
     const bool acid = instrument.Style() == meter::kStyleAcid;
-    if(acid)
-        echo.Set(instrument.L0Seconds(), room);
-    else if(room != room_set)
+    const float room = instrument.Room();
+    if(room != room_set)
     {
         room_set = room;
         room_rv.SetDecay(room);
     }
-    /* The room knob also sets how much: none at 0, twice the matched level at 1
-     * (acid house: the delay's). */
-    const float wet = 2.f * room * (acid ? kEchoWet : kRoomWet);
+    /* The room knob also sets how much: none at 0, twice the matched level at 1. */
+    const float wet = 2.f * room * kRoomWet;
 
     float l[64], r[64], sl[64], sr[64];
     std::fill(l, l + size, 0.f);
@@ -246,17 +239,13 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     for(size_t i = 0; i < size; i++)
     {
         float wl, wr;
+        room_rv.Process(sl[i], sr[i], &wl, &wr);
+        l[i] += wet * wl;
+        r[i] += wet * wr;
         if(acid)
         {
-            echo.Process(sl[i], sr[i], &wl, &wr);
-            l[i] = tanhf(kDrive * (l[i] + wet * wl)) * (kDriveGain / kDrive);
-            r[i] = tanhf(kDrive * (r[i] + wet * wr)) * (kDriveGain / kDrive);
-        }
-        else
-        {
-            room_rv.Process(sl[i], sr[i], &wl, &wr);
-            l[i] += wet * wl;
-            r[i] += wet * wr;
+            l[i] = tanhf(kDrive * l[i]) * (kDriveGain / kDrive);
+            r[i] = tanhf(kDrive * r[i]) * (kDriveGain / kDrive);
         }
 
         /* Limiter: many long notes add up, so the sum is turned down smoothly
@@ -334,9 +323,7 @@ int main(void)
     const float sr = hw.seed.AudioSampleRate();
     instrument.Init(sr, reinterpret_cast<meter::Versions*>(versions_mem), voice_mem);
     instrument.SetAlign(options.align);
-    instrument.SetLastStyle(options.style);
     room_rv.Init(sr, room_mem);
-    echo.Init(sr, echo_mem);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // cycle counter for the load guard
     DWT->LAR = 0xC5ACCE55;
@@ -366,13 +353,6 @@ int main(void)
         }
 
         page_link.Poll(hw, instrument, now);
-
-        /* The style chosen at power-on, remembered for next time. */
-        if(meter::kDrift && instrument.Style() >= 0 && instrument.Style() != options.style)
-        {
-            options.style = instrument.Style();
-            options.Save();
-        }
 
         main_beat = now;
 
