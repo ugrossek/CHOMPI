@@ -13,8 +13,11 @@ MEMORY
 {
 	FLASH (RX)    : ORIGIN = 0x08000000, LENGTH = 128K
 	DTCMRAM (RWX) : ORIGIN = 0x20000000, LENGTH = 128K
-	SRAM_EXEC (RWX): ORIGIN = 0x24000000, LENGTH = 236K - 768
-	SRAM (RWX)    : ORIGIN = 0x24000000 + 236K - 768, LENGTH = 276K + 768
+	/* CIRCLES: 64K more for code than TAPE's 236K (the instruments); its
+	 * data needs about 176K of the rest. The launcher copies an image of up
+	 * to 512K, the whole of this RAM. */
+	SRAM_EXEC (RWX): ORIGIN = 0x24000000, LENGTH = 300K - 768
+	SRAM (RWX)    : ORIGIN = 0x24000000 + 300K - 768, LENGTH = 212K + 768
 	RAM_D2 (RWX)  : ORIGIN = 0x30000000, LENGTH = 32K
 	RAM_D2CACHE (RWX)  : ORIGIN = 0x30000000 + 32K, LENGTH = 288K - 32K
 	RAM_D3 (RWX)  : ORIGIN = 0x38000000, LENGTH = 64K

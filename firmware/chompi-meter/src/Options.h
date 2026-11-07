@@ -9,11 +9,11 @@
 //                comes in on the next L0 beat, the player back on its place
 //                there, in step with L0. false: at the player's own loop
 //                start, wherever the drift has taken it (nothing jumps).
+//
+// Read by hand, not with a JSON library: a name, then the value after it.
 
 #include "daisy_seed.h"
-#include "core_json.h"
 
-#include <cstdio>
 #include <cstring>
 
 namespace meter {
@@ -35,12 +35,12 @@ struct Options {
             len = br;
         }
         was[len] = '\0';
-        if (len && JSON_Validate(was, len) == JSONSuccess) Parse(was, len);
+        Bool(was, "Align To L0", align);
 
         alignas(32) static char now[kSize];
-        snprintf(now, kSize,
-                 "{\n\t\"chompi\": [\n\t\t{\n\t\t\t\"name\": \"Align To L0\",\n\t\t\t\"value\": %s\n\t\t}\n\t]\n}",
-                 align ? "true" : "false");
+        std::strcpy(now, "{\n\t\"chompi\": [\n\t\t{\n\t\t\t\"name\": \"Align To L0\",\n\t\t\t\"value\": ");
+        std::strcat(now, align ? "true" : "false");
+        std::strcat(now, "\n\t\t}\n\t]\n}");
         if (std::strcmp(now, was) == 0) return;
         if (f_open(&f_, kName, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK) {
             UINT bw = 0;
@@ -50,26 +50,23 @@ struct Options {
     }
 
 private:
-    void Parse(char* s, size_t len) {
-        for (int i = 0; i < kMost; ++i) {
-            char q[32];
-            char* v;
-            size_t n;
-            snprintf(q, sizeof q, "chompi[%d].name", i);
-            if (JSON_Search(s, len, q, std::strlen(q), &v, &n) != JSONSuccess) break;
-            const bool is_align = n == 11 && std::strncmp(v, "Align To L0", n) == 0;
-            snprintf(q, sizeof q, "chompi[%d].value", i);
-            if (JSON_Search(s, len, q, std::strlen(q), &v, &n) != JSONSuccess) continue;
-            if (is_align) {
-                if (n == 4 && std::strncmp(v, "true", n) == 0) align = true;
-                if (n == 5 && std::strncmp(v, "false", n) == 0) align = false;
-            }
-        }
+    // The value after "name": "<name>": true or false; anything else leaves v.
+    static void Bool(const char* s, const char* name, bool& v) {
+        char q[48] = "\"";
+        std::strcat(q, name);
+        std::strcat(q, "\"");
+        const char* p = std::strstr(s, q);
+        if (!p) return;
+        p = std::strstr(p + std::strlen(q), "\"value\"");
+        if (!p) return;
+        p += 7;
+        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':') p++;
+        if (std::strncmp(p, "true", 4) == 0) v = true;
+        else if (std::strncmp(p, "false", 5) == 0) v = false;
     }
 
     static constexpr const char* kName = "options.json";
     static constexpr size_t kSize = 1024;
-    static constexpr int kMost = 16;
     FIL f_;
 };
 

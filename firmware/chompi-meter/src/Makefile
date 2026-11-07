@@ -46,10 +46,8 @@ LDSCRIPT = chompi_sram.lds
 CPP_SOURCES = meter_main.cpp \
 	board/encoder.cpp
 
-# The settings on the card (Options.h): FatFS and TAPE's JSON reader.
+# The settings on the card (Options.h).
 USE_FATFS = 1
-C_SOURCES += $(CHOMPI_LIBS)/coreJSON/source/core_json.c
-C_INCLUDES += -I$(CHOMPI_LIBS)/coreJSON/source/include
 
 C_INCLUDES += -Iboard -I$(CHOMPI_LIBS)/libDaisy/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
 
