@@ -211,9 +211,9 @@ static void RunAll() {
     Bench<Acid>("Acid", K(.70f, .25f, .30f, .00f, .30f, .75f));
     Bench<Fm>("FM piano", K(.55f, .25f, .50f, .40f, .30f, .20f));
     Bench<Fm>("FM bell", K(.60f, .30f, .75f, .30f, .25f, .55f));
-    Bench<Chip>("Chip lead", K(.15f, .45f, .45f, .60f, .25f, .00f));
+    Bench<Chip>("Chip lead", K(.15f, .45f, .65f, .60f, .25f, .00f));
     Bench<Acid>("Saw stab", K(.40f, .55f, .35f, .80f, .30f, .20f));
-    Bench<Grit>("Grit", K(.35f, .55f, .35f, .40f, .30f, .30f));
+    Bench<Grit>("Grit", K(.35f, .55f, .50f, .40f, .30f, .30f));
     Bench<Grit>("Grit stutter", K(1.f, 1.f, .35f, .40f, .30f, 1.f));
     Bench<Fm>("FM bass", K(.50f, .35f, .30f, .00f, .25f, .05f));
     Line("e,%d", nlines + 1);

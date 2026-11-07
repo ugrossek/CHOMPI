@@ -19,6 +19,7 @@ struct MalletPreset {
     MalletParams p;
     float gain_db; // evens out loudness: measured over the first 0.2 s, C3 .. G5
     int engine = kEngMallet;
+    int octave = 0; // where it sounds best: a player's octave when it is chosen (the wheel moves it on)
 };
 
 //            material brightness decay strike variation shimmer buzz kind  gain (dB)
@@ -30,7 +31,7 @@ static const MalletPreset kMalletPresets[] = {
     {"Glass",     {0.667f, 0.60f, 0.65f, 0.75f, 0.30f, 0.00f, 0.0f, 0}, -1.0f},
     // A slow shimmer: real bells are never quite round, so partials beat.
     {"Bell",      {0.833f, 0.50f, 0.80f, 0.60f, 0.30f, 0.15f, 0.0f, 0}, -6.0f},
-    {"Gong",      {1.000f, 0.45f, 0.92f, 0.25f, 0.20f, 0.40f, 0.0f, 0}, -4.0f}, // best low (E2) and high
+    {"Gong",      {1.000f, 0.45f, 0.92f, 0.25f, 0.20f, 0.40f, 0.0f, 0}, -4.0f, kEngMallet, -1}, // best low (E2) and high
     {"Felt",      {0.180f, 0.30f, 0.75f, 0.05f, 0.35f, 0.00f, 0.0f, 0}, +0.0f},
     {"Snare bar", {0.000f, 0.55f, 0.28f, 0.65f, 0.45f, 0.00f, 0.3f, 0}, +5.0f}, // rattle
     {"Muffled",   {0.100f, 0.50f, 0.55f, 0.55f, 0.40f, 0.00f, 0.7f, 1}, +0.0f}, // muffle
@@ -52,8 +53,11 @@ static const MalletPreset kMalletPresets[] = {
     {"Hands",        {0.f, 0.50f, 0.30f, 0.50f, 0.40f, 0.30f, 0.20f, 0}, +5.4f, kEngHands},
     {"Tape",         {0.f, 0.40f, 0.50f, 0.30f, 0.40f, 0.30f, 0.30f, 0}, -7.0f, kEngTape},
     // The second set, electronic (study/synths.h), each at its setting on the
-    // listening page (Nov 7, 2026); the gain as above, at C4. The short ones
-    // (hi-hat, clap, snare) come out loud on their peaks: the limiter has them.
+    // listening page (Nov 7, 2026), in the octave it played there (a bass two
+    // down, the chip lead and the bell one up); the chip lead and grit longer
+    // since (their lengths were too near the others'). The gain as above, at
+    // C4. The short ones (hi-hat, clap, snare) come out loud on their peaks:
+    // the limiter has them.
     //                     brightness decay strike  feel  shimmer prep
     {"Kick",         {0.f, 0.30f, 0.35f, 0.55f, 0.20f, 0.00f, 0.15f, 0}, -6.8f, kEngKick},
     {"Tom",          {0.f, 0.20f, 0.35f, 0.45f, 0.25f, 0.45f, 0.10f, 0}, -6.5f, kEngTom},
@@ -61,14 +65,14 @@ static const MalletPreset kMalletPresets[] = {
     {"Clap",         {0.f, 0.35f, 0.35f, 0.30f, 0.35f, 0.10f, 0.85f, 0}, +6.8f, kEngNoise},
     {"Hi-hat",       {0.f, 0.85f, 0.08f, 0.50f, 0.30f, 1.00f, 0.00f, 0}, +11.8f, kEngMetal},
     {"Cowbell",      {0.f, 0.35f, 0.25f, 0.30f, 0.25f, 0.00f, 0.00f, 0}, +3.6f, kEngMetal},
-    {"Blip",         {0.f, 0.50f, 0.12f, 0.60f, 0.20f, 0.00f, 0.00f, 0}, +1.8f, kEngChip},
-    {"Acid",         {0.f, 0.25f, 0.30f, 0.70f, 0.30f, 0.00f, 0.75f, 0}, +1.8f, kEngAcid},
+    {"Blip",         {0.f, 0.50f, 0.12f, 0.60f, 0.20f, 0.00f, 0.00f, 0}, +1.8f, kEngChip, +1},
+    {"Acid",         {0.f, 0.25f, 0.30f, 0.70f, 0.30f, 0.00f, 0.75f, 0}, +1.8f, kEngAcid, -1},
     {"FM piano",     {0.f, 0.25f, 0.50f, 0.55f, 0.30f, 0.40f, 0.20f, 0}, -4.9f, kEngFm},
-    {"FM bell",      {0.f, 0.30f, 0.75f, 0.60f, 0.25f, 0.30f, 0.55f, 0}, -11.6f, kEngFm},
-    {"Chip lead",    {0.f, 0.45f, 0.45f, 0.15f, 0.25f, 0.60f, 0.00f, 0}, -5.6f, kEngChip},
+    {"FM bell",      {0.f, 0.30f, 0.75f, 0.60f, 0.25f, 0.30f, 0.55f, 0}, -11.6f, kEngFm, +1},
+    {"Chip lead",    {0.f, 0.45f, 0.65f, 0.15f, 0.25f, 0.60f, 0.00f, 0}, -8.5f, kEngChip, +1},
     {"Saw stab",     {0.f, 0.55f, 0.35f, 0.40f, 0.30f, 0.80f, 0.20f, 0}, +2.0f, kEngAcid},
-    {"Grit",         {0.f, 0.55f, 0.35f, 0.35f, 0.30f, 0.40f, 0.30f, 0}, +1.1f, kEngGrit},
-    {"FM bass",      {0.f, 0.35f, 0.30f, 0.50f, 0.25f, 0.00f, 0.05f, 0}, -6.1f, kEngFm},
+    {"Grit",         {0.f, 0.55f, 0.50f, 0.35f, 0.30f, 0.40f, 0.30f, 0}, -2.0f, kEngGrit, -1},
+    {"FM bass",      {0.f, 0.35f, 0.30f, 0.50f, 0.25f, 0.00f, 0.05f, 0}, -6.1f, kEngFm, -2},
 };
 static constexpr int kNumMalletPresets = sizeof(kMalletPresets) / sizeof(kMalletPresets[0]);
 static constexpr int kNumClassicPresets = 10; // today's ten, all on the mallet voice

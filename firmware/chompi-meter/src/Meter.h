@@ -243,7 +243,7 @@ public:
             ch_[c].preset = kSetPresets[0][c % 14];
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
             ch_[c].pan = StartPan(c); // fanned out from the middle
-            ch_[c].octave = ch_[c].preset == 6 ? -1 : 0;  // the gong sounds best low
+            ch_[c].octave = kMalletPresets[ch_[c].preset].octave;
             loop_[c].count = 0;
             loop_[c].seam = 0.f;
             hist_[c].since = now_;
@@ -344,17 +344,20 @@ public:
                     if (kKeys[k].white) white_down_[WhiteIndex(k)] = 0; // tap or hold: see below
                     play_used_ = true;
                 } else if (sound_view_ && kKeys[k].white) {
-                    // The instruments of a set on the white keys: pick one, heard at once.
+                    // The instruments of a set on the white keys: pick one, heard at
+                    // once, in its own octave (a bass low; the wheel moves it on).
                     const int preset = kSetPresets[view_set_][WhiteIndex(k)];
                     if (preset >= 0) {
                         Channel& c = ch_[sel_];
                         c.preset = preset;
                         c.p = kMalletPresets[c.preset].p;
+                        c.octave = kMalletPresets[c.preset].octave;
                         Update(sel_);
                         NoteOn(sel_, c.last_note + 12 * c.octave);
                     }
                 } else if (sound_view_) {
                     // The sets on the black keys, from the lowest (with more than one).
+                    // The one chosen stays, for every player, until another is chosen.
                     if (kSets > 1 && BlackIndex(k) < kSets) view_set_ = BlackIndex(k);
                 } else if (chompi && kKeys[k].white) {
                     // A second white key while one is still held: copy that channel's
@@ -393,7 +396,6 @@ public:
 
         if (tap_again_ && tap_key_ >= 0 && !Down(int(kKeys[tap_key_].sw))) {
             sound_view_ = true;
-            view_set_ = SetOf(ch_[sel_].preset, view_set_);
             tap_again_ = false;
         }
 
@@ -1000,13 +1002,6 @@ public:
 
 private:
     struct Slot { AnyVoice v; int ch, note; uint32_t age = 0; float energy = 0.f; };
-    // The set a preset is in: the one shown, if it is there, else the first.
-    static int SetOf(int preset, int shown) {
-        for (int i = 0; i < 15; ++i) if (kSetPresets[shown][i] == preset) return shown;
-        for (int s = 0; s < kSets; ++s)
-            for (int i = 0; i < 15; ++i) if (kSetPresets[s][i] == preset) return s;
-        return 0;
-    }
 
     // A light at the top, with the page's hint over it: CHOMPI 0, K1-K4 1-4,
     // the wheel 5 and 6, play 7, loop 8, K6 9.
