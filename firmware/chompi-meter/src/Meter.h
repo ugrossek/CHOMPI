@@ -64,6 +64,10 @@ using Sw = Hardware::SwId;
 
 constexpr int kChannels = 15;
 constexpr int kVoices = 32; // the pool all channels share; the load guard limits it in practice
+// The style, chosen at power-on: mallets (set 1, the room) or acid house (set 2,
+// a bar at 124 BPM, the kick ducking everyone else, drive, and a delay in place
+// of the room, meter_main.cpp). Both sets stay in the instrument view.
+constexpr int kStyleMallets = 0, kStyleAcid = 1, kStyles = 2;
 
 // Keyboard: the shift register index of each key, low to high, its note and
 // its LED (from TAPE's key and LED maps).
@@ -236,11 +240,13 @@ public:
     // As at power-on: every channel on its own sound, no loops, everything at
     // its start. (The volume and the room stay as they are.)
     void Start() {
-        l0_ = kStartL0 * sr_;
+        l0_ = StartL0() * sr_;
+        const int set = style_ == kStyleAcid ? 1 : 0;
+        view_set_ = set;
         for (int c = 0; c < kChannels; ++c) {
             ch_[c] = Channel();
-            // Players 1-14 on the instruments of set 1 in key order, 15 on the first again.
-            ch_[c].preset = kSetPresets[0][c % 14];
+            // Players 1-14 on the instruments of the style's set in key order, 15 on the first again.
+            ch_[c].preset = kSetPresets[set][c % 14];
             ch_[c].p = kMalletPresets[ch_[c].preset].p;
             ch_[c].pan = StartPan(c); // fanned out from the middle
             ch_[c].octave = kMalletPresets[ch_[c].preset].octave;
@@ -310,6 +316,19 @@ public:
             Apply(mail_, mail_len_);
             __sync_synchronize();
             mail_ready_ = false;
+        }
+
+        // Power-on: the style first, nothing else (C# mallets, D# acid house;
+        // the one chosen last time the brighter). It stays until the CHOMPI is
+        // switched on again (or rebooted).
+        if (style_ < 0) {
+            for (int k = 0; k < 25; ++k)
+                if (!kKeys[k].white && BlackIndex(k) < kStyles && Pressed(int(kKeys[k].sw))) {
+                    style_ = BlackIndex(k);
+                    Start();
+                    break;
+                }
+            return;
         }
 
         for (int id = 0; id < kIdKnob; ++id) {
@@ -435,7 +454,7 @@ public:
             ShowPhase();
         }
         if (hw.enc[kKnobs[kTransport].enc].RisingEdge() && !look) {
-            if (chompi) l0_ = kStartL0 * sr_;
+            if (chompi) l0_ = StartL0() * sr_;
             else if (kSlide && !kDrift && loop_down_) { // loop held + push: the figure back where it was kept (on all: everyone's)
                 if (!shift_saved_) { if (all_) SaveAll(); else Save(sel_); shift_saved_ = true; }
                 for (int c = 0; c < kChannels; ++c)
@@ -657,6 +676,9 @@ public:
             // How loud it sounds, for the keys (the instrument's own loudness, not the channel's level).
             s.energy = s.v.Active() ? peak * preset_gain_[c.preset] : 0.f;
         }
+        // Acid house: every player that is not a kick ducks under the kicks
+        // (quickly down, back in about 150 ms), the pump of the style.
+        if (style_ == kStyleAcid) Duck(n);
         // Each channel at its pan.
         for (int c = 0; c < kChannels; ++c) {
             if (!busy_[c]) continue;
@@ -676,6 +698,29 @@ public:
             if (click_ >= len) click_ = -1;
         }
     }
+
+    // The kicks' level, followed (2 ms up, 150 ms down), turns the others down
+    // by up to kDuckDepth; a kick at its preset's level ducks them fully.
+    void Duck(size_t n) {
+        bool kick[kChannels], any = false;
+        for (int c = 0; c < kChannels; ++c) {
+            kick[c] = busy_[c] && kMalletPresets[ch_[c].preset].engine == kEngKick;
+            any |= kick[c];
+        }
+        if (!any && duck_env_ < 1e-4f) { duck_env_ = 0.f; return; }
+        const float up = 1.f - std::exp(-1.f / (.002f * sr_)), down = std::exp(-1.f / (.15f * sr_));
+        float g[64];
+        for (size_t i = 0; i < n; ++i) {
+            float a = 0.f;
+            for (int c = 0; c < kChannels; ++c) if (kick[c]) a += std::fabs(bus_[c][i]);
+            duck_env_ = a > duck_env_ ? duck_env_ + up * (a - duck_env_) : duck_env_ * down;
+            g[i] = 1.f - kDuckDepth * std::min(duck_env_ / kDuckFull, 1.f);
+        }
+        for (int c = 0; c < kChannels; ++c)
+            if (busy_[c] && !kick[c])
+                for (size_t i = 0; i < n; ++i) bus_[c][i] *= g[i];
+    }
+    static constexpr float kDuckDepth = .6f, kDuckFull = .2f; // 8 dB under a full kick
 
     // Any player has a figure (the click stops with the first).
     bool AnyFigure() const {
@@ -711,6 +756,11 @@ public:
     }
 
     float Room() const { return room_; }
+    // The style: -1 not chosen yet (power-on), else kStyleMallets or kStyleAcid.
+    int Style() const { return style_; }
+    void SetLastStyle(int s) { last_style_ = s; }
+    // L0 now, in seconds (the acid house delay follows it).
+    float L0Seconds() const { return l0_ / sr_; }
     float Volume() const { return volume_; }
     bool RebootNow() const { return reboot_now_; }
     // Options.h, Align To L0: a new length or a figure from the library on the
@@ -842,7 +892,17 @@ public:
 
         for (int k = 0; k < 25; ++k) {
             float rgb[3] = {0.f, 0.f, 0.f};
-            if (reboot_armed_) {
+            if (style_ < 0) {
+                // Power-on: the two styles, breathing, C# mallets (the marimba's
+                // red), D# acid house (the acid's lime); last time's brighter.
+                const int b = kKeys[k].white ? -1 : BlackIndex(k);
+                if (b >= 0 && b < kStyles) {
+                    const float* col = kPresetColor[b == kStyleAcid ? kSetPresets[1][7] : kSetPresets[0][1]];
+                    const float breath = .6f + .4f * std::sin(2.f * float(M_PI) * .5f * led_time_);
+                    const float lvl = (b == last_style_ ? 1.f : .25f) * breath;
+                    for (int j = 0; j < 3; ++j) rgb[j] = col[j] * lvl;
+                }
+            } else if (reboot_armed_) {
                 rgb[0] = rgb[1] = rgb[2] = 1.f;
             } else if (vshow_ && !kKeys[k].white) {
                 // Stepping through the versions: one black key each, the oldest
@@ -1160,6 +1220,8 @@ private:
     static constexpr float kMinL0 = .5f, kMaxL0 = 8.f; // seconds
     static constexpr float kTempoStep = 1.01f;         // the wheel: 1% per click
     static constexpr float kStartL0 = 2.f;             // L0 at power-on, s
+    static constexpr float kAcidL0 = 240.f / 124.f;    // acid house: a bar at 124 BPM
+    float StartL0() const { return style_ == kStyleAcid ? kAcidL0 : kStartL0; }
     static constexpr float kFeelSeconds = .03f;        // feel 1: repeats up to 30 ms off
     // Drift: detune 0.1% a click up to 5%; the pull 0.5% a click up to 20%, 4% at
     // power-on; gliding home pulls with at least 30% and no detune, until it
@@ -1971,6 +2033,9 @@ private:
     static constexpr int kListenBlocks = 250; // play + white held this long: listen; shorter: a tap, mute
     bool sound_view_ = false; // the selected channel's sound on the white keys
     int view_set_ = 0;        // the set of instruments shown there
+    int style_ = -1;          // chosen at power-on (-1: not yet)
+    int last_style_ = 0;      // ... the one chosen last time (options.json), shown brighter
+    float duck_env_ = 0.f;    // acid house: the kick, heard by everything else
     int tap_key_ = -1;        // the white key last tapped with CHOMPI held
     bool tap_again_ = false;  // ... and it was tapped before: the sounds on letting go
     float gate_[kChannels] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
