@@ -155,9 +155,9 @@ nav.dev b { color: var(--accent); font-weight: 500; }
   <a href="mindmap.html">Mind map</a>
 </nav>
 <header class="top">
-  <div class="eyebrow">CIRCLES · the math · 1.0 and the dev build</div>
+  <div class="eyebrow">CIRCLES · the math · 1.0 and 2.0 in development</div>
   <h1>Every player is a hand going round a circle</h1>
-  <p class="lead">Each player is a hand turning on a circle, once per loop. Its notes are marks on the circle, and a note sounds when the hand passes its mark. One formula says how fast every hand turns. This page puts that formula first, then shows what each part of it does: what CIRCLES 1.0 uses, what the dev build adds, and what would fit but isn't in yet.</p>
+  <p class="lead">Each player is a hand turning on a circle, once per loop. Its notes are marks on the circle, and a note sounds when the hand passes its mark. One formula says how fast every hand turns. This page puts that formula first, then shows what each part of it does: what CIRCLES 1.0 uses, what 2.0 adds, and what would fit but isn't in yet. Part two is 2.0 as it stands in development (build CIRCLES-105, 12 November 2026), newer than this snapshot's download.</p>
   <div class="legend" aria-label="How to read the scopes">
     <span><i style="background:var(--ink)"></i>note played</span>
     <span><i style="border:2px solid var(--accent)"></i>note folded back by a shorter length</span>
@@ -173,7 +173,7 @@ nav.dev b { color: var(--accent); font-weight: 500; }
   <div class="eyebrow">The formula</div>
   <h2>One formula for all of CIRCLES</h2>
   <div class="formula big">dθ<sub>i</sub>/dt = m<sub>i</sub> / (L0 · E · R<sub>i</sub>)
-m<sub>i</sub> = 1 + δ<sub>i</sub> + K · sin 2π(g<sub>i</sub> − θ<sub>i</sub>)        0.5 ≤ m<sub>i</sub> ≤ 1.5
+m<sub>i</sub> = 1 + δ<sub>i</sub>        |δ<sub>i</sub>| ≤ 1/15
 note k of player i sounds when θ<sub>i</sub> passes a<sub>k</sub> / R<sub>i</sub>  (mod 1)</div>
   <p>Read it as three sentences. The hand of player i turns once per loop. It turns at a speed of its own, m. Each note sounds when the hand passes its mark. Everything on this page is one of these symbols at work, so every section below starts with its piece of the formula, marked in colour.</p>
   <dl class="anat" aria-label="The symbols">
@@ -182,13 +182,12 @@ note k of player i sounds when θ<sub>i</sub> passes a<sub>k</sub> / R<sub>i</su
     <div><dt>E</dt><dd>The ensemble length, one of the ten ratios: a tempo for everyone.</dd><dd class="on">Switch on all, CHOMPI + black key.</dd><dd class="st"><span class="chip">In 1.0</span></dd></div>
     <div><dt>R<sub>i</sub></dt><dd>The player's length, one of ten ratios from 1/3 to 3.</dd><dd class="on">CHOMPI + black key.</dd><dd class="st"><span class="chip">In 1.0</span></dd></div>
     <div><dt>a<sub>k</sub></dt><dd>When note k came, counted from the figure's start in L0 · E. Its mark sits at a<sub>k</sub> / R<sub>i</sub> of a turn.</dd><dd class="on">The figure, kept with loop.</dd><dd class="st"><span class="chip">In 1.0</span></dd></div>
-    <div><dt>m<sub>i</sub></dt><dd>The player's speed: 1 is in step. In 1.0 it is always exactly 1.</dd><dd class="on">The three symbols below.</dd><dd class="st"><span class="chip b2">Dev build</span></dd></div>
-    <div><dt>δ<sub>i</sub></dt><dd>Detune: how much faster or slower the player wants to run.</dd><dd class="on">Play held + wheel, 0.1 % a click, up to ±5 %.</dd><dd class="st"><span class="chip b2">Dev build</span></dd></div>
-    <div><dt>K</dt><dd>The pull towards the ghost, one amount for everyone.</dd><dd class="on">On all, loop held + wheel. 4 % at power-on, up to 20 %.</dd><dd class="st"><span class="chip b2">Dev build</span></dd></div>
-    <div><dt>g<sub>i</sub></dt><dd>The ghost, (B − h<sub>i</sub>) / R<sub>i</sub>: where the hand would be had it stayed in step with L0. B counts L0 beats; h<sub>i</sub> is the beat its loop started on.</dd><dd class="on">The dashed hand in the scopes.</dd><dd class="st"><span class="chip b2">Dev build</span></dd></div>
+    <div><dt>m<sub>i</sub></dt><dd>The player's speed: 1 is in step. In 1.0 it is always exactly 1.</dd><dd class="on">The drift below; gliding home sets it for a moment.</dd><dd class="st"><span class="chip b2">2.0 dev</span></dd></div>
+    <div><dt>δ<sub>i</sub></dt><dd>The drift: how much faster or slower the player runs. Right ahead, left behind; at the end of the bar once round in 15 loops.</dd><dd class="on">CHOMPI + play held + wheel: 50 clicks to either end, the middle catches.</dd><dd class="st"><span class="chip b2">2.0 dev</span></dd></div>
+    <div><dt>g<sub>i</sub></dt><dd>The ghost, (B − h<sub>i</sub>) / R<sub>i</sub>: where the hand would be had it stayed in step with L0. B counts L0 beats; h<sub>i</sub> is the beat its loop started on.</dd><dd class="on">The dashed hand in the scopes; where gliding home goes.</dd><dd class="st"><span class="chip b2">2.0 dev</span></dd></div>
   </dl>
-  <p>Two things sit outside the formula, as rules on top of it. <b>Jumps</b>: a new length (R changes), and in the dev build a kick, which moves the hand. Between jumps, the formula runs. <b>The feel</b>: it moves each mark a little at random and changes each note's loudness; the hand itself is never touched.</p>
-  <p><b>1.0 in one line.</b> With m = 1 the formula solves itself: θ<sub>i</sub> = (B − h<sub>i</sub>) / R<sub>i</sub>, so note k of player i plays on the beats B = h<sub>i</sub> + (a<sub>k</sub> mod R<sub>i</sub>) + n · R<sub>i</sub>, for every whole n. Each player is a periodic signal and CIRCLES is their sum. The dev build makes m move, so the hand can leave its ghost and come back.</p>
+  <p>Two things sit outside the formula, as rules on top of it. <b>Jumps</b>: a new length (R changes), and in 2.0 a kick, which moves the hand. <b>Gliding home</b> (2.0): for a while the speed is set by how far off the player is, not by its drift. Between these, the formula runs. <b>The feel</b>: it moves each mark a little at random and changes each note's loudness; the hand itself is never touched.</p>
+  <p><b>1.0 in one line.</b> With m = 1 the formula solves itself: θ<sub>i</sub> = (B − h<sub>i</sub>) / R<sub>i</sub>, so note k of player i plays on the beats B = h<sub>i</sub> + (a<sub>k</sub> mod R<sub>i</sub>) + n · R<sub>i</sub>, for every whole n. Each player is a periodic signal and CIRCLES is their sum. 2.0 makes m move, so the hand can leave its ghost and come back.</p>
 </section>
 
 <section class="plate" id="ensemble" data-plate="ensemble">
@@ -208,12 +207,12 @@ R = 1, 1, 5/4    together periodic, every lcm(1, 5/4) = 5 L0</div>
       <a class="chip" href="#window">Tempo (time scaling)</a>
       <a class="chip" href="#phasing">Phasing by length</a>
       <a class="chip b2" href="#phase">Phase (kick)</a>
-      <a class="chip b2" href="#detune">Detune</a>
-      <a class="chip b2" href="#model">Pull to the ghost</a>
+      <a class="chip b2" href="#detune">Drift (detune)</a>
       <a class="chip b2" href="#model">Glide home</a>
       <a class="chip no" href="#pulses">Lengths in pulses</a>
       <a class="chip no" href="#coupling">Coupling</a>
       <a class="chip no" href="#detune">Chirp</a>
+      <a class="chip x" href="#pull">Pull to the ghost</a>
       <a class="chip x" href="#sync">Hard sync</a>
     </div></div>
     <div class="fam"><h4>Shape of the figure</h4><div class="chips">
@@ -237,7 +236,7 @@ R = 1, 1, 5/4    together periodic, every lcm(1, 5/4) = 5 L0</div>
       <a class="chip no" href="#feedback">Feedback (comb)</a>
     </div></div>
   </div>
-  <div class="legend"><span class="chip" style="pointer-events:none">in 1.0</span><span class="chip b2" style="pointer-events:none">dev build</span><span class="chip no" style="pointer-events:none">not in yet</span><span class="chip x" style="pointer-events:none">doesn't fit</span></div>
+  <div class="legend"><span class="chip" style="pointer-events:none">in 1.0</span><span class="chip b2" style="pointer-events:none">2.0 dev</span><span class="chip no" style="pointer-events:none">not in yet</span><span class="chip x" style="pointer-events:none">doesn't fit</span></div>
 </section>
 
 <section class="part">
@@ -273,10 +272,10 @@ ensemble length:  dθ/dt = 1 / (L0 · <em>E</em> · R)    mark = a<sub>k</sub> /
   <div class="ph"><h3>Phasing in 1.0: a new length lands on the L0 beat and keeps the time</h3><span class="chip">In 1.0</span></div>
   <div class="formula">a new <em>R</em> on the next L0 beat:  θ ← θ · R<sub>old</sub> / R<sub>new</sub>    the time in the loop, θ · R, is kept; the angle θ jumps
 after n L0 at ×5/4, back to ×1:  θ − g = (n mod 5/4) mod 1  =  0, ¾, ½, ¼, 0 …  for n = 1, 2, 3, 4, 5
-the dev build: a new R waits for θ = 0, where both agree, so nothing jumps</div>
+2.0: a new R waits for θ = 0, where both agree, so nothing jumps</div>
   <div class="notes">
     <div><span class="k">Math</span><p>When a period changes there are two choices: keep the phase (the hand's angle) or keep the time since the loop began. Keeping the phase is true phasing: any shift is possible. Keeping the time means the angle jumps, because angle = time ÷ length.</p></div>
-    <div><span class="k">In CIRCLES</span><p>1.0 keeps the time, and only on an L0 beat. So after a detour a copy lands on the L0 grid: back in step after 1 L0 at ×5/4, and a quarter, half or three quarters off after 2, 3 or 4 L0. ×4/3 gives thirds, ×3/2 halves, ×2 and ×3 always land in step. The dev build changes this (Part two): a new length lands at the player's own loop start and keeps its phase, so nothing jumps.</p></div>
+    <div><span class="k">In CIRCLES</span><p>1.0 keeps the time, and only on an L0 beat. So after a detour a copy lands on the L0 grid: back in step after 1 L0 at ×5/4, and a quarter, half or three quarters off after 2, 3 or 4 L0. ×4/3 gives thirds, ×3/2 halves, ×2 and ×3 always land in step. 2.0 changes this (Part two): a new length lands at the player's own loop start and keeps its phase, so nothing jumps, as in Terry Riley's <i>In C</i>, where each player moves on when their own figure ends. The ensemble length on all still comes on the next L0 beat: it is a tempo, nothing is cut.</p></div>
   </div>
 </section>
 
@@ -293,41 +292,41 @@ loudness · swell · (1 − 0.35 · feel · u)    skipped with p = 0.3 · max(fe
 
 <section class="part">
   <div class="eyebrow">Part two</div>
-  <h2>In the dev build</h2>
-  <p>The dev build is in development. It gives every player a speed of its own, through one equation: players can drift, be kicked out of step, and find their way back. It also clicks on every L0 until the first figure is kept; L0 is the only beat CIRCLES has, so there is nothing else to count.</p>
+  <h2>In 2.0, in development</h2>
+  <p>2.0 gives every player a speed of its own: players can drift, be kicked out of step, and find their way back. It is Steve Reich's phasing, nothing more: the bar is the speed, the middle is in step, and a player stays wherever it got to. Nothing moves on its own. It also clicks on every L0 until the first figure is kept; L0 is the only beat CIRCLES has, so there is nothing else to count.</p>
 </section>
 
 <section class="plate" id="phase" data-plate="phase">
   <div class="ph"><div class="eyebrow">Phase</div></div>
-  <div class="ph"><h3>A kick changes a player's phase, not its figure</h3><span class="chip b2">Dev build</span></div>
+  <div class="ph"><h3>A kick changes a player's phase, not its figure</h3><span class="chip b2">2.0 dev</span></div>
   <div class="formula"><em>θ<sub>i</sub> ← θ<sub>i</sub> − n/64</em>    a jump of the hand; the marks stay    one click of the wheel = a 64th of the loop</div>
   <div class="notes">
     <div><span class="k">Math</span><p>Shifting a periodic signal in time moves its phase. On the circle the hand jumps forward or back against the marks; the marks themselves stay where they are.</p></div>
-    <div><span class="k">In CIRCLES</span><p>Loop held + wheel kicks the chosen player a 64th of its length per click, right for later: its hand goes back a little, so its notes come later. With the pull on (below), it then drifts back towards its place; loop held + push lets it glide home. This scope shows the kick without the pull, so the copy stays where you put it. The dashed wave in the copy's row is its source: in step, the two waves lie on top of each other; after a kick they come apart. Time runs from the circles to the right, so the shift starts at the circle and travels across; what was already played stays as it was.</p></div>
+    <div><span class="k">In CIRCLES</span><p>CHOMPI + play held, then push the wheel and turn: a kick for the chosen player, a 64th of its length per click, right for later: its hand goes back a little, so its notes come later. It stays where you put it; push and let go (without turning) and it glides home. The dashed wave in the copy's row is its source: in step, the two waves lie on top of each other; after a kick they come apart. Time runs from the circles to the right, so the shift starts at the circle and travels across; what was already played stays as it was.</p></div>
   </div>
 </section>
 
 <section class="plate" id="detune" data-plate="detune">
   <div class="ph"><div class="eyebrow">Continuous frequency · quasi-periodicity</div></div>
-  <div class="ph"><h3>Detune: speeds between the black keys</h3><span class="chip b2">Dev build</span></div>
-  <div class="formula">m<sub>i</sub> = 1 + <em>δ<sub>i</sub></em>   (K = 0)    the hand gains δ of a turn on its ghost every loop    back in step after 1/δ loops    δ irrational: never exactly</div>
+  <div class="ph"><h3>Drift: speeds between the black keys</h3><span class="chip b2">2.0 dev</span></div>
+  <div class="formula">m<sub>i</sub> = 1 + <em>δ<sub>i</sub></em>    δ = x / 15, the bar x from −1 to 1 in 50 clicks each way    the hand gains δ of a turn on its ghost every loop
+back in step after 1/δ loops: 15 at the end of the bar    near the middle, 6 clicks the same way are caught at δ = 0</div>
   <div class="notes">
     <div><span class="k">Math</span><p>Frequency is continuous. Between the rational ratios lie ratios that never meet again, and the sum becomes quasi-periodic. A frequency that itself moves is a chirp, an accelerando; Nancarrow built tempo canons that way (not in CIRCLES).</p></div>
-    <div><span class="k">In CIRCLES</span><p>Play held + wheel detunes the chosen player, 0.1 % a click, up to 5 % either way; play held + push makes it exact again. Piano Phase without hands: a copy drifts slowly through every phase against its source. This scope shows detune without the pull; with the pull on, a small detune locks instead (below). The dashed wave in the copy's row is its source: the copy's wave slides slowly away from it and comes back.</p></div>
+    <div><span class="k">In CIRCLES</span><p>CHOMPI + play held + wheel drifts the chosen player: a bar on the keys, about 0.13 % a click, up to 1/15 (6.7 %) either way, so at the end it goes once round its ghost in 15 loops. Turning back through the middle stops there, in step, and the middle key lights in the player's colour; six more clicks the same way and it drifts on. <i>Piano Phase</i> without hands: a copy drifts slowly through every phase against its source, and when the bar is back in the middle it stays wherever it got to. The dashed wave in the copy's row is its source: the copy's wave slides slowly away from it and comes back.</p></div>
   </div>
 </section>
 
 <section class="plate" id="model" data-plate="model">
-  <div class="ph"><div class="eyebrow">Phase-locked loops · Adler's equation</div></div>
-  <div class="ph"><h3>The whole speed: detune, pull, kick and the way home</h3><span class="chip b2">Dev build</span></div>
-  <div class="formula">m<sub>i</sub> = 1 + δ<sub>i</sub> + <em>K · sin 2π(g<sub>i</sub> − θ<sub>i</sub>)</em>     0.5 ≤ m ≤ 1.5     g<sub>i</sub> = (B − h<sub>i</sub>) / R<sub>i</sub>, the ghost, locked to L0
-how far off, ψ = g − θ:  dψ/dt = −(δ + K · sin 2πψ) / (L0 · E · R)    Adler's equation
-|δ| &lt; K: locks, asin(|δ|/K) / 2π of a turn off its ghost (fast: ahead, slow: behind)     |δ| &gt; K: slips round, lingering near home
-glide home:  K → max(K, 0.3), δ → 0, until |ψ| &lt; 1/256
+  <div class="ph"><div class="eyebrow">Phase · the way home</div></div>
+  <div class="ph"><h3>The whole speed: drift, kick and the way home</h3><span class="chip b2">2.0 dev</span></div>
+  <div class="formula">m<sub>i</sub> = 1 + δ<sub>i</sub>     g<sub>i</sub> = (B − h<sub>i</sub>) / R<sub>i</sub>, the ghost, locked to L0
+how far off, ψ = g − θ (−½ … ½):  dψ/dt = −δ / (L0 · E · R)    it drifts evenly; with δ = 0 it stays where it is
+glide home:  δ → 0,  <em>m = 1 + 0.3 · clamp(8ψ, −1, 1)</em>    the short way, slowing in the last eighth, until |ψ| &lt; 1/256
 not in yet (the last row):  + C · Σ<sub>j</sub> sin 2π(θ<sub>j</sub> − θ<sub>i</sub>), listening to each other,  + σ · ξ(t), wander</div>
   <div class="notes">
-    <div><span class="k">The rules</span><p>The figure itself never changes; only when its notes come does. Time never runs backwards or stops: speed stays between half and one and a half. L0 is the conductor and is never pulled. Nothing jumps but deliberate acts: a kick, and a new length, which lands at the player's own loop start. The dashed hand on each circle is the player's ghost: where it would be had it stayed in step with L0, and the dashed wave is the ghost's shadow. The arc between hand and ghost is how far off it is.</p></div>
-    <div><span class="k">In CIRCLES</span><p>The pull K is one amount for everyone: 4 % at power-on, switch on all + loop held + wheel, 0.5 % a click up to 20 %. Gliding home pulls with at least 30 % and ignores the detune until the player is within 1/256 of a turn. In this scope vibes is 2.5 % fast and the 4 % pull holds it, a little ahead of its ghost; kora is 5 % slow, more than the pull can hold, so it slips round about once a minute. The two sliders on the last row, listening to each other and wander, are not in CIRCLES (Part three).</p></div>
+    <div><span class="k">The rules</span><p>The figure itself never changes; only when its notes come does. Time never runs backwards or stops: drifting, the speed stays within 1/15 of in step; gliding home, within 30 %. L0 is the conductor and is never pulled. Nothing moves on its own, and nothing jumps but deliberate acts: a kick, and a new length, which lands at the player's own loop start. The dashed hand on each circle is the player's ghost: where it would be had it stayed in step with L0, and the dashed wave is the ghost's shadow. The arc between hand and ghost is how far off it is.</p></div>
+    <div><span class="k">In CIRCLES</span><p>All with CHOMPI + play held: the wheel drifts the chosen player; push and turn kicks it; push and let go sets its drift to the middle and it glides home, the short way round, up to 30 % faster or slower. With the switch on all, push and let go sends everyone home, and turning does nothing. A new length (CHOMPI + black key) waits for the player's own loop start. In this scope vibes drifts 2 % ahead and kora 5 % behind; marimba runs at ×5/4. The two sliders on the last row, listening to each other and wander, are not in CIRCLES (Part three).</p></div>
   </div>
 </section>
 
@@ -344,7 +343,7 @@ not in yet (the last row):  + C · Σ<sub>j</sub> sin 2π(θ<sub>j</sub> − θ<
 Kuramoto model    order r = |mean e<sup>2πiθ</sup>|, 1 = all in step</div>
   <div class="notes">
     <div><span class="k">Math</span><p>Slightly detuned oscillators that nudge each other's phase. With weak coupling they drift; above a threshold they lock. Clapping audiences, fireflies and pendulum clocks on one wall all do this.</p></div>
-    <div><span class="k no">What it would add</span><p>In the dev build every player is pulled towards its own ghost, never towards the others. Coupling would add a pull between players of the same length, so detuned copies find each other wherever they are, not only at home.</p></div>
+    <div><span class="k no">What it would add</span><p>In 2.0 no player is pulled anywhere: not towards its ghost (that pull was tried and taken out, below), and not towards the others. Coupling would add a pull between players of the same length, so drifting copies find each other on their own. It is the same kind of hidden, automatic behaviour that took the pull out, so it would need a very good reason.</p></div>
   </div>
 </section>
 
@@ -352,7 +351,7 @@ Kuramoto model    order r = |mean e<sup>2πiθ</sup>|, 1 = all in step</div>
   <div class="ph"><div class="eyebrow">Symmetries of a periodic signal</div></div>
   <div class="ph"><h3>Retrograde, inversion, transposition</h3><span class="chip no">Not in yet</span></div>
   <div class="formula">retrograde: <em>a<sub>k</sub> → R − a<sub>k</sub></em>    inversion: <em>pitch p → 2c − p</em>    transposition: <em>p → p + k</em>    the hand's equation stays; only the marks and the notes change
-(1.0 has E, the tempo, and p → p + 12n, the octave; the dev build adds θ → θ − n/64, the kick)</div>
+(1.0 has E, the tempo, and p → p + 12n, the octave; 2.0 adds θ → θ − n/64, the kick)</div>
   <div class="notes">
     <div><span class="k">Math</span><p>A signal can be mirrored in time and in value, and shifted in value, without changing its period. With time shift and scaling these are the moves that keep it recognisably the same figure. The spokes on the circles show pitch: longer is higher.</p></div>
     <div><span class="k no">What it would add</span><p>A new figure from a kept one without playing it: the copy runs backwards or upside down. Canons have done this for six hundred years, and it suits passing figures around.</p></div>
@@ -390,6 +389,17 @@ T<sub>m</sub> = n · L0, a period of its own, unrelated to R    the whole repeat
   </div>
 </section>
 
+<section class="plate" id="pull">
+  <div class="ph"><div class="eyebrow">Phase-locked loops · Adler's equation</div></div>
+  <div class="ph"><h3>The pull to the ghost: tried, and taken out</h3><span class="chip x">Doesn't fit</span></div>
+  <div class="formula">m<sub>i</sub> = 1 + δ<sub>i</sub> <em>+ K · sin 2π(g<sub>i</sub> − θ<sub>i</sub>)</em>    how far off, ψ:  dψ/dt = −(δ + K · sin 2πψ) / (L0 · E · R)    Adler's equation
+|δ| &lt; K: locks, asin(|δ|/K) / 2π of a turn off its ghost     |δ| &gt; K: slips round, lingering near home</div>
+  <div class="notes">
+    <div><span class="k">Math</span><p>A phase-locked loop: an oscillator nudged towards a reference, harder the further off it is. A small detune then locks at a fixed distance instead of drifting; a large one slips round and lingers near home.</p></div>
+    <div><span class="k">Why not here</span><p>The dev builds up to CIRCLES-93 had it: one pull for everyone, settable on all. On the instrument it stayed hard to read in every version tried: a player would settle at a distance nobody set, and the amount sat hidden on all. It was taken out for a rule that now holds for all of CIRCLES: no magic, nothing moves on its own. What it gave, a way back, is now a deliberate act: glide home.</p></div>
+  </div>
+</section>
+
 <section class="plate" id="sync">
   <div class="ph"><div class="eyebrow">Hard sync</div></div>
   <div class="ph"><h3>Hard sync doesn't fit CIRCLES</h3><span class="chip x">Doesn't fit</span></div>
@@ -403,11 +413,11 @@ T<sub>m</sub> = n · L0, a period of its own, unrelated to R    the whole repeat
 <section class="close">
   <div class="eyebrow">In short</div>
   <h2>Where CIRCLES stands</h2>
-  <p>In 1.0 the speed m is always 1 and the formula solves itself. The dev build lets m move. What is not in yet would add a term to m, or change the marks, the knobs or the sound.</p>
+  <p>In 1.0 the speed m is always 1 and the formula solves itself. 2.0 lets m move, only when the player turns it. What is not in yet would add a term to m, or change the marks, the knobs or the sound.</p>
   <div class="status">
     <div><span class="chip" style="pointer-events:none">In 1.0</span><p>Periods as ten rational ratios of one L0; a length is a window, the ensemble length a tempo; phasing by length, on the L0 grid; copy and octave; the feel as noise on time and loudness.</p></div>
-    <div><span class="chip b2" style="pointer-events:none">Dev build</span><p>A speed of its own for every player: detune, a pull towards its ghost, kicks and a glide home; a new length lands at the player's own loop start; a click on L0 until the first figure.</p></div>
-    <div><span class="chip no" style="pointer-events:none">Not in yet</span><p>Coupling between players, wander, retrograde and inversion, slow cycles on any knob, a delay timed in L0, lengths in pulses.</p></div>
+    <div><span class="chip b2" style="pointer-events:none">2.0 dev</span><p>A speed of its own for every player: drift with a catch in the middle, kicks and a glide home, and nothing moving on its own; a new length lands at the player's own loop start; a click on L0 until the first figure.</p></div>
+    <div><span class="chip no" style="pointer-events:none">Not in yet</span><p>Coupling between players, wander, retrograde and inversion, slow cycles on any knob, a delay timed in L0, lengths in pulses. Doesn't fit: hard sync, and the pull to the ghost, tried and taken out.</p></div>
   </div>
 </section>
 </div>
@@ -520,8 +530,8 @@ class Plate {
     const P = this.P, N = P.length;
     let rates = P.map(p => br / lenOf(p) * p.det);
     if (this.cfg.model) rates = P.map(p => {
-      const e = this.err(p, B0), Kp = p.home ? Math.max(this.Kh, .3) : this.Kh;
-      let m = (p.home ? 1 : p.det) + Kp * Math.sin(2 * Math.PI * e);
+      const e = this.err(p, B0); // 2.0: no pull; gliding home the short way, slowing in the last eighth
+      let m = p.home ? 1 + .3 * Math.min(1, Math.max(-1, 8 * e)) : p.det;
       if (this.Km) { let c = 0, n = 0; P.forEach(o => { if (o !== p && o.r[0] * p.r[1] === o.r[1] * p.r[0]) { c += Math.sin(2 * Math.PI * (o.th - p.th)); n++; } }); if (n) m += this.Km * c / n; }
       if (this.wander) { p.nz = (p.nz || 0) * (1 - dt / 2) + Math.sqrt(dt) * (Math.random() + Math.random() + Math.random() - 1.5) * 1.4; m += this.wander * .06 * p.nz; }
       return br / lenOf(p) * Math.min(1.5, Math.max(.5, m));
@@ -719,6 +729,8 @@ const fig = {
   marimba54: [[0, 50], [.5, 57], [.75, 53], [1.0, 55]],
 };
 const deg = x => Math.round(x * 360);
+const CLICK = .02 / 15; // 2.0: the drift bar, 50 clicks to 1/15
+const clicksTxt = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + ' clicks · ' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * CLICK * 100).toFixed(1) + ' %';
 const cfgs = {
   ensemble: { win: 14, meet: true, aria: 'Three players on circles: bronze and vibes at one L0, marimba at five quarters; their hands cast cosine shadows with the notes on them.',
     players: [
@@ -782,13 +794,13 @@ const cfgs = {
   detune: { win: 16, meet: true, ref: 0,
     players: [
       { name: 'vibes', col: 'c2', fig: [[0, 69], [.25, 72], [.375, 74], [.625, 76]], pan: -.4 },
-      { name: 'its copy', col: 'c3', fig: [[0, 57], [.25, 60], [.375, 62], [.625, 64]], det: 1.02, pan: .4, showRatio: false }],
+      { name: 'its copy', col: 'c3', fig: [[0, 57], [.25, 60], [.375, 62], [.625, 64]], det: 1 + 15 * CLICK, pan: .4, showRatio: false }],
     controls: (pl, bar) => {
       const p = pl.P[1];
-      const [s, o] = slider('detune-d', -5, 5, .1, 2, v => (v > 0 ? '+' : '') + v.toFixed(1) + ' %', v => { p.det = 1 + v / 100; });
-      bar.append(ctl('detune the copy', s, o));
+      const [s, o] = slider('detune-d', -50, 50, 1, 15, clicksTxt, v => { p.det = 1 + v * CLICK; });
+      bar.append(ctl('drift the copy', s, o));
     },
-    readout: pl => { const d = pl.P[1].det - 1, o = frac(pl.P[1].th - pl.P[0].th), n = Math.round((o > .5 ? o - 1 : o) * 64), now = n === 0 ? 'in step now' : `now ${Math.abs(n)}/64 ${n > 0 ? 'ahead' : 'behind'}`; if (Math.abs(d) < 1e-6) return `no detune: the copy stays where it is, ${now}`; return `${now} · copy ${d > 0 ? 'gains' : 'loses'} a 64th every ${(1 / (64 * Math.abs(d))).toFixed(2)} L0 · back in step after ${(1 / Math.abs(d)).toFixed(0)} L0 (${mmss(L0 / Math.abs(d))})`; } },
+    readout: pl => { const d = pl.P[1].det - 1, o = frac(pl.P[1].th - pl.P[0].th), n = Math.round((o > .5 ? o - 1 : o) * 64), now = n === 0 ? 'in step now' : `now ${Math.abs(n)}/64 ${n > 0 ? 'ahead' : 'behind'}`; if (Math.abs(d) < 1e-6) return `no drift: the copy stays where it is, ${now}`; return `${now} · copy ${d > 0 ? 'gains' : 'loses'} a 64th every ${(1 / (64 * Math.abs(d))).toFixed(2)} L0 · back in step after ${(1 / Math.abs(d)).toFixed(0)} L0 (${mmss(L0 / Math.abs(d))})`; } },
 
   coupling: { win: 16, K: .25,
     players: [
@@ -827,17 +839,17 @@ const cfgs = {
     readout: pl => { const rs = pl.P.map(p => p.r).concat(pl.P.filter(p => p.amP).map(p => [p.amP, 1])); const m = meetL0(rs); return `the whole ensemble repeats after ${m} L0 (${mmss(m * L0)})`; } },
 
   model: { win: 16, model: true, pre: 40,
-    aria: 'Four players with their ghosts: hands pulled toward dashed ghost hands; detune, pull, kick and glide home.',
+    aria: 'Four players with their ghosts, the dashed hands: drift, kick and glide home.',
     players: [
       { name: 'bronze', col: 'c1', fig: [[0, 62], [.25, 69], [.5, 67], [.625, 69]], pan: -.5 },
-      { name: 'vibes', col: 'c2', fig: [[0, 74], [.25, 81], [.5, 79], [.625, 81]], det: 1.025, pan: .5 },
+      { name: 'vibes', col: 'c2', fig: [[0, 74], [.25, 81], [.5, 79], [.625, 81]], det: 1 + 15 * CLICK, pan: .5 },
       { name: 'marimba', col: 'c3', fig: [[0, 50], [.5, 57], [.75, 53], [1.0, 55]], r: [5, 4], pan: 0 },
-      { name: 'kora', col: 'c4', fig: [[0, 57], [.375, 64], [.75, 62]], det: .95, pan: -.2 }],
+      { name: 'kora', col: 'c4', fig: [[0, 57], [.375, 64], [.75, 62]], det: 1 - 38 * CLICK, pan: -.2 }],
     controls: (pl, bar) => {
-      pl.Kh = .04; pl.Km = 0; pl.wander = 0; pl.chosen = 0;
-      const P = pl.P, cur = () => P[pl.chosen], pct = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + ' %';
-      const [ds, dout] = slider('model-d', -5, 5, .1, 0, pct, v => { cur().det = 1 + v / 100; });
-      const syncDet = () => { const v = Math.round((cur().det - 1) * 1000) / 10; ds.value = v; dout.textContent = pct(v); };
+      pl.Km = 0; pl.wander = 0; pl.chosen = 0;
+      const P = pl.P, cur = () => P[pl.chosen];
+      const [ds, dout] = slider('model-d', -50, 50, 1, 0, clicksTxt, v => { cur().det = 1 + v * CLICK; });
+      const syncDet = () => { const v = Math.round((cur().det - 1) / CLICK); ds.value = v; dout.textContent = clicksTxt(v); };
       const lenSeg = () => seg('model-r', ['1', '5/4', '4/3', '3/2', '2'].map(v => ({ v, l: '×' + v })), fr(cur().pendLoop || cur().r), v => { const r = rOf(v); if (fr(r) !== fr(cur().r)) cur().pendLoop = r; else cur().pendLoop = null; });
       let lenBox = ctl('', lenSeg());
       const pick = seg('model-p', P.map((p, i) => ({ v: i, l: p.name })), 0, v => { pl.chosen = v; syncDet(); const nb = ctl('', lenSeg()); lenBox.replaceWith(nb); lenBox = nb; });
@@ -845,16 +857,15 @@ const cfgs = {
       const g = document.createElement('div'); g.className = 'ctl-g';
       const row = (...k) => { const r = document.createElement('div'); r.className = 'row'; r.append(...k); return r; };
       const gl = t => { const x = document.createElement('span'); x.className = 'gest'; x.textContent = t; return x; };
-      const [ks, kout] = slider('model-k', 0, 20, .5, 4, v => v.toFixed(1) + ' %', v => { pl.Kh = v / 100; });
       const [ms, mout] = slider('model-m', 0, 20, .5, 0, v => v.toFixed(1) + ' %', v => { pl.Km = v / 100; });
       const [ws, wout] = slider('model-w', 0, 1, .05, 0, v => v.toFixed(2), v => { pl.wander = v; });
       g.append(
         row(ctl('chosen player', pick)),
-        row(ctl('', gl('loop + wheel'), mkBtn('model-sl', '◀ kick', () => kick(-1)), mkBtn('model-sr', 'kick ▶', () => kick(1)), mkBtn('model-s8', 'kick ¼ ▶', () => kick(16))),
-            ctl('', gl('loop + push'), mkBtn('model-h', 'Glide home', () => { cur().home = true; }))),
-        row(ctl('', gl('play + wheel'), ctl('detune', ds, dout)), ctl('', gl('play + push'), mkBtn('model-x', 'Exact length', () => { cur().det = 1; syncDet(); }))),
-        row(ctl('', gl('CHOMPI + black key'), lenBox)),
-        row(ctl('', gl('all · loop + wheel'), ctl('pull', ks, kout)), ctl('', gl('all · loop + push'), mkBtn('model-ha', 'Everyone home', () => P.forEach(p => { p.home = true; })))),
+        row(ctl('', gl('CHOMPI + play + wheel'), ctl('drift', ds, dout))),
+        row(ctl('', gl('CHOMPI + play + push, turn'), mkBtn('model-sl', '◀ kick', () => kick(-1)), mkBtn('model-sr', 'kick ▶', () => kick(1)), mkBtn('model-s8', 'kick ¼ ▶', () => kick(16))),
+            ctl('', gl('CHOMPI + play + push'), mkBtn('model-h', 'Glide home', () => { cur().det = 1; cur().home = true; syncDet(); }))),
+        row(ctl('', gl('CHOMPI + black key'), lenBox),
+            ctl('', gl('all · CHOMPI + play + push'), mkBtn('model-ha', 'Everyone home', () => { P.forEach(p => { p.det = 1; p.home = true; }); syncDet(); }))),
         row(ctl('listen to each other (not in yet)', ms, mout), ctl('wander (not in yet)', ws, wout)));
       bar.append(g);
       syncDet();
@@ -862,8 +873,8 @@ const cfgs = {
     readout: pl => pl.P.map(p => {
       const e = pl.err(p, pl.B), n = Math.round(-e * 64), off = n === 0 ? 'in step' : `${Math.abs(n)}/64 ${n < 0 ? 'behind' : 'ahead'}`;
       if (p.home) return `${p.name} gliding home`;
-      if (Math.abs(p.eRate || 0) < .004) return `${p.name} ${n === 0 ? 'in step' : 'steady, ' + off}`;
-      return `${p.name} ${pl.Kh > 0 && Math.abs(p.det - 1) > pl.Kh ? 'slipping' : pl.Kh > 0 ? 'settling' : 'drifting'}, ${off}`;
+      if (Math.abs(p.eRate || 0) < .004) return `${p.name} ${n === 0 ? 'in step' : 'staying, ' + off}`;
+      return `${p.name} drifting, ${off}`;
     }).join(' · ') },
 
   feedback: { win: 10,
