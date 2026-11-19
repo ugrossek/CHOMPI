@@ -765,7 +765,7 @@
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT } from "../chompi-midi.js?v=2026-10-14";
+import { Launcher, ProtocolError, FEATURE, LAUNCHER_SLOT, EXISTS } from "../chompi-midi.js?v=2026-11-18";
 
 const OLD_LAUNCHER = "This CHOMPI's launcher can only take one firmware at a time. This page needs the new launcher:";
 const NO_LAUNCHER = "Still no answer. If its keys never start breathing after switching on, this CHOMPI has no launcher yet. To install the launcher:";
@@ -798,6 +798,7 @@ const state = {
   plan: [],      // per key: "empty", "keep", or a catalogue id
   selected: 0,
   progress: {},  // per key: { phase, text, bad }
+  filesMissing: {}, // per catalogue id with files: those not on the card yet (launcher 1.8)
 };
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -851,6 +852,20 @@ async function loadCatalog() {
   const data = await res.json();
   if (!Array.isArray(data.firmwares) || !data.firmwares.length) throw new Error("catalog.json: no firmwares");
   for (const f of [...data.firmwares, data.launcher].filter(Boolean)) f.file = new URL(f.file, CATALOG_URL).href;
+  /* A firmware's own files for its folder, e.g. presets: { path, file, size, sha256 } */
+  /* Only into the firmware's own folder: a path anywhere else (another
+     firmware's folder, the card root) and none of its files are offered. */
+  for (const f of data.firmwares) {
+    if (!f.files?.length) continue;
+    const own = (f.folder || "").toUpperCase() + "/";
+    const stray = f.files.filter((x) => own === "/" || !x.path.toUpperCase().startsWith(own) || x.path.includes(".."));
+    if (stray.length) {
+      console.warn(`catalog: ${f.title}'s files outside /${f.folder || "?"}, not offered:`, stray.map((x) => x.path));
+      delete f.files;
+      continue;
+    }
+    for (const x of f.files) x.file = new URL(x.file, CATALOG_URL).href;
+  }
   state.catalog = data.firmwares;
   state.newLauncher = data.launcher || null;
   if (data.launcher) $("launcher-download").href = data.launcher.file;
@@ -878,6 +893,48 @@ function identify(file, size) {
   }
   return {};
 }
+
+/* ---- a firmware's own files --------------------------------------------- */
+/* Some firmwares come with files for their folder on the card, such as
+   PHYMO's presets. Launchers from 1.8 (FEATURE.FILES) can put them there.
+   A file already on the card is never written over: it may be one the user
+   saved or changed. */
+const canFiles = () => !!(state.info?.features & FEATURE.FILES);
+const filesWhat = (f) => f.filesWhat || "files";
+
+/** Which of the firmwares on the card have files that aren't there yet. */
+async function checkFiles() {
+  state.filesMissing = {};
+  if (!canFiles()) return;
+  const ids = new Set(state.current.map((c) => c.id).filter((id) => state.byId[id]?.files?.length));
+  for (const id of ids) {
+    const f = state.byId[id];
+    screen(`Looking for ${f.title}'s ${filesWhat(f)}…`, "busy");
+    const missing = [];
+    try {
+      for (const x of f.files) if ((await state.launcher.stat(x.path)).kind === 0) missing.push(x);
+    } catch (e) {
+      note(`${f.title}: couldn't look for its ${filesWhat(f)}: ${e.message}`);
+      continue; /* not worth failing the connection over; a write looks again */
+    }
+    state.filesMissing[id] = missing;
+    note(`${f.title}: ${f.files.length - missing.length} of ${f.files.length} ${filesWhat(f)} on the card`);
+  }
+}
+
+async function fetchFile(f, x) {
+  if (fileCache[x.file]) return fileCache[x.file];
+  const res = await fetch(x.file);
+  if (!res.ok) throw new Error(`Couldn't download ${f.title}'s ${x.path} (${res.status}).`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length !== x.size) throw new Error(`The download of ${x.path} came out the wrong size. Try again.`);
+  if (crypto.subtle) {
+    const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    if (hash !== x.sha256) throw new Error(`The download of ${x.path} doesn't match the list. Try again.`);
+  }
+  return (fileCache[x.file] = bytes);
+}
+const fileCache = {};
 
 /* ---- what a key holds, in words --------------------------------------- */
 function describeCurrent(i) {
@@ -1175,6 +1232,20 @@ function plannedOps() {
     if (p === "empty") ops.push({ key: i + 1, kind: "clear", loose });
     else ops.push({ key: i + 1, kind: "write", fw: state.byId[p], loose });
   }
+  /* Files for the firmwares the card will hold: after a fresh write, or if
+     some are missing. Which ones go is decided on the card, file by file. */
+  if (canFiles()) {
+    const done = new Set();
+    state.plan.forEach((p, i) => {
+      const f = state.byId[p];
+      if (!f?.files?.length || done.has(p)) return;
+      const writing = ops.some((o) => o.kind === "write" && o.fw.id === p);
+      if (writing || state.filesMissing[p]?.length) {
+        ops.push({ key: i + 1, kind: "files", fw: f, missing: writing ? null : state.filesMissing[p].length });
+        done.add(p);
+      }
+    });
+  }
   return ops;
 }
 
@@ -1187,10 +1258,19 @@ function renderSummary() {
     const li = document.createElement("li");
     const c = state.current[op.key - 1];
     const was = describeCurrent(op.key - 1);
+    const warn = [];
+    if (op.kind === "files") {
+      const n = op.missing ?? op.fw.files.length;
+      li.textContent = op.missing == null
+        ? `${op.fw.title}'s ${filesWhat(op.fw)} into /${op.fw.folder || op.fw.files[0].path.split("/")[0]}: ${op.fw.files.length} files. Any already on the card stay as they are.`
+        : `${op.fw.title}'s ${filesWhat(op.fw)}: ${n} of ${op.fw.files.length} aren't on the card yet. The ones there stay as they are.`;
+      return li;
+    }
     li.textContent = op.kind === "clear"
       ? `${cap(keyName(op.key))}: remove ${was}`
       : `${cap(keyName(op.key))}: ${op.fw.title} ${op.fw.version}` + (was === "empty" ? "" : ` (replaces ${was})`);
-    const warn = [];
+    if (op.kind === "write" && op.fw.files?.length && !canFiles())
+      warn.push(`${op.fw.title} comes with ${filesWhat(op.fw)}, which need launcher 1.8 to go on the card. It plays without them. Update the launcher in step 1 first to get them.`);
     if (unknownFile(c))
       warn.push(`${c.file} isn't in the firmware list. Once it's gone, you need your own copy of it to put it back.`);
     if ((c.id || c.prev?.id) === "usb-storage" && !planned("usb-storage"))
@@ -1225,10 +1305,12 @@ function renderSummary() {
   }
   $("notes").replaceChildren(...notes.map((t) => { const li = document.createElement("li"); li.textContent = t; return li; }));
   const writes = ops.filter((o) => o.kind === "write").length;
-  const clears = ops.length - writes;
+  const clears = ops.filter((o) => o.kind === "clear").length;
+  const files = ops.filter((o) => o.kind === "files");
   const parts = [];
   if (writes) parts.push(`${writes} firmware${writes > 1 ? "s" : ""} to write`);
   if (clears) parts.push(`${clears} key${clears > 1 ? "s" : ""} to empty`);
+  for (const o of files) parts.push(`${o.fw.title}'s ${filesWhat(o.fw)}`);
   $("summary").textContent = !known ? "Connect CHOMPI first: this page reads what's on it."
     : ops.length ? `${parts.join(", ")}. Every other key stays as it is.` : "Nothing to write yet: choose firmwares in step 2.";
   $("write").disabled = !known || !ops.length || state.busy || !state.info;
@@ -1410,6 +1492,7 @@ async function connectTo(pair, quiet = false) {
     state.plan = hadChanges ? before : state.current.map((_, i) => initialPlan(i));
     state.info = info;
     await syncColors();
+    await checkFiles();
     const n = state.current.filter((c) => c.file).length;
     screen(`Connected. ${n} key${n === 1 ? "" : "s"} hold${n === 1 ? "s" : ""} a firmware.`, "ok");
     const lv = info.launcherVersion ? ` (launcher ${info.launcherVersion})` : "";
@@ -1645,6 +1728,10 @@ $("write").addEventListener("click", async () => {
     /* Download everything first, so a bad connection fails before CHOMPI is touched. */
     screen("Downloading firmwares…", "busy");
     for (const op of ops) if (op.kind === "write") await fetchImage(op.fw);
+    for (const op of ops.filter((o) => o.kind === "files")) {
+      screen(`Downloading ${op.fw.title}'s ${filesWhat(op.fw)}…`, "busy");
+      for (const x of op.fw.files) await fetchFile(op.fw, x);
+    }
     await openPorts();
 
     /* Files without a number go first. They sit on whatever key is free, so
@@ -1687,6 +1774,29 @@ $("write").addEventListener("click", async () => {
       progress(op.key, "done", "done");
       note(`key ${op.key}: ${op.kind === "clear" ? "emptied" : op.fw.title + " written"}`);
     }
+    const filesDone = [];
+    for (const op of ops.filter((o) => o.kind === "files")) {
+      failed = op;
+      const f = op.fw, what = filesWhat(f);
+      let put = 0, kept = 0;
+      for (const [i, x] of f.files.entries()) {
+        screen(`${f.title}'s ${what}: ${i + 1} of ${f.files.length}…`, "busy");
+        progress(op.key, "send", `${what} ${i + 1} of ${f.files.length}`);
+        const there = await state.launcher.stat(x.path);
+        if (there.kind !== 0) { kept++; continue; }
+        /* (Never replaces: one there by now stays, and the launcher says so.) */
+        try {
+          await state.launcher.putFile(x.path, fileCache[x.file], chunkSize());
+          put++;
+        } catch (e) {
+          if (!(e instanceof ProtocolError && e.status === EXISTS)) throw e;
+          kept++;
+        }
+      }
+      progress(op.key, "done", "done");
+      note(`${f.title}: ${put} ${what} written, ${kept} already on the card`);
+      filesDone.push(`${f.title}: ${put} ${what} written` + (kept ? `, ${kept} already on the card kept as they were` : "") + ".");
+    }
     failed = null;
 
     /* Read the card back: that is what CHOMPI will offer. */
@@ -1695,6 +1805,7 @@ $("write").addEventListener("click", async () => {
     state.current = await readCard();
     state.plan = state.current.map((_, i) => initialPlan(i));
     await syncColors();
+    await checkFiles();
     const off = expected.map((p, i) => (p !== state.plan[i] ? i + 1 : 0)).filter(Boolean);
     if (off.length) {
       /* most likely a file without a number that moved to a freed key */
@@ -1711,7 +1822,7 @@ $("write").addEventListener("click", async () => {
       show("write-result", `Written. But ${moved.join(", ")}: firmwares without a number in front of their file name take the first free key. Check the list above and write again if you like.`, true);
     } else {
       screen("All done. Press a lit key on CHOMPI to start that firmware.", "ok");
-      show("write-result", "All done. Press a lit key on CHOMPI to start that firmware. To come back to the keys, switch CHOMPI off and on.");
+      show("write-result", ["All done.", ...filesDone, "Press a lit key on CHOMPI to start that firmware. To come back to the keys, switch CHOMPI off and on."].join(" "));
       $("step-write").classList.add("done");
     }
     state.progress = {};
