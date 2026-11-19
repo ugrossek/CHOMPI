@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Feed the CHOMPI</title>
-<script src="setup/demo.js?v=2026-10-15"></script>
+<script src="setup/demo.js?v=2026-11-08"></script>
 <meta name="description" content="Send a firmware to your CHOMPI over USB and store it in one of the launcher's slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -167,6 +167,35 @@
   @media (prefers-reduced-motion: no-preference) {
     .key[data-busy="store"]::before, .key[data-busy="send"]::before { animation: write 0.9s ease-in-out infinite alternate; }
     @keyframes write { to { opacity: .35; } }
+  }
+
+  /* Pages of keys (launcher 1.7), as on the setup page: small black keys,
+     like the two CHOMPI turns pages with, each with its page's LED colour. */
+  .pages { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+  .pages[hidden] { display: none; }
+  .pg {
+    display: inline-flex; align-items: center; gap: 8px;
+    appearance: none; margin: 0; padding: 6px 12px 6px 10px;
+    border: 2.5px solid var(--outline); border-radius: 10px;
+    background: #1B1238; color: #FFF1DC; box-shadow: 0 3px 0 var(--outline);
+    font: 700 .8rem/1 var(--mono); cursor: pointer;
+    transition: translate .08s, box-shadow .08s;
+  }
+  .pg::before {
+    content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid #FFF1DC; background: var(--pc); opacity: .4;
+  }
+  .pg .count { color: #9CFFCF; font-weight: 400; }
+  .pg.chosen .count::after { content: "*"; }
+  .pg:disabled { cursor: default; }
+  .pg:not(:disabled):hover { translate: 0 -2px; box-shadow: 0 5px 0 var(--outline); }
+  .pg[aria-pressed="true"] { translate: 0 -3px; box-shadow: 0 6px 0 var(--outline); }
+  .pg[aria-pressed="true"]::before { opacity: 1; box-shadow: 0 0 8px 2px var(--pc); }
+  @media (max-width: 560px) {
+    /* one row of five: the number and its LED; the count is in the label */
+    .pages { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .pg { justify-content: center; gap: 6px; padding: 6px 4px; }
+    .pg .word, .pg .count { display: none; }
   }
 
   /* ---- steps: tilted coloured cards ------------------------------------------ */
@@ -505,8 +534,8 @@
     <div>
       <p class="eyebrow">CHOMPI firmwares • one at a time</p>
       <h1><span class="feed">Feed the</span> <span class="brand" aria-label="CHOMPI"><span>C</span><span>H</span><span>O</span><span>M</span><span>P</span><span>I</span></span></h1>
-      <p class="lede">Send a firmware over USB, keep it in one of the launcher's fifteen slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
-      <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. Firmware upload over USB is part of it since <a href="https://github.com/sfaber02/CHOMPI/releases/latest">launcher v1.1</a>.</p>
+      <p class="lede">Send a firmware over USB, keep it in one of the launcher's slots, and start it right away. Send to the same slot again and the new version replaces the old one.</p>
+      <p class="credit">This builds on the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/tree/main/firmware/chompi-launcher">multi-firmware launcher</a> by <a href="https://github.com/sfaber02">@sfaber02</a>, which does the hard part of running several firmwares from one card. Firmware upload over USB is part of it since <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/releases/latest">launcher v1.1</a>.</p>
       <ul class="facts"><li>4 steps</li><li>one firmware at a time</li><li>Chrome or Edge</li></ul>
     </div>
     <div>
@@ -541,7 +570,7 @@
         <p><strong>Use at your own risk</strong>This is an unofficial community project, not made or supported by CHOMPI Club, and it comes without any warranty. Sending a firmware writes to your SD card and replaces whatever is in the slot you pick, so back up your card first. If something goes wrong, switch CHOMPI off and on.</p>
       </aside>
       <aside class="notice">
-        <p><strong>Several at once?</strong>The <a href="setup/">setup page</a> puts firmwares on all fifteen keys in one go.</p>
+        <p><strong>Several at once?</strong>The <a href="setup/">setup page</a> puts firmwares on all the keys in one go.</p>
       </aside>
     </div>
   </div>
@@ -550,7 +579,7 @@
     <summary>First time? Set up the card</summary>
     <ol>
       <li>Back up your SD card: copy everything on it to your computer.</li>
-      <li>Download <code>chompi-multi-firmware-card.zip</code> from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest launcher release</a> and unzip it.</li>
+      <li>Download <code>chompi-multi-firmware-card.zip</code> from the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/releases/latest">latest launcher release</a> and unzip it.</li>
       <li>Format a microSD card as FAT32 (32 GB or smaller).</li>
       <li>Copy everything inside <code>chompi-multi-firmware-card/</code> to the top level of the card.</li>
       <li>Put the card in CHOMPI and switch it on. The first start shows a rainbow while the launcher is installed, then the picker: key 1 TAPE, key 2 TEMPO, key 3 WAVE, key 15 USB storage.</li>
@@ -582,7 +611,7 @@
             <label class="act">Choose a file<input type="file" id="file" accept=".bin,application/octet-stream"></label>
           </div>
         </div>
-        <p class="hint">Or send one of the firmwares from the <a href="https://github.com/sfaber02/CHOMPI/releases/tag/launcher-v1.1">launcher v1.1 release card</a>:</p>
+        <p class="hint">Or send one of the firmwares from the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/releases/tag/launcher-v1.1">launcher v1.1 release card</a>:</p>
         <div class="row" id="stock"></div>
         <p class="result" id="firmware-result" hidden></p>
       </div>
@@ -593,10 +622,12 @@
       <h2><span class="num">3</span>Pick a slot and a name</h2>
       <div class="inner">
         <p>Press a key on the CHOMPI below. Whatever is in that slot now will be replaced. With launcher 1.6 or newer, the keys here wear the colours they have on CHOMPI.</p>
+        <p class="hint" id="pages-hint" hidden></p>
         <section class="chompi" aria-label="CHOMPI keybed: the slots">
           <div class="screen" id="screen" data-mood="idle" role="status" aria-live="polite">
             <span class="dot" aria-hidden="true"></span><span id="screen-text">Not connected yet.</span>
           </div>
+          <div class="pages" id="pages" role="group" aria-label="Pages of keys" hidden></div>
           <div class="keys" id="keys"></div>
         </section>
         <div class="row">
@@ -627,15 +658,19 @@
 
   <footer>
     Works in Chrome and Edge. Safari can't talk MIDI to CHOMPI. Needs launcher v1.1 or later on the card.
-    The protocol is described in <a href="https://github.com/ugrossek/CHOMPI/blob/midi-firmware-load/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
-    <br>Get the launcher from the <a href="https://github.com/sfaber02/CHOMPI/releases/latest">latest release</a>, see <a href="#setup">setup</a>.
+    The protocol is described in <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/blob/main/firmware/chompi-launcher/PROTOCOL.md">PROTOCOL.md</a>.
+    <br>Get the launcher from the <a href="https://github.com/sfaber02/CHOMPI-MULTI-FIRMWARE/releases/latest">latest release</a>, see <a href="#setup">setup</a>.
   </footer>
 </main>
 
 <script type="module">
-import { Launcher, ProtocolError, NAME_RE, FEATURE, defaultName } from "./chompi-midi.js?v=2026-10-14";
+import { Launcher, ProtocolError, NAME_RE, FEATURE, defaultName } from "./chompi-midi.js?v=2026-11-18";
 
-const SLOTS_DEFAULT = 15;
+/* One page of keys: CHOMPI's 15 white keys. Launchers from 1.7 have pages
+   of them (PING's slot count, 75 = five pages); slot 16 is page 2, key 1. */
+const PAGE = 15;
+/* Each page's colour on CHOMPI's page keys: TAPE's bank colours, A to E. */
+const PAGE_COLORS = ["#940DFF", "#FF993D", "#24FFEB", "#C4610F", "#B4FF00"];
 /* The firmwares on the launcher-v1.1 release card, unchanged (sha256 of the
    release zip checked), served from this site so the page can fetch them. */
 const STOCK = [
@@ -649,40 +684,89 @@ const STANDARD = Object.fromEntries(STOCK.map((s) => [s.slot, s]));
 
 const $ = (id) => document.getElementById(id);
 const state = { access: null, launcher: null, info: null, image: null, fileLabel: "", slot: 0, busy: false,
+                slots: PAGE, // how many the launcher has: 15, or 75 on pages (1.7)
+                page: 0,     // the page of keys showing, 0 = slots 1-15
                 connecting: false, autoTimer: 0,
                 onKeys: [] }; // per slot (index 0 = slot 1): LIST's { file, size, color }, from launchers that have LIST
 
 /* ---- keybed ------------------------------------------------------------ */
+const pageCount = () => Math.ceil(state.slots / PAGE);
+const pageOf = (n) => Math.floor((n - 1) / PAGE);
+/** Slot n in words: "slot 5", or with pages "slot 16 (page 2 key 1)". */
+const slotName = (n) => (pageCount() > 1 ? `slot ${n} (page ${pageOf(n) + 1} key ${(n - 1) % PAGE + 1})` : `slot ${n}`);
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+/** The slot key j (0-14) of the page showing stands for. */
+const slotOf = (j) => state.page * PAGE + j + 1;
+
+/* Always one page of 15 keys; with pages, the page keys above them choose
+   which 15 slots they are. */
 const keys = [];
-function buildKeys(n) {
+function buildKeys() {
   $("keys").replaceChildren();
   keys.length = 0;
-  for (let i = 1; i <= n; i++) {
+  for (let j = 0; j < PAGE; j++) {
     const k = document.createElement("button");
     k.className = "key";
     k.type = "button";
     k.setAttribute("aria-pressed", "false");
-    k.setAttribute("aria-label", `Slot ${i}`);
-    k.innerHTML = `<span class="n">${i}</span>`;
-    k.addEventListener("click", () => pickSlot(i));
+    k.innerHTML = `<span class="n">${j + 1}</span>`;
+    k.addEventListener("click", () => pickSlot(slotOf(j)));
     $("keys").append(k);
     keys.push(k);
   }
+}
+
+/* ---- pages (launcher 1.7) ---------------------------------------------- */
+function showPage(p) {
+  if (state.busy || p === state.page) return;
+  state.page = p;
+  paintCards();
+}
+function renderPages() {
+  const n = pageCount(), bar = $("pages");
+  bar.hidden = n < 2;
+  $("pages-hint").hidden = n < 2;
+  if (n < 2) return;
+  $("pages-hint").textContent = `This CHOMPI has ${n} pages of ${PAGE} keys. Choose a page above the keys to see its slots. On CHOMPI, hold the CHOMPI key and press the lowest C# or D# to turn the page. Empty pages are skipped there.`;
+  if (bar.children.length !== n) {
+    bar.replaceChildren(...Array.from({ length: n }, (_, p) => {
+      const b = document.createElement("button");
+      b.className = "pg";
+      b.type = "button";
+      b.style.setProperty("--pc", PAGE_COLORS[p % PAGE_COLORS.length]);
+      b.innerHTML = `<span><span class="word">Page </span>${p + 1}</span><span class="count"></span>`;
+      b.addEventListener("click", () => showPage(p));
+      return b;
+    }));
+  }
+  const known = state.onKeys.length > 0;
+  [...bar.children].forEach((b, p) => {
+    const on = state.onKeys.slice(p * PAGE, (p + 1) * PAGE).filter((c) => c?.file).length;
+    b.querySelector(".count").textContent = known ? String(on) : "";
+    b.classList.toggle("chosen", !!state.slot && pageOf(state.slot) === p);
+    b.setAttribute("aria-pressed", String(p === state.page));
+    b.setAttribute("aria-label", `Page ${p + 1}` + (known ? `: ${on} firmware${on === 1 ? "" : "s"}` : ""));
+    b.disabled = state.busy;
+  });
 }
 /** Keys holding a firmware wear its colour, as CHOMPI's LEDs do; empty
  *  and unknown keys stay plain. Launchers before 1.6 report no colour:
  *  then a full key is only a little grey. */
 function paintCards() {
-  keys.forEach((k, i) => {
-    const c = state.onKeys[i];
+  if (state.page >= pageCount()) state.page = 0;
+  renderPages();
+  keys.forEach((k, j) => {
+    const n = slotOf(j), c = state.onKeys[n - 1];
+    k.hidden = n > state.slots;
+    k.setAttribute("aria-pressed", String(n === state.slot));
     if (c?.file) {
       k.dataset.fw = "";
       k.style.setProperty("--key", c.color || "#C9C3D6");
-      k.setAttribute("aria-label", `Slot ${i + 1}: ${c.file}`);
+      k.setAttribute("aria-label", `${cap(slotName(n))}: ${c.file}`);
     } else {
       delete k.dataset.fw;
       k.style.removeProperty("--key");
-      k.setAttribute("aria-label", c ? `Slot ${i + 1}: empty` : `Slot ${i + 1}`);
+      k.setAttribute("aria-label", c ? `${cap(slotName(n))}: empty` : cap(slotName(n)));
     }
   });
 }
@@ -693,7 +777,10 @@ async function readCards() {
   if (!(state.info.features & FEATURE.LIST)) return;
   try {
     const on = [];
-    for (let n = 1; n <= state.info.slots; n++) on.push(await state.launcher.list(n));
+    for (let n = 1; n <= state.slots; n++) {
+      screen(pageCount() > 1 ? `Looking at page ${pageOf(n) + 1} of ${pageCount()}…` : `Looking at slot ${n} of ${state.slots}…`, "busy");
+      on.push(await state.launcher.list(n));
+    }
     state.onKeys = on;
   } catch (e) {
     logLines.push(`· couldn't read the keys: ${e.message}`);
@@ -789,12 +876,16 @@ async function connectTo(pair, quiet = false) {
     state.launcher = new Launcher(adapter(pair), log);
     await openPorts();
     state.info = await state.launcher.ping();
-    buildKeys(state.info.slots);
+    /* 15 slots, or pages of them from launcher 1.7 */
+    state.slots = Math.max(PAGE, Math.min(state.info.slots || PAGE, 126));
+    if (state.slot > state.slots) { state.slot = 0; state.slotChosen = false; }
     await readCards();
     paintCards();
     if (state.slot) pickSlot(state.slot, false); /* keep, don't mark as chosen */
     screen(`Connected to ${pair.name}. Pick a slot.`, "ok");
-    show("connect-result", `Connected. The launcher has ${state.info.slots} slots.`);
+    show("connect-result", pageCount() > 1
+      ? `Connected. The launcher has ${state.slots} slots, on ${pageCount()} pages of ${PAGE} keys.`
+      : `Connected. The launcher has ${state.slots} slots.`);
     $("step-connect").classList.add("done");
     ok = true;
   } catch (e) {
@@ -954,7 +1045,8 @@ function pickSlot(n, chosen = true) {
   if (state.busy) return;
   state.slot = n;
   state.slotChosen ||= chosen;
-  keys.forEach((k, i) => k.setAttribute("aria-pressed", String(i + 1 === n)));
+  state.page = pageOf(n);
+  paintCards();
   update();
 }
 $("name").addEventListener("input", (e) => {
@@ -978,7 +1070,7 @@ function update() {
   $("target-file").textContent = `${nn}_${name || "NAME"}.bin`;
   const std = STANDARD[state.slot];
   const now = state.onKeys[state.slot - 1];
-  show("slot-warn", now ? (now.file ? `Slot ${state.slot} holds ${now.file}. Sending replaces it.` : "")
+  show("slot-warn", now ? (now.file ? `${cap(slotName(state.slot))} holds ${now.file}. Sending replaces it.` : "")
     : std && name !== std.name ? `On the release card, slot ${state.slot} holds ${std.label}. Sending replaces it.` : "");
   $("step-slot").classList.toggle("done", !!state.slot && NAME_RE.test(name));
 
@@ -986,6 +1078,7 @@ function update() {
   $("send").disabled = !ready;
   $("send").textContent = state.slot ? `Send to slot ${state.slot}` : "Send";
   keys.forEach((k) => { k.disabled = state.busy; });
+  for (const b of $("pages").children) b.disabled = state.busy;
 }
 
 /* ---- send -------------------------------------------------------------- */
@@ -1017,7 +1110,7 @@ $("send").addEventListener("click", async () => {
     /* its colour is the launcher's to give: known again on the next connect */
     if (state.onKeys.length) { state.onKeys[state.slot - 1] = { file, size: state.image.length, color: null }; paintCards(); }
     screen(`Stored as ${file}. CHOMPI is starting it.`, "ok");
-    show("send-result", `Stored in slot ${state.slot} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI with the launcher showing; this page connects by itself.`);
+    show("send-result", `Stored in ${slotName(state.slot)} as ${file}. CHOMPI is starting it now. To send again, power-cycle CHOMPI with the launcher showing; this page connects by itself.`);
     $("step-send").classList.add("done");
     state.info = null; // the launcher is gone until the next power-on
     $("step-connect").classList.remove("done");
@@ -1037,7 +1130,8 @@ function openSetup() { if (location.hash === "#setup") $("setup").open = true; }
 window.addEventListener("hashchange", openSetup);
 openSetup();
 
-buildKeys(SLOTS_DEFAULT);
+buildKeys();
+paintCards();
 update();
 </script>
 </body>

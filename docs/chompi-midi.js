@@ -7,13 +7,13 @@
 export const PROTOCOL_VERSION = 1;
 
 const HEADER = [0xF0, 0x7D, 0x43, 0x48];
-export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, RUN = 0x05, LIST = 0x06, CLEAR = 0x07, COLOR = 0x08;
+export const PING = 0x01, BEGIN = 0x02, DATA = 0x03, END = 0x04, RUN = 0x05, LIST = 0x06, CLEAR = 0x07, COLOR = 0x08, FILE = 0x09, STAT = 0x0A;
 /** Where the test launchers 1.4.0 - 1.4.2 had them, before 05 went to RUN. */
 const OLD_LIST = 0x05, OLD_CLEAR = 0x06;
 const REPLY = 0x40;
 
 /** PING's optional features byte; launchers before it have none of these. */
-export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8, RUN: 16, COLOR: 32 };
+export const FEATURE = { LIST: 1, CLEAR: 2, STAY: 4, LAUNCHER: 8, RUN: 16, COLOR: 32, FILES: 64 };
 /** BEGIN's slot for a new launcher (FEATURE.LAUNCHER). */
 export const LAUNCHER_SLOT = 127;
 const END_STAY = 1;
@@ -34,11 +34,17 @@ export const STATUS = {
   12: "The SD card is full. Make some room on it and send again.",
   13: "That file isn't a CHOMPI launcher.",
   14: "There's another .bin file at the top level of the SD card, which CHOMPI would install instead of the launcher. Remove it, then try again.",
+  15: "The launcher refused a file's place on the card.",
+  16: "That file is on the card already, and was left as it was.",
 };
 
 export const NAME_RE = /^[A-Z0-9_-]{1,16}$/;
 
-export class ProtocolError extends Error {}
+export class ProtocolError extends Error {
+  /** status: the launcher's status byte, if it answered with one. */
+  constructor(message, status = null) { super(message); this.status = status; }
+}
+export const EXISTS = 16;
 
 export function put7(value, n) {
   const out = [];
@@ -137,7 +143,7 @@ export class Launcher {
 
   static #check(reply) {
     if (!reply) throw new ProtocolError("CHOMPI stopped answering. Is the launcher still showing?");
-    if (reply[0] !== 0) throw new ProtocolError(STATUS[reply[0]] || `The launcher answered with status ${reply[0]}.`);
+    if (reply[0] !== 0) throw new ProtocolError(STATUS[reply[0]] || `The launcher answered with status ${reply[0]}.`, reply[0]);
   }
 
   /** Who is there. Throws if nobody is, or if it speaks another version. */
@@ -198,6 +204,35 @@ export class Launcher {
   async run(slot) {
     const r = await this.call(RUN, [slot], { timeout: 1000, retries: 2 });
     if (r) Launcher.#check(r);
+  }
+
+  /** What is at `path` on the card (FEATURE.FILES): { kind, size }, kind 0
+   *  nothing, 1 a file, 2 a folder. */
+  async stat(path) {
+    const p = [...path].map((c) => c.charCodeAt(0) & 0x7F);
+    /* the reply names its path: a late one for the previous file is skipped */
+    const same = (r) => r[0] !== 0 || (r[6] === p.length && p.every((c, i) => r[7 + i] === c));
+    const r = await this.call(STAT, [p.length, ...p], { timeout: 2000, retries: 3, match: same });
+    Launcher.#check(r);
+    return { kind: r[1], size: get7(r.slice(2, 6)) };
+  }
+
+  /** Write a firmware's data file to `path` on the card, e.g.
+   *  PHYMO/BANK1/P01.txt (FEATURE.FILES). One already there stays (status 16)
+   *  unless replace is set. The
+   *  launcher stays where it is. */
+  async putFile(path, bytes, maxChunk, { replace = false } = {}) {
+    const p = [...path].map((c) => c.charCodeAt(0) & 0x7F);
+    Launcher.#check(await this.call(FILE, [...put7(bytes.length, 4), replace ? 1 : 0, p.length, ...p]));
+    let offset = 0;
+    while (offset < bytes.length) {
+      const reply = await this.call(DATA, [...put7(offset, 4), ...pack7(bytes.subarray(offset, offset + maxChunk))]);
+      Launcher.#check(reply);
+      offset = get7(reply.slice(1, 5));
+    }
+    const reply = await this.call(END, [...put7(crc32(bytes), 5)], { timeout: 10000, retries: 2 });
+    if (!reply) throw new ProtocolError(`No answer after writing ${path}.`);
+    Launcher.#check(reply);
   }
 
   /**
